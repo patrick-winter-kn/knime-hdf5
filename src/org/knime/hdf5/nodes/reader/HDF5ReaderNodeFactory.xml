@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE knimeNode PUBLIC "-//UNIKN//DTD KNIME Node 2.0//EN" "http://www.knime.org/Node.dtd">
+<knimeNode icon="" type="Other">
+	<name>HDF5 Files</name>
+
+	<shortDescription>
+		Reads HDF5 files from an archive.
+	</shortDescription>
+
+	<fullDescription>
+		<intro>
+			This node reads HDF5 files from an archive. The path to the
+			files
+			will
+			be contained in the output table.
+			<br />
+			<br />
+			Supported formats are:
+			<ul>
+				<li>.h5</li>
+			</ul>
+		</intro>
+
+
+		<option name="Input file">Path or URL to the input archive.</option>
+		<option name="Output directory">Path to the output directory, where the
+			files will be extracted to. The output directory may be a local URL, remote URLs usually don't work.
+		</option>
+		<option name="Output...">
+			Specifies the content of the output table.
+			<br />
+			<b>Location</b>
+			A string column with the path to the extracted files.
+			<br />
+			<b>URI</b>
+			An URI column with the URIs to the extracted files.
+		</option>
+		<option name="If a file exists...">
+			Specifies the behavior if a file with the same name already
+			exists.
+			<br />
+			<b>Overwrite</b>
+			<br />
+			Overwrites already existing files.
+			<br />
+			<b>Abort</b>
+			<br />
+			Will abort if a file already exists.
+		</option>
+	</fullDescription>
+
+	<ports>
+		<outPort index="0" name="Output table">
+			Path to every extracted file.
+		</outPort>
+	</ports>
+</knimeNode>

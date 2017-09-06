@@ -1,0 +1,19 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: KNIME HDF5 Nodes
+Bundle-SymbolicName: org.knime.hdf5;singleton:=true
+Bundle-Version: 1.0.0.qualifier
+Bundle-Vendor: University Konstance
+Bundle-RequiredExecutionEnvironment: JavaSE-1.8
+Require-Bundle: org.knime.workbench.repository;bundle-version="3.4.0",
+ org.knime.core;bundle-version="3.4.0"
+Export-Package: hdf.hdf5lib,
+ hdf.hdf5lib.callbacks,
+ hdf.hdf5lib.exceptions,
+ hdf.hdf5lib.structs,
+ org.knime.hdf5.nodes.reader
+Bundle-ClassPath: lib/jarhdf5-1.10.1.jar,
+ .,
+ lib/slf4j-api-1.7.5.jar,
+ lib/slf4j-nop-1.7.5.jar,
+ lib/slf4j-simple-1.7.5.jar
