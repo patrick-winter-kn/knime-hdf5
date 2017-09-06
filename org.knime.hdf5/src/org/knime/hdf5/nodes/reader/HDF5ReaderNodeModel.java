@@ -18,15 +18,16 @@ import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeModel;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
+import org.knime.hdf5.lib.Hdf5File;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 
 public class HDF5ReaderNodeModel extends NodeModel {
 	
-    private static String fname  = "HDF5DatasetRead.h5";
-    private static String dsname  = "2D 32-bit integer 20x10";
-    private static long[] dims2D = { 20, 10 };
+    private static String fname  = "Data" + File.separator + "example2.h5";
+    private static String dsname  = "intTest"; //File separator überall gleich?
+    private static long[] dims2D = { 3, 3 };
 
 	protected HDF5ReaderNodeModel() {
 		super(0, 1);
@@ -36,45 +37,46 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
 		// create the file and add groups and dataset into the file
         createFile();
-        int[][] dataModified = useFile();
-		
+        int[][] dataRead = useFile();
+        
 		DataTableSpec outSpec = createOutSpec();
 		BufferedDataContainer outContainer = exec.createDataContainer(outSpec);
 		/*for (int i = 0; i < 100; i++) {
 			outContainer.addRowToTable(new DefaultRow("Row " + i, new IntCell(i+1)));
 		}*/
 		System.out.println("\n");
-		for (int i = 0; i < dataModified.length; i++) {
+		for (int i = 0; i < dataRead.length; i++) {
 			DefaultRow row = null;
 			JoinedRow jrow = null;
-			if (dataModified[i].length > 0) {
-				row = new DefaultRow("Row " + i, new IntCell(dataModified[i][0]));
+			if (dataRead[i].length > 0) {
+				row = new DefaultRow("Row " + i, new IntCell(dataRead[i][0]));
 			}
-			System.out.println(i + ": " + dataModified[i].length);
-			for (int j = 1; j < dataModified[i].length; j++) {
-				DefaultRow newRow = new DefaultRow("Row " + i, new IntCell(dataModified[i][j]));
+			System.out.println(i + ": " + dataRead[i].length);
+			for (int j = 1; j < dataRead[i].length; j++) {
+				DefaultRow newRow = new DefaultRow("Row " + i, new IntCell(dataRead[i][j]));
 				jrow = (j == 1) ? new JoinedRow(row, newRow) : new JoinedRow(jrow, newRow);
 			}
 			outContainer.addRowToTable(jrow);
 		}
-		System.out.println(dims2D[1]);
+		System.out.println(File.separator);
         outContainer.close();
 		return new BufferedDataTable[]{outContainer.getTable()};
 	}
 	
-	private static void createFile() throws Exception {
+	/**
+     * create the file and add groups ans dataset into the file, which is the
+     * same as javaExample.H5DatasetCreate
+     * 
+     * @see HDF5DatasetCreate.H5DatasetCreate
+     * @throws Exception
+     */
+    private static void createFile() throws Exception {
         int file_id = -1;
         int dataspace_id = -1;
         int dataset_id = -1;
-
-        // Create a new file using default properties.
-        try {
-            file_id = H5.H5Fcreate(fname, HDF5Constants.H5F_ACC_TRUNC,
-                    HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
+        
+        Hdf5File file = new Hdf5File(fname);
+        file_id = file.getFile_id();
 
         // Create the data space for the dataset.
         try {
@@ -95,6 +97,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
             e.printStackTrace();
         }
 
+        System.out.println("\nCreate: " + file_id + " : " + dataset_id);
+        
         // Terminate access to the data space.
         try {
             if (dataspace_id >= 0)
@@ -105,13 +109,19 @@ public class HDF5ReaderNodeModel extends NodeModel {
         }
 
         // set the data values
-        int[] dataIn = new int[20 * 10];
-        for (int i = 0; i < 20; i++) {
-            for (int j = 0; j < 10; j++) {
-                dataIn[i * 10 + j] = i * 100 + j;
+        int[] dataIn = new int[3 * 3];
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                dataIn[i * 3 + j] = i * 3 + j;
             }
         }
 
+        // print out the data values before writing into file
+        System.out.println("\n\nData Values");
+        for (int i = 0; i < 3 * 3; i++) {
+            System.out.print("\n" + dataIn[i]);
+        }
+        
         // Write the data to the dataset.
         try {
             if (dataset_id >= 0)
@@ -141,19 +151,14 @@ public class HDF5ReaderNodeModel extends NodeModel {
             e.printStackTrace();
         }
     }
-	
+
 	private static int[][] useFile() throws Exception {
 	    int file_id = -1;
         int dataset_id = -1;
         
-		// Open file using the default properties.
-        try {
-            file_id = H5.H5Fopen(fname, HDF5Constants.H5F_ACC_RDWR, HDF5Constants.H5P_DEFAULT);
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
-
+		Hdf5File file = new Hdf5File(fname);
+		file_id = file.getFile_id();
+		
         // Open dataset using the default properties.
         try {
             if (file_id >= 0)
@@ -162,6 +167,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
         catch (Exception e) {
             e.printStackTrace();
         }
+        
+        System.out.println("\nUse: " + file_id + " : " + dataset_id);
 
         // Allocate array of pointers to two-dimensional arrays (the
         // elements of the dataset.
@@ -179,50 +186,10 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
         // print out the data values
         System.out.println("\n\nOriginal Data Values");
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < dims2D[0]; i++) {
             System.out.print("\n" + dataRead[i][0]);
-            for (int j = 1; j < 10; j++) {
+            for (int j = 1; j < dims2D[1]; j++) {
                 System.out.print(", " + dataRead[i][j]);
-            }
-        }
-
-        // change data value and write it to file.
-        for (int i = 0; i < 20; i++) {
-            for (int j = 0; j < 10; j++) {
-                dataRead[i][j]++;
-            }
-        }
-
-        // Write the data to the dataset.
-        try {
-            if (dataset_id >= 0)
-                H5.H5Dwrite(dataset_id, HDF5Constants.H5T_NATIVE_INT,
-                        HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL, HDF5Constants.H5P_DEFAULT,
-                        dataRead);
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        // reload the data value
-        int[][] dataModified = new int[(int) dims2D[0]][(int) (dims2D[1])];
-
-        try {
-            if (dataset_id >= 0)
-                H5.H5Dread(dataset_id, HDF5Constants.H5T_NATIVE_INT,
-                        HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-                        HDF5Constants.H5P_DEFAULT, dataModified);
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        // print out the modified data values
-        System.out.println("\n\nModified Data Values");
-        for (int i = 0; i < 20; i++) {
-            System.out.print("\n" + dataModified[i][0]);
-            for (int j = 1; j < 10; j++) {
-                System.out.print(", " + dataModified[i][j]);
             }
         }
 
@@ -244,9 +211,9 @@ public class HDF5ReaderNodeModel extends NodeModel {
             e.printStackTrace();
         }
         
-        return dataModified;
+        return dataRead;
 	}
-
+	
 	private DataTableSpec createOutSpec() {
 		DataColumnSpec[] colSpecs = new DataColumnSpec[(int) dims2D[1]];
 		for (int i = 0; i < colSpecs.length; i++) {
