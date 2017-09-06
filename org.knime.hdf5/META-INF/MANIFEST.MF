@@ -12,6 +12,6 @@ Export-Package: hdf.hdf5lib,
  hdf.hdf5lib.exceptions,
  hdf.hdf5lib.structs,
  org.knime.hdf5.nodes.reader
-Bundle-ClassPath: lib/jarhdf5-1.10.1.jar,
- .,
- lib/slf4j-api-1.7.5.jar
+Bundle-ClassPath: .,
+ lib/slf4j-api-1.7.5.jar,
+ lib/jarhdf5-3.3.2.jar

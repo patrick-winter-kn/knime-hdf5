@@ -63,9 +63,9 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	}
 	
 	private static void createFile() throws Exception {
-        long file_id = -1;
-        long dataspace_id = -1;
-        long dataset_id = -1;
+        int file_id = -1;
+        int dataspace_id = -1;
+        int dataset_id = -1;
 
         // Create a new file using default properties.
         try {
@@ -143,8 +143,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
     }
 	
 	private static int[][] useFile() throws Exception {
-	    long file_id = -1;
-        long dataset_id = -1;
+	    int file_id = -1;
+        int dataset_id = -1;
         
 		// Open file using the default properties.
         try {
