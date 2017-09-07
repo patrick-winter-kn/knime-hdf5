@@ -15,3 +15,5 @@ Export-Package: hdf.hdf5lib,
 Bundle-ClassPath: .,
  lib/slf4j-api-1.7.5.jar,
  lib/jarhdf5-3.3.2.jar
+Bundle-Activator: org.knime.hdf5.Activator
+Bundle-ActivationPolicy: lazy
