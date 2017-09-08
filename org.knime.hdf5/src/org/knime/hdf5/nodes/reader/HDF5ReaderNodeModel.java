@@ -26,7 +26,7 @@ import hdf.hdf5lib.HDF5Constants;
 public class HDF5ReaderNodeModel extends NodeModel {
 	
     private static String fname  = "Data" + File.separator + "example2.h5";
-    private static String dsname  = "intTest"; //File separator überall gleich?
+    private static String dsname  = "intTest"; //File separator ï¿½berall gleich?
     private static long[] dims2D = { 3, 3 };
 
 	protected HDF5ReaderNodeModel() {
@@ -71,9 +71,9 @@ public class HDF5ReaderNodeModel extends NodeModel {
      * @throws Exception
      */
     private static void createFile() throws Exception {
-        int file_id = -1;
-        int dataspace_id = -1;
-        int dataset_id = -1;
+        long file_id = -1;
+        long dataspace_id = -1;
+        long dataset_id = -1;
         
         Hdf5File file = new Hdf5File(fname);
         file_id = file.getFile_id();
@@ -153,8 +153,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
     }
 
 	private static int[][] useFile() throws Exception {
-	    int file_id = -1;
-        int dataset_id = -1;
+	    long file_id = -1;
+        long dataset_id = -1;
         
 		Hdf5File file = new Hdf5File(fname);
 		file_id = file.getFile_id();

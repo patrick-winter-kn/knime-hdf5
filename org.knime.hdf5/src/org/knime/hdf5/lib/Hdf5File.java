@@ -5,10 +5,10 @@ import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5FileInterfaceException;
 
 // TODO
-// schauen, ob das die richtige Klasse für die Files ist
+// schauen, ob das die richtige Klasse fï¿½r die Files ist
 public class Hdf5File extends Hdf5Group {
 	
-	private int file_id = -1;
+	private long file_id = -1;
 	private final String path;
 	
 	/**
@@ -34,11 +34,11 @@ public class Hdf5File extends Hdf5Group {
         }
 	}
 	
-	public int getFile_id() {
+	public long getFile_id() {
 		return file_id;
 	}
 
-	public void setFile_id(int file_id) {
+	public void setFile_id(long file_id) {
 		this.file_id = file_id;
 	}
 
