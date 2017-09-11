@@ -1,14 +1,49 @@
 package org.knime.hdf5.lib;
 
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+
 //TODO
-public class Hdf5TreeElement {
+abstract public class Hdf5TreeElement {
 	
-	public Hdf5Attribute<?>[] listAttributes() {
-		return null;
+	private final List<Hdf5Attribute<?>> attributes = new LinkedList<>();
+	
+	public Hdf5TreeElement() {
+		
 	}
 	
+	//evtl. auf private setzen
+	public List<Hdf5Attribute<?>> getAttributes() {
+		return attributes;
+	}
+
+	public Hdf5Attribute<?>[] listAttributes() {
+		//Hdf5Attribute<?>[] attributes = (Hdf5Attribute<?>[]) this.getAttributes().toArray();
+		Hdf5Attribute<?>[] attributes = new Hdf5Attribute<?>[this.getAttributes().size()];
+		Iterator<Hdf5Attribute<?>> iter = this.getAttributes().iterator();
+		int i = 0;
+		while (iter.hasNext()) {
+			attributes[i] = iter.next();
+			i++;
+		}
+		return attributes;
+	}
+
 	public Hdf5Attribute<?> getAttribute(final String name) {
+		Iterator<Hdf5Attribute<?>> iter = this.getAttributes().iterator();
+		while (iter.hasNext()) {
+			Hdf5Attribute<?> attr = iter.next();
+			if (attr.getName() == name) {
+				return attr;
+			}
+		}
 		return null;
 	}
 
+	public void addAttribute(Hdf5Attribute<?> attribute) {
+		if (this.getAttribute(attribute.getName()) == null) {
+			this.getAttributes().add(attribute);
+		}
+	}
 }

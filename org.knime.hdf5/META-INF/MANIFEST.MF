@@ -12,12 +12,14 @@ Export-Package: hdf.hdf5lib,
  hdf.hdf5lib.exceptions,
  hdf.hdf5lib.structs,
  hdf.hdflib,
- org.knime.hdf5,
  org.knime.hdf5.lib,
- org.knime.hdf5.nodes.reader
-Bundle-ClassPath: .,
- lib/jarhdf-4.2.12.jar,
- lib/jarhdf5-1.10.1.jar,
- lib/slf4j-api-1.7.5.jar
+ org.knime.hdf5.nodes.reader,
+ org.slf4j,
+ org.slf4j.helpers,
+ org.slf4j.spi
 Bundle-Activator: org.knime.hdf5.Activator
 Bundle-ActivationPolicy: lazy
+Bundle-ClassPath: lib/jarhdf-4.2.12.jar,
+ lib/jarhdf5-1.10.1.jar,
+ lib/slf4j-api-1.7.5.jar,
+ .
