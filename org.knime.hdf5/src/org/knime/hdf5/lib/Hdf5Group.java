@@ -4,16 +4,49 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+import hdf.hdf5lib.H5;
+import hdf.hdf5lib.HDF5Constants;
+import hdf.hdf5lib.exceptions.HDF5LibraryException;
+
 //TODO
-// hier fehlt noch der Teil mit dem Filehandling
 public class Hdf5Group extends Hdf5TreeElement {
 	
 	private final String name;
 	private final List<Hdf5Group> groups = new LinkedList<>();
 	private final List<Hdf5DataSet<?>> dataSets = new LinkedList<>();
+	private long group_id = -1;
+	
+	/**
+	 * 
+	 * @param file
+	 * @param path
+	 * @return null if the file_id = -1
+	 */
 	
 	public Hdf5Group(final String name) {
 		this.name = name;
+	}
+	
+	public static Hdf5Group addToFile(Hdf5File file, String path) {
+		Hdf5Group group = null; 
+		if (file.getFile_id() >= 0) {
+			if (!path.equals("")) {
+		    	group = Hdf5Group.getLastGroup(path);
+		    	group.addGroupToFile(file, Hdf5Group.getGroupPath(path));
+	    	}
+    	}
+    	return group;
+	}
+
+	public static Hdf5Group getLastGroup(String path) {
+		int lastIndex = path.lastIndexOf("/");
+		String name = (lastIndex != -1) ? path.substring(lastIndex + 1) : path;
+		return !path.equals("") ? new Hdf5Group(name) : null;
+	}
+	
+	public static String getGroupPath(String path) {
+		int lastIndex = path.lastIndexOf("/");
+		return (lastIndex != -1) ? path.substring(0, lastIndex) : "";
 	}
 	
 	public String getName() {
@@ -28,7 +61,15 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return dataSets;
 	}
 
-	// da es der Methode Hdf5TreeElement.listAttributes() aehnelt, evtl. mgl., beide zu einer zusammenzufassen
+	public long getGroup_id() {
+		return group_id;
+	}
+
+	public void setGroup_id(long group_id) {
+		this.group_id = group_id;
+	}
+
+	// TODO this method is similar to Hdf5TreeElement.listAttributes(), maybe put it together
 	public Hdf5Group[] listGroups() {
 		Hdf5Group[] groups = new Hdf5Group[this.getGroups().size()];
 		Iterator<Hdf5Group> iter = this.getGroups().iterator();
@@ -83,5 +124,52 @@ public class Hdf5Group extends Hdf5TreeElement {
 		if (this.getDataSet(dataSet.getName()) == null) {
 			this.getDataSets().add(dataSet);
 		}
+	}
+	
+	// TODO test that our group isn't a file, because a file shouldn't add files
+	private void addGroupToFile(Hdf5File file, String path) {
+		if (file.getFile_id() >= 0) {
+			Hdf5Group group = file;
+			if (!path.equals("")) {
+				group = Hdf5Group.getLastGroup(path);
+		    	group.addGroupToFile(file, Hdf5Group.getGroupPath(path));             
+			} 
+			group.addGroup(this);
+			if (group.getGroup_id() >= 0) {
+	    		try {
+					this.setGroup_id(H5.H5Gopen(group.getGroup_id(), this.getName(), 
+							HDF5Constants.H5P_DEFAULT));
+				} catch (HDF5LibraryException | NullPointerException e) {
+					try {
+						this.setGroup_id(H5.H5Gcreate(group.getGroup_id(), this.getName(), 
+								HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT,
+								HDF5Constants.H5P_DEFAULT));
+					} catch (HDF5LibraryException | NullPointerException e2) {
+						e.printStackTrace();
+					}
+				}
+			} 
+        }
+	}
+	
+	public void close() {
+		try {
+            if (this.getGroup_id() >= 0) {
+                H5.H5Gclose(this.getGroup_id());
+                this.setGroup_id(-1);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+	}
+	
+	public void closeAll() {
+		Iterator<Hdf5Group> iter = this.getGroups().iterator();
+		while(iter.hasNext()) {
+			Hdf5Group group = iter.next();
+			group.closeAll();
+			group.close();
+		}
+		this.close();
 	}
 }

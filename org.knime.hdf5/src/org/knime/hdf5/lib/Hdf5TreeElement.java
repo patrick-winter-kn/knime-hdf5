@@ -13,7 +13,7 @@ abstract public class Hdf5TreeElement {
 		
 	}
 	
-	//evtl. auf private setzen
+	// TODO maybe set to private
 	public List<Hdf5Attribute<?>> getAttributes() {
 		return attributes;
 	}
