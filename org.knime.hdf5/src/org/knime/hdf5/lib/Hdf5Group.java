@@ -8,13 +8,14 @@ import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
-//TODO
 public class Hdf5Group extends Hdf5TreeElement {
 	
-	private final String name;
 	private final List<Hdf5Group> groups = new LinkedList<>();
 	private final List<Hdf5DataSet<?>> dataSets = new LinkedList<>();
-	private long group_id = -1;
+	
+	public Hdf5Group(final String name) {
+		super(name);
+	}
 	
 	/**
 	 * 
@@ -23,13 +24,9 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * @return null if the file_id = -1
 	 */
 	
-	public Hdf5Group(final String name) {
-		this.name = name;
-	}
-	
 	public static Hdf5Group addToFile(Hdf5File file, String path) {
 		Hdf5Group group = null; 
-		if (file.getFile_id() >= 0) {
+		if (file.getElement_id() >= 0) {
 			if (!path.equals("")) {
 		    	group = Hdf5Group.getLastGroup(path);
 		    	group.addGroupToFile(file, Hdf5Group.getGroupPath(path));
@@ -61,15 +58,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return dataSets;
 	}
 
-	public long getGroup_id() {
-		return group_id;
-	}
-
-	public void setGroup_id(long group_id) {
-		this.group_id = group_id;
-	}
-
-	// TODO this method is similar to Hdf5TreeElement.listAttributes(), maybe put it together
 	public Hdf5Group[] listGroups() {
 		Hdf5Group[] groups = new Hdf5Group[this.getGroups().size()];
 		Iterator<Hdf5Group> iter = this.getGroups().iterator();
@@ -82,10 +70,8 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 	
 	public Hdf5Group getGroup(final String name) {
-		Iterator<Hdf5Group> iter = this.getGroups().iterator();
-		while (iter.hasNext()) {
-			Hdf5Group group = iter.next();
-			if (group.getName() == name) {
+		for (Hdf5Group group: this.listGroups()) {
+			if (group.getName().equals(name)) {
 				return group;
 			}
 		}
@@ -110,10 +96,8 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 	
 	public Hdf5DataSet<?> getDataSet(final String name) {
-		Iterator<Hdf5DataSet<?>> iter = this.getDataSets().iterator();
-		while (iter.hasNext()) {
-			Hdf5DataSet<?> dataSet = iter.next();
-			if (dataSet.getName() == name) {
+		for (Hdf5DataSet<?> dataSet: this.listDataSets()) {
+			if (dataSet.getName().equals(name)) {
 				return dataSet;
 			}
 		}
@@ -126,37 +110,40 @@ public class Hdf5Group extends Hdf5TreeElement {
 		}
 	}
 	
-	// TODO test that our group isn't a file, because a file shouldn't add files
 	private void addGroupToFile(Hdf5File file, String path) {
-		if (file.getFile_id() >= 0) {
-			Hdf5Group group = file;
-			if (!path.equals("")) {
-				group = Hdf5Group.getLastGroup(path);
-		    	group.addGroupToFile(file, Hdf5Group.getGroupPath(path));             
-			} 
-			group.addGroup(this);
-			if (group.getGroup_id() >= 0) {
-	    		try {
-					this.setGroup_id(H5.H5Gopen(group.getGroup_id(), this.getName(), 
-							HDF5Constants.H5P_DEFAULT));
-				} catch (HDF5LibraryException | NullPointerException e) {
-					try {
-						this.setGroup_id(H5.H5Gcreate(group.getGroup_id(), this.getName(), 
-								HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT,
+		if (!(this instanceof Hdf5File)) {
+			if (file.getElement_id() >= 0) {
+				Hdf5Group group = file;
+				if (!path.equals("")) {
+					group = Hdf5Group.getLastGroup(path);
+			    	group.addGroupToFile(file, Hdf5Group.getGroupPath(path));             
+				} 
+				group.addGroup(this);
+				if (group.getElement_id() >= 0) {
+		    		try {
+						this.setElement_id(H5.H5Gopen(group.getElement_id(), this.getName(), 
 								HDF5Constants.H5P_DEFAULT));
-					} catch (HDF5LibraryException | NullPointerException e2) {
-						e.printStackTrace();
+					} catch (HDF5LibraryException | NullPointerException e) {
+						try {
+							this.setElement_id(H5.H5Gcreate(group.getElement_id(), this.getName(), 
+									HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT,
+									HDF5Constants.H5P_DEFAULT));
+						} catch (HDF5LibraryException | NullPointerException e2) {
+							e.printStackTrace();
+						}
 					}
-				}
-			} 
-        }
+				} 
+	        }
+		} else {
+			System.err.println("Cannot add file to file!");
+		}
 	}
 	
 	public void close() {
 		try {
-            if (this.getGroup_id() >= 0) {
-                H5.H5Gclose(this.getGroup_id());
-                this.setGroup_id(-1);
+            if (this.getElement_id() >= 0) {
+                H5.H5Gclose(this.getElement_id());
+                this.setElement_id(-1);
             }
         } catch (Exception e) {
             e.printStackTrace();

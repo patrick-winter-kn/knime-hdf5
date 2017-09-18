@@ -4,22 +4,33 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
-//TODO
 abstract public class Hdf5TreeElement {
-	
+
+	protected final String name;
 	private final List<Hdf5Attribute<?>> attributes = new LinkedList<>();
+	private long element_id = -1;
 	
-	public Hdf5TreeElement() {
-		
+	public Hdf5TreeElement(final String name) {
+		this.name = name;
 	}
 	
-	// TODO maybe set to private
-	public List<Hdf5Attribute<?>> getAttributes() {
+	public String getName() {
+		return name;
+	}
+
+	private List<Hdf5Attribute<?>> getAttributes() {
 		return attributes;
 	}
 
+	public long getElement_id() {
+		return element_id;
+	}
+
+	public void setElement_id(long element_id) {
+		this.element_id = element_id;
+	}
+
 	public Hdf5Attribute<?>[] listAttributes() {
-		//Hdf5Attribute<?>[] attributes = (Hdf5Attribute<?>[]) this.getAttributes().toArray();
 		Hdf5Attribute<?>[] attributes = new Hdf5Attribute<?>[this.getAttributes().size()];
 		Iterator<Hdf5Attribute<?>> iter = this.getAttributes().iterator();
 		int i = 0;
@@ -31,10 +42,8 @@ abstract public class Hdf5TreeElement {
 	}
 
 	public Hdf5Attribute<?> getAttribute(final String name) {
-		Iterator<Hdf5Attribute<?>> iter = this.getAttributes().iterator();
-		while (iter.hasNext()) {
-			Hdf5Attribute<?> attr = iter.next();
-			if (attr.getName() == name) {
+		for (Hdf5Attribute<?> attr: this.listAttributes()) {
+			if (attr.getName().equals(name)) {
 				return attr;
 			}
 		}
