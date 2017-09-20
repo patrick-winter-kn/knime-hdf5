@@ -7,8 +7,6 @@ import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataColumnSpecCreator;
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.def.DefaultRow;
-import org.knime.core.data.def.DoubleCell;
-import org.knime.core.data.def.IntCell;
 import org.knime.core.data.def.JoinedRow;
 import org.knime.core.data.def.StringCell;
 import org.knime.core.node.BufferedDataContainer;
@@ -24,10 +22,7 @@ import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
 
-import hdf.hdf5lib.H5;
-import hdf.hdf5lib.HDF5Constants;
-
-// TODO first: look to line 210
+// TODO more Dimensions also for KNIME
 // TODO delete things you can create, try everything out again
 // TODO later for GUI: change the thing how you go into a group,
 //		load all subGroups/attributes to show them
@@ -35,9 +30,9 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	
     private static String fname  = "Data" + File.separator + "example.h5";
     // TODO File separator '/' everywhere (opp system) the same?
-    private static String dspath  = "tests/stringTests/first";
+    private static String dspath  = "tests/stringTests/second";
     private static String dsname  = "stringTest";
-    private static long[] dims2D = { 2, 2 };
+    private static long[] dims2D = { 2, 2, 2, 8 }; //stringLength = 7 (= 8 - 1), 1 for the null terminator
 
 	protected HDF5ReaderNodeModel() {
 		super(0, 1);
@@ -47,9 +42,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
 		// create the file and add groups and dataset into the file
 		
-		String[] dataRead = CreateDataset();
-		
-		//String[] dataRead = createFile();
+		String[] dataRead = createFile();
         
 		DataTableSpec outSpec = createOutSpec();
 		BufferedDataContainer outContainer = exec.createDataContainer(outSpec);
@@ -80,10 +73,72 @@ public class HDF5ReaderNodeModel extends NodeModel {
      */
 	
     private static String[] createFile() {
-        Hdf5File file = new Hdf5File(fname);
-        Hdf5DataSet<String> dataSet = new Hdf5DataSet<>(dsname, dims2D, new String(""));
-        System.out.println("\n\naddToFile: " + dataSet.addToFile(file, dspath));
+		StringBuffer[][][] str_data = { { {new StringBuffer("1"), new StringBuffer("22")},
+				{new StringBuffer("333"), new StringBuffer("4444")} } , 
+				{ {new StringBuffer("55555"), new StringBuffer("666666")},
+					{new StringBuffer("7777777"), new StringBuffer("88888888")} } };
 
+		Hdf5File file = new Hdf5File(fname);
+		Hdf5DataSet<Byte> dataSet = new Hdf5DataSet<>(dsname, dims2D, new Byte((byte) 0));
+		System.out.println("Added to file: " + dataSet.addToFile(file, dspath));
+		
+		long SDIM = (int) dataSet.getStringLength() + 1;
+		Byte[] dstr = new Byte[(int) dataSet.numberOfValues()];
+
+		// Write the data to the dataset.
+		for (int i = 0; i < dataSet.numberOfValuesRange(0, dataSet.getDimensions().length - 1); i++) {
+			for (int j = 0; j < SDIM; j++) {
+				// TODO das mit dimensions aus Datasets schreiben
+				StringBuffer buf = str_data[(i / (int) dims2D[2]) / (int) dims2D[1]][(i / (int) dims2D[2]) % (int) dims2D[1]][i % (int) dims2D[2]];
+				if (j < buf.length()) {
+					dstr[i * (int) SDIM + j] = (Byte) (byte) buf.charAt(j);
+				} else {
+					dstr[i * (int) SDIM + j] = 0;
+				}
+			}
+		}
+		dataSet.write(dstr);
+
+		// Allocate space for data.
+		Byte[] dataReadByte = new Byte[(int) dataSet.numberOfValues()];
+
+		// Read data.
+		dataReadByte = dataSet.read(dataReadByte);
+		
+
+		System.out.println();
+		
+		for (Byte b: dataReadByte) {
+			System.out.println(b);
+		}
+		
+		String[] dataRead = new String[(int) dataSet.numberOfValuesRange(0, dataSet.getDimensions().length - 1)];
+		char[] tempbuf = new char[(int) SDIM];
+		for (int i = 0; i < dataReadByte.length; i++) {
+			tempbuf[i%(int) SDIM] = (char) (byte) dataReadByte[i];
+			if ((i+1) % (int) SDIM == 0) {
+				dataRead[i/(int) SDIM] = String.copyValueOf(tempbuf);
+			}
+		}
+		
+		// Output the data to the screen.
+		for (int i = 0; i < (int) dataSet.numberOfValuesRange(0, dataSet.getDimensions().length - 1); i++) {
+			System.out.println(dsname + " [" + i + "]: " + dataRead[i]);
+		}
+		
+		// TODO check if indices are too big
+        System.out.println("\n\nStringCell 0 1 1: " + dataSet.getStringCell(dataReadByte, 0, 1, 1));
+        System.out.println("\n\nCell 0 1 3: " + dataSet.getCell(dataReadByte, 0, 1, 3));
+		addAttribute(dataSet);
+		
+		dataSet.close();
+		file.closeAll();
+		
+		return dataRead;
+        
+        
+        
+/*
         // set the data values
         String[] dataIn = new String[(int) (dims2D[0] * dims2D[1])];
         for (int i = 0; i < dims2D[0]; i++) {
@@ -124,7 +179,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
         dataSet.close();
         file.closeAll();
         
-        return dataRead;
+        return dataRead;*/
     }
 	
 	public static void addAttribute(Hdf5DataSet<?> dataSet) {
@@ -178,94 +233,4 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 	@Override
 	protected void reset() {}
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	// Test
-	
-	private static String[] CreateDataset() {
-		String FILENAME = "Data" + File.separator + "h5ex_t_string.h5";
-		String DATASETNAME = "DS2";
-		int DIM0 = 2;
-		int DIM1 = 2;
-		int SDIM = 8;
-		long[] dims = { DIM0, DIM1 };
-		byte[][][] dset_data = new byte[DIM0][DIM1][SDIM];
-		String[] dstr = new String[DIM0 * DIM1 * SDIM];
-		StringBuffer[][] str_data = { {new StringBuffer("Parting"),
-				new StringBuffer("is such")}, {new StringBuffer("sweet"),
-				new StringBuffer("sorrow.")} };
-
-		System.out.println("\n\nInt: " + HDF5Constants.H5T_NATIVE_INT + "\nLong: " + HDF5Constants.H5T_NATIVE_INT64 + "\nDouble: " + HDF5Constants.H5T_NATIVE_DOUBLE);
-		
-		Hdf5File file = new Hdf5File(FILENAME);
-		// TODO make it with Character instead of String
-		Hdf5DataSet<String> dataSet = new Hdf5DataSet<>(DATASETNAME, dims, new String(""));
-		System.out.println("Added to file: " + dataSet.addToFile(file, ""));
-
-		//dataspace_id = dataSet.getDataspace_id();
-		
-		// Write the data to the dataset.
-		for (int indx = 0; indx < DIM0; indx++) {
-			for (int kndx = 0; kndx < DIM1; kndx++) {
-				for (int jndx = 0; jndx < SDIM; jndx++) {
-					if (jndx < str_data[indx][kndx].length()) {
-						dset_data[indx][kndx][jndx] = (byte) str_data[indx][kndx].charAt(jndx);
-						dstr[(indx*DIM1 + kndx) * SDIM + jndx] = "" + str_data[indx][kndx].charAt(jndx);
-					} else {
-						dset_data[indx][kndx][jndx] = 0;
-						dstr[(indx*DIM1 + kndx) * SDIM + jndx] = "0";
-					}
-				}
-			}
-		}
-		dataSet.write(dstr);
-
-/*
-		// Terminate access to the data space.
-		try {
-			if (dataspace_id >= 0)
-				H5.H5Sclose(dataspace_id);
-		}
-		catch (Exception e) {
-			e.printStackTrace();
-		}
-*/
-
-		String[] dataRead;
-
-		// Allocate space for data.
-		//byte[][][] dset_dataRead = new byte[(int) dims[0]][(int) dims[1]][(int) dataSet.getStringLength()];
-		//StringBuffer[][] str_dataRead = new StringBuffer[(int) dims[0]][(int) dims[1]];
-		dataRead = new String[(int) dims[0] * (int) dims[1]];
-
-		// Read data.
-		dataRead = dataSet.read(dataRead);
-
-		// Output the data to the screen.
-		for (int indx = 0; indx < dims[0]; indx++) {
-			for (int kndx = 0; kndx < (int) dims[1]; kndx++) {
-				System.out.println(DATASETNAME + " [" + indx + "][" + kndx + "]: " + str_data[indx][kndx]);
-			}
-		}
-		System.out.println();
-		
-		for (String s: dataRead) {
-			System.out.println(s);
-		}
-
-		dataSet.close();
-		file.closeAll();
-
-		return dataRead;
-	}
 }

@@ -17,7 +17,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	// TODO find a way to do it without the parameter Type type
 	public Hdf5DataSet(final String name, long[] dimensions, Type type) {
 		super(name);
-		if (type instanceof Integer) {
+		if (type instanceof Byte) {
+			this.string = true;
+			this.stringLength = dimensions[dimensions.length - 1] - 1;
+			//this.datatype will become values in addToFile()
+		} else if (type instanceof Integer) {
 			this.datatype[0] = HDF5Constants.H5T_STD_I32LE;
 			this.datatype[1] = HDF5Constants.H5T_NATIVE_INT32;
 		} else if (type instanceof Long) {
@@ -33,6 +37,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			System.err.println("Hdf5DataSet: Datatype is not supported");
 		}
 		this.dimensions = dimensions;
+		System.out.println("SDIM: " + (int) this.getDimensions()[2]);
 	}
 	
 	public long[] getDatatype() {
@@ -65,11 +70,14 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 
 	public void updateDimensions() {
+		// Get dataspace and allocate memory for read buffer.
 		long dataspace_id = -1;
 		try {
-			dataspace_id = H5.H5Dget_space(getElement_id());
-		} catch (HDF5LibraryException e1) {
-			e1.printStackTrace();
+			if (this.getElement_id() >= 0) {
+				dataspace_id = H5.H5Dget_space(this.getElement_id());
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 		
 		int ndims = -1;
@@ -85,6 +93,53 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		} catch (HDF5LibraryException | NullPointerException e1) {
 			e1.printStackTrace();
 		}
+		
+		if (this.isString()) {
+    		// Get the datatype and its size.
+    		try {
+    			if (this.getElement_id() >= 0) {
+    				this.getDatatype()[0] = H5.H5Dget_type(this.getElement_id());
+    			}
+    			if (this.getDatatype()[0] >= 0) {
+    				this.setStringLength(H5.H5Tget_size(this.getDatatype()[0]));
+    				dims = Arrays.copyOf(dims, ndims + 1);
+    				dims[dims.length - 1] = this.getStringLength() + 1;
+    				System.out.println("Stringlength: " + this.getStringLength());
+    				// (+1) for: Make room for null terminator
+    			}
+    		} catch (Exception e) {
+    			e.printStackTrace();
+    		}
+
+    		try {
+    			if (dataspace_id >= 0) {
+    				System.out.println("DIM1-0: " + (int) this.getDimensions()[1]);
+    				H5.H5Sget_simple_extent_dims(dataspace_id, Arrays.copyOfRange(this.getDimensions(), 0, this.getDimensions().length - 1), null);
+    			}
+    		} catch (Exception e) {
+    			e.printStackTrace();
+    		}
+    		
+    		// Create the memory datatype.
+    		try {
+    			this.getDatatype()[1] = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+    			if (this.getDatatype()[1] >= 0) {
+    				H5.H5Tset_size(this.getDatatype()[1], this.getStringLength() + 1);
+    				System.out.println("DIM1-1: " + (int) this.getDimensions()[1]);
+    			}
+    		} catch (Exception e) {
+    			e.printStackTrace();
+    		}
+    		
+    		// Terminate access to the data space.
+	        try {
+	            if (dataspace_id >= 0) {
+	                H5.H5Sclose(dataspace_id);
+	            }
+	        } catch (Exception e2) {
+	            e2.printStackTrace();
+	        }
+    	}
 		
 		System.out.println("Datasetdims: " + dims[0] + "  " + dims[1]);
 		
@@ -119,96 +174,42 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 */
 	public boolean addToFile(Hdf5File file, String dspath) {
 		Hdf5Group group = file;
+    	String separator = "";
 		// Open dataset using the default properties.
         try {
             if (file.getElement_id() >= 0) {
-            	if (!dspath.matches("/?")) {
+            	if (!dspath.matches("")) {
             		group = Hdf5Group.addToFile(file, dspath);
+            		separator = "/";
         		}
             	
-                this.setElement_id(H5.H5Dopen(file.getElement_id(), dspath + "/" + this.getName(),
+                this.setElement_id(H5.H5Dopen(file.getElement_id(), dspath + separator + this.getName(),
                 		HDF5Constants.H5P_DEFAULT));
+	            System.out.println("Open: " + dspath + separator + this.getName());
             	group.addDataSet(this);
             	this.updateDimensions();
-            	
-            	if (this.isString()) {
-            		// Get the datatype and its size.
-            		try {
-            			if (this.getElement_id() >= 0) {
-            				this.getDatatype()[0] = H5.H5Dget_type(this.getElement_id());
-            			}
-            			if (this.getDatatype()[0] >= 0) {
-            				this.setStringLength(H5.H5Tget_size(this.getDatatype()[0]) + 1);
-            				// (+1) for: Make room for null terminator
-            			}
-            		}
-            		catch (Exception e) {
-            			e.printStackTrace();
-            		}
-
-            		// Get dataspace and allocate memory for read buffer.
-            		long dataspace_id = -1;
-            		try {
-            			if (this.getElement_id() >= 0)
-            				dataspace_id = H5.H5Dget_space(this.getElement_id());
-            		}
-            		catch (Exception e) {
-            			e.printStackTrace();
-            		}
-
-            		try {
-            			if (dataspace_id >= 0)
-            				H5.H5Sget_simple_extent_dims(dataspace_id, this.getDimensions(), null);
-            		}
-            		catch (Exception e) {
-            			e.printStackTrace();
-            		}
-            		
-            		// Create the memory datatype.
-            		try {
-            			this.getDimensions()[1] = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-            			if (this.getDimensions()[1] >= 0)
-            				H5.H5Tset_size(this.getDimensions()[1], this.getStringLength());
-            		}
-            		catch (Exception e) {
-            			e.printStackTrace();
-            		}
-            		
-            		// Terminate access to the data space.
-        	        try {
-        	            if (dataspace_id >= 0) {
-        	                H5.H5Sclose(dataspace_id);
-        	            }
-        	        }
-        	        catch (Exception e2) {
-        	            e2.printStackTrace();
-        	        }
-            	}
             }
         } catch (HDF5LibraryException e) {
         	if (this.isString()) {
 				long filetype_id = -1;
 				long memtype_id = -1;
-				int SDIM = 8;
 				// Create file and memory datatypes. For this example we will save
 				// the strings as FORTRAN strings, therefore they do not need space
 				// for the null terminator in the file.
 				try {
 					filetype_id = H5.H5Tcopy(HDF5Constants.H5T_FORTRAN_S1);
 					if (filetype_id >= 0) {
-						H5.H5Tset_size(filetype_id, SDIM - 1);
+						H5.H5Tset_size(filetype_id, this.getStringLength());
 					}
-				}
-				catch (Exception e2) {
+				} catch (Exception e2) {
 					e.printStackTrace();
 				}
 				try {
 					memtype_id = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
 					if (memtype_id >= 0) {
-						H5.H5Tset_size(memtype_id, SDIM);
+						H5.H5Tset_size(memtype_id, this.getStringLength() + 1);
 					}
-				}
-				catch (Exception e2) {
+				} catch (Exception e2) {
 					e.printStackTrace();
 				}
 				this.getDatatype()[0] = filetype_id;
@@ -220,7 +221,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         	long dataspace_id = -1;
         	
 	        try {
-	            dataspace_id = H5.H5Screate_simple(this.getDimensions().length, this.getDimensions(), null);
+	            dataspace_id = H5.H5Screate_simple(this.getDimensions().length - 1, Arrays.copyOfRange(this.getDimensions(), 0, this.getDimensions().length - 1), null);
 	        } catch (Exception e2) {
 	            e2.printStackTrace();
 	        }
@@ -228,10 +229,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	        // Create the dataset.
 	        try {
 	            if ((file.getElement_id() >= 0) && (dataspace_id >= 0)) {
-	                this.setElement_id(H5.H5Dcreate(file.getElement_id(), dspath + "/" + this.getName(),
+	                this.setElement_id(H5.H5Dcreate(file.getElement_id(), dspath + separator + this.getName(),
 	                        this.getDatatype()[0], dataspace_id,
 	                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
-		            group.addDataSet(this);
+		            System.out.println("Create: " + dspath + separator + this.getName());
+	                group.addDataSet(this);
 		        }
 	        } catch (Exception e2) {
 	            e2.printStackTrace();
@@ -242,8 +244,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	            if (dataspace_id >= 0) {
 	                H5.H5Sclose(dataspace_id);
 	            }
-	        }
-	        catch (Exception e2) {
+	        } catch (Exception e2) {
 	            e2.printStackTrace();
 	        }
 	        
@@ -258,10 +259,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	@SuppressWarnings("unchecked")
 	public Type[] read(Type[] dataRead) {
 		if (this.isString()) {
-			int DIM0 = (int) this.getDimensions()[0];
-			int DIM1 = (int) this.getDimensions()[1];
-			int SDIM = 8;
-			byte[][][] dbyte = new byte[DIM0][DIM1][SDIM];
+			int SDIM = (int) this.getDimensions()[this.getDimensions().length - 1];
+			byte[][] dbyte = new byte[(int) this.numberOfValuesRange(0, this.getDimensions().length - 1)][SDIM];
 			if ((this.getElement_id() >= 0) && (this.getDatatype()[1] >= 0)) {
 				try {
 					H5.H5Dread(this.getElement_id(), this.getDatatype()[1], HDF5Constants.H5S_ALL,
@@ -269,13 +268,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				} catch (NullPointerException | HDF5Exception e) {
 					e.printStackTrace();
 				}
-				byte[] tempbuf = new byte[SDIM];
-				for (int indx = 0; indx < DIM0; indx++) {
-					for (int kndx = 0; kndx < DIM1; kndx++) {
-						for (int jndx = 0; jndx < SDIM; jndx++) {
-							tempbuf[jndx] = dbyte[indx][kndx][jndx];
-						}
-						dataRead[indx * DIM1 + kndx] = (Type) new String(tempbuf);
+				for (int i = 0; i < (int) this.numberOfValuesRange(0, this.getDimensions().length - 1); i++) {
+					for (int j = 0; j < SDIM; j++) {
+						dataRead[i * SDIM + j] = (Type) (Byte) dbyte[i][j];
 					}
 				}
 			}
@@ -302,12 +297,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		// Write the data to the dataset.
         try {
 			if (this.isString()) {
-				int DIM0 = (int) this.getDimensions()[0];
-				int DIM1 = (int) this.getDimensions()[1];
-				int SDIM = 8;
-				byte[][][] dbyte = new byte[DIM0][DIM1][SDIM];
+				int SDIM = (int) this.getDimensions()[this.getDimensions().length - 1];
+				byte[][] dbyte = new byte[(int) this.numberOfValuesRange(0, this.getDimensions().length - 1)][SDIM];
 				for (int i = 0; i < dataIn.length; i++) {
-					dbyte[i/SDIM/DIM1][(i/SDIM) % DIM1][i % SDIM] = Byte.parseByte((String) dataIn[i]);
+					dbyte[i/SDIM][i % SDIM] = (byte) dataIn[i];
+					System.out.println("dbyte[" + i/SDIM + "][" + i % SDIM + "] = " + (byte) dataIn[i]);
 				}
 	        	if ((this.getElement_id() >= 0) && (this.getDatatype()[1] >= 0)) {
 					H5.H5Dwrite(this.getElement_id(), this.getDatatype()[1], HDF5Constants.H5S_ALL,
@@ -344,8 +338,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				if (this.getDatatype()[0] >= 0) {
 					H5.H5Tclose(this.getDatatype()[0]);
 				}
-			}
-			catch (Exception e) {
+			} catch (Exception e) {
 				e.printStackTrace();
 			}
 	
@@ -354,8 +347,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				if (this.getDatatype()[1] >= 0) {
 					H5.H5Tclose(this.getDatatype()[1]);
 				}
-			}
-			catch (Exception e) {
+			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
@@ -365,11 +357,50 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		int index = 0;
 		if (indices.length == this.getDimensions().length) {
 			for (int i = 0; i < indices.length; i++) {
-				index += indices[i] * (int) this.numberOfValuesRange(i+1, indices.length);
+				if (indices[i] >= 0 && indices[i] < this.getDimensions()[i]) {
+					index += indices[i] * (int) this.numberOfValuesRange(i+1, indices.length);
+				} else {
+					System.err.println("Hdf5DataSets.getCell() - Index out of bounds: indices["
+							+ i + "] = " + indices[i] + " and should be from 0 to "
+							+ (this.getDimensions()[i] - 1));
+					return null;
+				}
 		    }
 			return this.read(data)[index];
 		}
-		System.err.println("Hdf5DataSets.getCell(): Not the correct amount of indices!");
+		System.err.println("Hdf5DataSets.getCell() - Not the correct amount (" 
+				+ this.getDimensions().length + ") of indices!: " + indices.length);
+		return null;
+	}
+	
+	public String getStringCell(Byte[] data, int... indices) {
+		if (this.isString()) {
+			int index = 0;
+			int SDIM = (int) this.getStringLength() + 1;
+			Byte[] dataByte = new Byte[SDIM];
+			if (indices.length == this.getDimensions().length - 1) {
+				for (int i = 0; i < indices.length; i++) {
+					if (indices[i] >= 0 && indices[i] < this.getDimensions()[i]) {
+						index += indices[i] * (int) this.numberOfValuesRange(i+1, indices.length);
+					} else {
+						System.err.println("Hdf5DataSets.getStringCell() - Index out of bounds: indices["
+								+ i + "] = " + indices[i] + " and should be from 0 to "
+								+ (this.getDimensions()[i] - 1));
+						return null;
+					}
+			    }
+				dataByte = Arrays.copyOfRange(data, SDIM * index, SDIM * (index + 1));
+				char[] dataChar = new char[SDIM];
+				for (int i = 0; i < dataByte.length; i++) {
+					dataChar[i] = (char) (byte) dataByte[i];
+				}
+				return String.copyValueOf(dataChar);
+			}
+			System.err.println("Hdf5DataSet.getStringCell() - Not the correct amount (" 
+					+ (this.getDimensions().length - 1) + ") of indices!: " + indices.length);
+		} else {
+			System.err.println("Hdf5DataSet.getStringCell(): Should only be used for datatype Byte!");
+		}
 		return null;
 	}
 }
