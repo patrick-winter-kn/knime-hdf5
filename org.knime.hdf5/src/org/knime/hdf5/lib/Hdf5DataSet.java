@@ -20,7 +20,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		if (type instanceof Byte) {
 			this.string = true;
 			this.stringLength = dimensions[dimensions.length - 1] - 1;
-			//this.datatype will become values in addToFile()
+			//this.datatype will get values in addToFile()
 		} else if (type instanceof Integer) {
 			this.datatype[0] = HDF5Constants.H5T_STD_I32LE;
 			this.datatype[1] = HDF5Constants.H5T_NATIVE_INT32;
@@ -30,9 +30,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		} else if (type instanceof Double) {
 			this.datatype[0] = HDF5Constants.H5T_IEEE_F64LE;
 			this.datatype[1] = HDF5Constants.H5T_NATIVE_DOUBLE;
-		} else if (type instanceof String) {
-			this.string = true;
-			//this.datatype will become values in addToFile()
 		} else {
 			System.err.println("Hdf5DataSet: Datatype is not supported");
 		}
@@ -68,83 +65,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	public void setString(boolean string) {
 		this.string = string;
 	}
-
-	public void updateDimensions() {
-		// Get dataspace and allocate memory for read buffer.
-		long dataspace_id = -1;
-		try {
-			if (this.getElement_id() >= 0) {
-				dataspace_id = H5.H5Dget_space(this.getElement_id());
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		
-		int ndims = -1;
-		try {
-			ndims = H5.H5Sget_simple_extent_ndims(dataspace_id);
-		} catch (HDF5LibraryException e1) {
-			e1.printStackTrace();
-		}
-		
-		long[] dims = new long[ndims];
-		try {
-			H5.H5Sget_simple_extent_dims(dataspace_id, dims, null);
-		} catch (HDF5LibraryException | NullPointerException e1) {
-			e1.printStackTrace();
-		}
-		
-		if (this.isString()) {
-    		// Get the datatype and its size.
-    		try {
-    			if (this.getElement_id() >= 0) {
-    				this.getDatatype()[0] = H5.H5Dget_type(this.getElement_id());
-    			}
-    			if (this.getDatatype()[0] >= 0) {
-    				this.setStringLength(H5.H5Tget_size(this.getDatatype()[0]));
-    				dims = Arrays.copyOf(dims, ndims + 1);
-    				dims[dims.length - 1] = this.getStringLength() + 1;
-    				System.out.println("Stringlength: " + this.getStringLength());
-    				// (+1) for: Make room for null terminator
-    			}
-    		} catch (Exception e) {
-    			e.printStackTrace();
-    		}
-
-    		try {
-    			if (dataspace_id >= 0) {
-    				System.out.println("DIM1-0: " + (int) this.getDimensions()[1]);
-    				H5.H5Sget_simple_extent_dims(dataspace_id, Arrays.copyOfRange(this.getDimensions(), 0, this.getDimensions().length - 1), null);
-    			}
-    		} catch (Exception e) {
-    			e.printStackTrace();
-    		}
-    		
-    		// Create the memory datatype.
-    		try {
-    			this.getDatatype()[1] = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-    			if (this.getDatatype()[1] >= 0) {
-    				H5.H5Tset_size(this.getDatatype()[1], this.getStringLength() + 1);
-    				System.out.println("DIM1-1: " + (int) this.getDimensions()[1]);
-    			}
-    		} catch (Exception e) {
-    			e.printStackTrace();
-    		}
-    		
-    		// Terminate access to the data space.
-	        try {
-	            if (dataspace_id >= 0) {
-	                H5.H5Sclose(dataspace_id);
-	            }
-	        } catch (Exception e2) {
-	            e2.printStackTrace();
-	        }
-    	}
-		
-		System.out.println("Datasetdims: " + dims[0] + "  " + dims[1]);
-		
-		this.setDimensions(dims);
-	}
 	
 	/**
 	 * 
@@ -165,7 +85,93 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return values;
 	}
 	
+	public void updateDimensions() {
+		// Get dataspace and allocate memory for read buffer.
+		long dataspace_id = -1;
+		try {
+			if (this.getElement_id() >= 0) {
+				dataspace_id = H5.H5Dget_space(this.getElement_id());
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		int ndims = -1;
+		try {
+			if (dataspace_id >= 0) {
+				ndims = H5.H5Sget_simple_extent_ndims(dataspace_id);
+			}
+		} catch (HDF5LibraryException e1) {
+			e1.printStackTrace();
+		}
+		
+		long[] dims = new long[ndims];
+		try {
+			if (dataspace_id >= 0) {
+				H5.H5Sget_simple_extent_dims(dataspace_id, dims, null);
+			}
+		} catch (HDF5LibraryException | NullPointerException e1) {
+			e1.printStackTrace();
+		}
+		
+		if (this.isString()) {
+			long filetype_id = -1;
+			long memtype_id = -1;
+			
+    		// Get the datatype and its size.
+    		try {
+    			if (this.getElement_id() >= 0) {
+    				filetype_id = H5.H5Dget_type(this.getElement_id());
+    			}
+    			if (filetype_id >= 0) {
+    				this.setStringLength(H5.H5Tget_size(filetype_id));
+    				dims = Arrays.copyOf(dims, ndims + 1);
+    				dims[dims.length - 1] = this.getStringLength() + 1;
+    				// (+1) for: Make room for null terminator
+    			}
+    		} catch (Exception e) {
+    			e.printStackTrace();
+    		}
+    		/*
+    		try {
+    			if (dataspace_id >= 0) {
+    				H5.H5Sget_simple_extent_dims(dataspace_id, Arrays.copyOfRange(this.getDimensions(), 0, this.getDimensions().length - 1), null);
+    			}
+    		} catch (Exception e) {
+    			e.printStackTrace();
+    		}
+    		*/
+    		
+    		// Create the memory datatype.
+    		try {
+    			memtype_id = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+    			if (memtype_id >= 0) {
+    				H5.H5Tset_size(memtype_id, this.getStringLength() + 1);
+    			}
+    		} catch (Exception e) {
+    			e.printStackTrace();
+    		}
+    		
+			this.getDatatype()[0] = filetype_id;
+			this.getDatatype()[1] = memtype_id;
+    	}
+		
+		// Terminate access to the data space.
+        try {
+            if (dataspace_id >= 0) {
+                H5.H5Sclose(dataspace_id);
+            }
+        } catch (Exception e2) {
+            e2.printStackTrace();
+        }
+
+		this.setDimensions(dims);
+	}
+	
 	/**
+	 * Adds this dataset to the file through the path.
+	 * The problem of adding it to a group, would be that you have to test if the group has already been
+	 * added to a file.
 	 * 
 	 * @param file
 	 * @param dspath may not end with '/'
@@ -193,6 +199,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         	if (this.isString()) {
 				long filetype_id = -1;
 				long memtype_id = -1;
+				
 				// Create file and memory datatypes. For this example we will save
 				// the strings as FORTRAN strings, therefore they do not need space
 				// for the null terminator in the file.
@@ -204,6 +211,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				} catch (Exception e2) {
 					e.printStackTrace();
 				}
+				
 				try {
 					memtype_id = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
 					if (memtype_id >= 0) {
@@ -212,6 +220,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				} catch (Exception e2) {
 					e.printStackTrace();
 				}
+				
 				this.getDatatype()[0] = filetype_id;
 				this.getDatatype()[1] = memtype_id;
         	}
@@ -228,7 +237,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	        System.out.println("Dataspace: " + dataspace_id);
 	        // Create the dataset.
 	        try {
-	            if ((file.getElement_id() >= 0) && (dataspace_id >= 0)) {
+	            if ((file.getElement_id() >= 0) && (dataspace_id >= 0) && (this.getDatatype()[0] >= 0)) {
 	                this.setElement_id(H5.H5Dcreate(file.getElement_id(), dspath + separator + this.getName(),
 	                        this.getDatatype()[0], dataspace_id,
 	                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
@@ -256,6 +265,89 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return false;
 	}
 
+	public boolean addToGroupInFile(Hdf5Group group, Hdf5File file) {
+		if (!group.getPathFromFile().equals(null)) {
+			// Open dataset using the default properties.
+	        try {
+	            if (group.getElement_id() >= 0) {
+	            	this.setElement_id(H5.H5Dopen(group.getElement_id(), this.getName(),
+	                		HDF5Constants.H5P_DEFAULT));
+		            System.out.println("Open: " + group.getPathFromFile() + "/" + this.getName());
+	            	group.addDataSet(this);
+	            	this.updateDimensions();
+	            }
+	        } catch (HDF5LibraryException e) {
+	        	if (this.isString()) {
+					long filetype_id = -1;
+					long memtype_id = -1;
+					
+					// Create file and memory datatypes. For this example we will save
+					// the strings as FORTRAN strings, therefore they do not need space
+					// for the null terminator in the file.
+					try {
+						filetype_id = H5.H5Tcopy(HDF5Constants.H5T_FORTRAN_S1);
+						if (filetype_id >= 0) {
+							H5.H5Tset_size(filetype_id, this.getStringLength());
+						}
+					} catch (Exception e2) {
+						e.printStackTrace();
+					}
+					
+					try {
+						memtype_id = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+						if (memtype_id >= 0) {
+							H5.H5Tset_size(memtype_id, this.getStringLength() + 1);
+						}
+					} catch (Exception e2) {
+						e.printStackTrace();
+					}
+					
+					this.getDatatype()[0] = filetype_id;
+					this.getDatatype()[1] = memtype_id;
+	        	}
+				
+	        	
+	        	// Create the data space for the dataset.
+	        	long dataspace_id = -1;
+	        	
+		        try {
+		            dataspace_id = H5.H5Screate_simple(this.getDimensions().length - 1, Arrays.copyOfRange(this.getDimensions(), 0, this.getDimensions().length - 1), null);
+		        } catch (Exception e2) {
+		            e2.printStackTrace();
+		        }
+		        System.out.println("Dataspace: " + dataspace_id);
+		        // Create the dataset.
+		        try {
+		            if ((group.getElement_id() >= 0) && (dataspace_id >= 0) && (this.getDatatype()[0] >= 0)) {
+		                this.setElement_id(H5.H5Dcreate(group.getElement_id(), this.getName(),
+		                        this.getDatatype()[0], dataspace_id,
+		                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
+			            System.out.println("Create: " + group.getPathFromFile() + "/" + this.getName());
+		                group.addDataSet(this);
+			        }
+		        } catch (Exception e2) {
+		            e2.printStackTrace();
+		        }
+	            
+		        // Terminate access to the data space.
+		        try {
+		            if (dataspace_id >= 0) {
+		                H5.H5Sclose(dataspace_id);
+		            }
+		        } catch (Exception e2) {
+		            e2.printStackTrace();
+		        }
+		        
+		        if (this.getElement_id() >= 0) {
+		    		return true;
+		        }
+	        }
+	        System.out.println("Dataset: " + this.getElement_id());
+			return false;
+		}
+		return false;
+	}
+	
 	@SuppressWarnings("unchecked")
 	public Type[] read(Type[] dataRead) {
 		if (this.isString()) {

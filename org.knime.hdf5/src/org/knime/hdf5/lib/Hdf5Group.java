@@ -12,6 +12,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	
 	private final List<Hdf5Group> groups = new LinkedList<>();
 	private final List<Hdf5DataSet<?>> dataSets = new LinkedList<>();
+	private String pathFromFile = null;
 	
 	public Hdf5Group(final String name) {
 		super(name);
@@ -56,6 +57,14 @@ public class Hdf5Group extends Hdf5TreeElement {
 
 	public List<Hdf5DataSet<?>> getDataSets() {
 		return dataSets;
+	}
+
+	public String getPathFromFile() {
+		return pathFromFile;
+	}
+
+	public void setPathFromFile(String pathFromFile) {
+		this.pathFromFile = pathFromFile;
 	}
 
 	public Hdf5Group[] listGroups() {
@@ -110,6 +119,36 @@ public class Hdf5Group extends Hdf5TreeElement {
 		}
 	}
 	
+	public void addToGroupInFile(Hdf5Group group, Hdf5File file) {
+		if (!(this instanceof Hdf5File)) {
+			if (!(group instanceof Hdf5File)) {
+				String path = group.getPathFromFile();
+				if (!path.equals(null) && file.getElement_id() >= 0 && group.getElement_id() >= 0) {
+		    		try {
+						this.setElement_id(H5.H5Gopen(group.getElement_id(), this.getName(), 
+								HDF5Constants.H5P_DEFAULT));
+						group.addGroup(this);
+						this.setPathFromFile(path);
+					} catch (HDF5LibraryException | NullPointerException e) {
+						try {
+							this.setElement_id(H5.H5Gcreate(group.getElement_id(), this.getName(), 
+									HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT,
+									HDF5Constants.H5P_DEFAULT));
+							group.addGroup(this);
+							this.setPathFromFile(path);
+						} catch (HDF5LibraryException | NullPointerException e2) {
+							e.printStackTrace();
+						}
+					} 
+				}
+			} else {
+				this.addGroupToFile(file, "");
+			}
+		} else {
+			System.err.println("Cannot add file to file!");
+		}
+	}
+	
 	private void addGroupToFile(Hdf5File file, String path) {
 		if (!(this instanceof Hdf5File)) {
 			if (file.getElement_id() >= 0) {
@@ -118,16 +157,19 @@ public class Hdf5Group extends Hdf5TreeElement {
 					group = Hdf5Group.getLastGroup(path);
 			    	group.addGroupToFile(file, Hdf5Group.getGroupPath(path));             
 				} 
-				group.addGroup(this);
 				if (group.getElement_id() >= 0) {
 		    		try {
 						this.setElement_id(H5.H5Gopen(group.getElement_id(), this.getName(), 
 								HDF5Constants.H5P_DEFAULT));
+						group.addGroup(this);
+						this.setPathFromFile(path);
 					} catch (HDF5LibraryException | NullPointerException e) {
 						try {
 							this.setElement_id(H5.H5Gcreate(group.getElement_id(), this.getName(), 
 									HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT,
 									HDF5Constants.H5P_DEFAULT));
+							group.addGroup(this);
+							this.setPathFromFile(path);
 						} catch (HDF5LibraryException | NullPointerException e2) {
 							e.printStackTrace();
 						}
@@ -150,13 +192,12 @@ public class Hdf5Group extends Hdf5TreeElement {
         }
 	}
 	
-	public void closeAll() {
+	public void closeAllBelow() {
 		Iterator<Hdf5Group> iter = this.getGroups().iterator();
 		while(iter.hasNext()) {
 			Hdf5Group group = iter.next();
-			group.closeAll();
+			group.closeAllBelow();
 			group.close();
 		}
-		this.close();
 	}
 }

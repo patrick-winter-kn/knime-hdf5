@@ -21,17 +21,43 @@ import org.knime.core.node.NodeSettingsWO;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.lib.Hdf5Group;
+import org.knime.hdf5.lib.Hdf5TreeElement;
 
-// TODO more Dimensions also for KNIME
-// TODO delete things you can create, try everything out again
-// TODO later for GUI: change the thing how you go into a group,
-//		load all subGroups/attributes to show them
+/* what's possible so far:
+ * HDF5 - Java:		1abcd
+ * KNIME - Java:	
+ * 	
+ * what's possible so far, but can be done differently/better:
+ * HDF5 - Java:		2abcd 	(TODO not possible to see a list of all groups in the file
+ * 							 where you don't know the name)
+ * KNIME - Java:	1c		(TODO not possible to write datasets with more than 2 dimensions)
+ * 
+ * what's not possible so far:
+ * HDF5 - Java:		3abcd	(maybe also not necessary)
+ * KNIME - Java:	1ab		(not necessary)
+ * 					1d		(TODO still missing)
+ * 					2abcd	(TODO the whole thing with reading KNIME datasets in Java is still missing)
+ * 					3abcd	(maybe also not necessary)
+ * 
+ * abbreviations: (A = (HDF5|KNIME))
+ * 1 - write something in A with methods from Java
+ * 2 - read something in Java which is already available in A
+ * 3 - delete something in A with methods from Java
+ * 
+ * something:
+ * a - file
+ * b - a group which isn't a file
+ * c - dataset
+ * d - attribute
+ */
+
 public class HDF5ReaderNodeModel extends NodeModel {
 	
-    private static String fname  = "Data" + File.separator + "example.h5";
+    private static String fname  = "Data" + File.separator + "example_new2.h5";
     // TODO File separator '/' everywhere (opp system) the same?
     private static String dspath  = "tests/stringTests/second";
-    private static String dsname  = "stringTest";
+    private static String dsname  = "stringTest3";
     private static long[] dims2D = { 2, 2, 2, 8 }; //stringLength = 7 (= 8 - 1), 1 for the null terminator
 
 	protected HDF5ReaderNodeModel() {
@@ -40,7 +66,6 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		// create the file and add groups and dataset into the file
 		
 		String[] dataRead = createFile();
         
@@ -79,17 +104,23 @@ public class HDF5ReaderNodeModel extends NodeModel {
 					{new StringBuffer("7777777"), new StringBuffer("88888888")} } };
 
 		Hdf5File file = new Hdf5File(fname);
+		Hdf5Group group = new Hdf5Group("tests");
+		group.addToGroupInFile(file, file);
+		Hdf5Group group2 = new Hdf5Group("groups");
+		group2.addToGroupInFile(group, file);
+		Hdf5Group group3 = new Hdf5Group("testGroup");
+		group3.addToGroupInFile(group2, file);
 		Hdf5DataSet<Byte> dataSet = new Hdf5DataSet<>(dsname, dims2D, new Byte((byte) 0));
-		System.out.println("Added to file: " + dataSet.addToFile(file, dspath));
+		System.out.println("Added to file: " + dataSet.addToGroupInFile(group3, file));
 		
-		long SDIM = (int) dataSet.getStringLength() + 1;
+		long SDIM = dataSet.getStringLength() + 1;
 		Byte[] dstr = new Byte[(int) dataSet.numberOfValues()];
 
 		// Write the data to the dataset.
 		for (int i = 0; i < dataSet.numberOfValuesRange(0, dataSet.getDimensions().length - 1); i++) {
+			// TODO das mit dimensions aus Datasets schreiben
+			StringBuffer buf = str_data[(i / (int) dims2D[2]) / (int) dims2D[1]][(i / (int) dims2D[2]) % (int) dims2D[1]][i % (int) dims2D[2]];
 			for (int j = 0; j < SDIM; j++) {
-				// TODO das mit dimensions aus Datasets schreiben
-				StringBuffer buf = str_data[(i / (int) dims2D[2]) / (int) dims2D[1]][(i / (int) dims2D[2]) % (int) dims2D[1]][i % (int) dims2D[2]];
 				if (j < buf.length()) {
 					dstr[i * (int) SDIM + j] = (Byte) (byte) buf.charAt(j);
 				} else {
@@ -126,13 +157,14 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			System.out.println(dsname + " [" + i + "]: " + dataRead[i]);
 		}
 		
-		// TODO check if indices are too big
         System.out.println("\n\nStringCell 0 1 1: " + dataSet.getStringCell(dataReadByte, 0, 1, 1));
         System.out.println("\n\nCell 0 1 3: " + dataSet.getCell(dataReadByte, 0, 1, 3));
-		addAttribute(dataSet);
+		addAttribute(group3);
+		addAttribute2(group2);
 		
 		dataSet.close();
-		file.closeAll();
+		file.closeAllBelow();
+		file.close();
 		
 		return dataRead;
         
@@ -182,22 +214,62 @@ public class HDF5ReaderNodeModel extends NodeModel {
         return dataRead;*/
     }
 	
-	public static void addAttribute(Hdf5DataSet<?> dataSet) {
-        String attrname  = "data range5";
-        Byte[] attrValue = { 's', 'd' }; // attribute value
-        long[] attrDims = { 2 }; // 1D of size two
+	public static void addAttribute(Hdf5TreeElement treeElement) {
 
-        Hdf5Attribute<Byte> attribute = new Hdf5Attribute<>(attrname, attrValue, attrDims);
+        String attrname  = "double2";
+        Double[] attrValue = { 3.345, 23.243, 54.354 }; // attribute value
+
+        Hdf5Attribute<Double> attribute = new Hdf5Attribute<>(attrname, attrValue);
+        long DIM0 = attribute.getDimension(); // 1D of size two
         
-        System.out.println("\n\naddToDataSet: " + attribute.writeToTreeElement(dataSet));
+        System.out.println("\n\naddToTreeElement: " + attribute.writeToTreeElement(treeElement));
         System.out.println("ds: " + attribute.getDataspace_id() + "\na: " + attribute.getAttribute_id());
 
-        Byte[] attrData = attribute.read(new Byte[(int) attribute.numberOfValues()]);
+        Double[] attrData = attribute.read(new Double[(int) DIM0]);
         
         // print out attribute value
         System.out.println("\n\n" + attrname);
-        System.out.println(attrData[0] + "  " + attrData[1]);
+        System.out.println("SDIM: " + DIM0);
+        for (Double d: attrData) {
+            System.out.println("Zahl : " + d);
+        }
 
+        attribute.close();
+        
+	}
+
+	public static void addAttribute2(Hdf5TreeElement treeElement) {
+        String attrname  = "numbers3";
+        long stringLength = 8; // 1D of size two
+		StringBuffer str_data = new StringBuffer("12345678910");
+
+		Byte[] attrValue = new Byte[(int) stringLength];
+
+		// Write the data to the dataset.
+		for (int i = 0; i < stringLength; i++) {
+			if (i < str_data.length()) {
+				attrValue[i] = (Byte) (byte) str_data.charAt(i);
+			} else {
+				attrValue[i] = 0;
+			}
+		}
+		
+        Hdf5Attribute<Byte> attribute = new Hdf5Attribute<>(attrname, attrValue);
+		
+        System.out.println("\n\naddToTreeElement: " + attribute.writeToTreeElement(treeElement));
+
+		// Read data.
+		String dataRead;
+		Byte[] dataReadByte = attribute.read(new Byte[(int) stringLength]);		
+		char[] tempbuf = new char[(int) stringLength];
+		for (int i = 0; i < dataReadByte.length; i++) {
+			tempbuf[i] = (char) (byte) dataReadByte[i];
+		}
+		dataRead = String.copyValueOf(tempbuf);
+		
+ 		// Output the data to the screen.
+ 		System.out.println(attrname + ": " + dataRead + "\n");
+        
         attribute.close();
 	}
 	
