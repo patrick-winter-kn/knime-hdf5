@@ -17,21 +17,23 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	// TODO find a way to do it without the parameter Type type
 	public Hdf5DataSet(final String name, long[] dimensions, Type type) {
 		super(name);
-		if (type instanceof Byte) {
-			this.string = true;
-			this.stringLength = dimensions[dimensions.length - 1] - 1;
-			//this.datatype will get values in addToFile()
-		} else if (type instanceof Integer) {
-			this.datatype[0] = HDF5Constants.H5T_STD_I32LE;
-			this.datatype[1] = HDF5Constants.H5T_NATIVE_INT32;
-		} else if (type instanceof Long) {
-			this.datatype[0] = HDF5Constants.H5T_STD_I64LE;
-			this.datatype[1] = HDF5Constants.H5T_NATIVE_INT64;
-		} else if (type instanceof Double) {
-			this.datatype[0] = HDF5Constants.H5T_IEEE_F64LE;
-			this.datatype[1] = HDF5Constants.H5T_NATIVE_DOUBLE;
-		} else {
-			System.err.println("Hdf5DataSet: Datatype is not supported");
+		if (type != null) {
+			if (type instanceof Byte) {
+				this.string = true;
+				this.stringLength = dimensions[dimensions.length - 1] - 1;
+				//this.datatype will get values in addToFile()
+			} else if (type instanceof Integer) {
+				this.datatype[0] = HDF5Constants.H5T_STD_I32LE;
+				this.datatype[1] = HDF5Constants.H5T_NATIVE_INT32;
+			} else if (type instanceof Long) {
+				this.datatype[0] = HDF5Constants.H5T_STD_I64LE;
+				this.datatype[1] = HDF5Constants.H5T_NATIVE_INT64;
+			} else if (type instanceof Double) {
+				this.datatype[0] = HDF5Constants.H5T_IEEE_F64LE;
+				this.datatype[1] = HDF5Constants.H5T_NATIVE_DOUBLE;
+			} else {
+				System.err.println("Hdf5DataSet: Datatype is not supported");
+			}
 		}
 		this.dimensions = dimensions;
 		System.out.println("SDIM: " + (int) this.getDimensions()[2]);
@@ -192,7 +194,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
                 this.setElement_id(H5.H5Dopen(file.getElement_id(), dspath + separator + this.getName(),
                 		HDF5Constants.H5P_DEFAULT));
 	            System.out.println("Open: " + dspath + separator + this.getName());
-            	group.addDataSet(this);
+            	//group.addDataSet(this);
             	this.updateDimensions();
             }
         } catch (HDF5LibraryException e) {
@@ -242,7 +244,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	                        this.getDatatype()[0], dataspace_id,
 	                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
 		            System.out.println("Create: " + dspath + separator + this.getName());
-	                group.addDataSet(this);
+	                //group.addDataSet(this);
 		        }
 	        } catch (Exception e2) {
 	            e2.printStackTrace();
@@ -273,7 +275,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	            	this.setElement_id(H5.H5Dopen(group.getElement_id(), this.getName(),
 	                		HDF5Constants.H5P_DEFAULT));
 		            System.out.println("Open: " + group.getPathFromFile() + "/" + this.getName());
-	            	group.addDataSet(this);
+	            	//group.addDataSet(this);
 	            	this.updateDimensions();
 	            }
 	        } catch (HDF5LibraryException e) {
@@ -323,7 +325,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		                        this.getDatatype()[0], dataspace_id,
 		                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
 			            System.out.println("Create: " + group.getPathFromFile() + "/" + this.getName());
-		                group.addDataSet(this);
+		                //group.addDataSet(this);
 			        }
 		        } catch (Exception e2) {
 		            e2.printStackTrace();
@@ -443,6 +445,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				e.printStackTrace();
 			}
 		}
+        
+        System.out.println("Dataset " + this.getName() + " closed.");
 	}
 
 	public Type getCell(Type[] data, int... indices) {

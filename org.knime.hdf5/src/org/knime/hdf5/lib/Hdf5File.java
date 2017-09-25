@@ -44,7 +44,7 @@ public class Hdf5File extends Hdf5Group {
 		// TODO test if some things in the file are still open
         try {
             if (this.getElement_id() >= 0) {
-                System.out.println("File closed: " + H5.H5Fclose(this.getElement_id()));
+                System.out.println("File " + this.getName() + " closed: " + H5.H5Fclose(this.getElement_id()));
                 this.setElement_id(-1);
             }
         } catch (Exception e) {

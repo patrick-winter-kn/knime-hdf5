@@ -14,6 +14,10 @@ abstract public class Hdf5TreeElement {
 		this.name = name;
 	}
 	
+	/*public Hdf5TreeElement(long element_id) {
+		this.element_id = element_id;
+	}*/
+	
 	public String getName() {
 		return name;
 	}
