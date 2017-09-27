@@ -2,9 +2,6 @@ package org.knime.hdf5.nodes.reader;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataColumnSpecCreator;
@@ -27,17 +24,15 @@ import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 
-import hdf.hdf5lib.H5;
-import hdf.hdf5lib.HDF5Constants;
-
 /* what's possible so far:
  * HDF5 - Java:		1acd
  * 					1b		(maybe add another class Hdf5Path to access the groups along this path)
+ * 					2ab
  * KNIME - Java:	
  * 	
  * what's possible so far, but can be done differently/better:
- * HDF5 - Java:		2abcd 	(TODO not possible to see a list of all groups in the file
- * 							 where you don't know the name)
+ * HDF5 - Java:		2c		(TODO automatically recognize the datatype of the dataset)
+ * 					2d 		(TODO not possible to see a list of all attributes in a treeElement)
  * KNIME - Java:	1c		(TODO not possible to write datasets with more than 2 dimensions)
  * 
  * what's not possible so far:
@@ -63,9 +58,11 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	
     private static String fname  = "Data" + File.separator + "example_new2.h5";
     // TODO File separator '/' everywhere (opp system) the same?
-    private static String dspath  = "tests/groupTests/first";
-    private static String dsname  = "stringTest";
-    private static long[] dims2D = { 2, 2, 2, 8 }; //stringLength = 7 (= 8 - 1), 1 for the null terminator
+    private static String dspath  = "/tests/groupTests/first/searchedGroup/";
+    private static String dsname  = "searchedDataset";
+    //stringLength = 7, +1 for the null terminator
+    private static long[] dims2D = { 2, 2, 2, 7+1 };
+    private static String[] dataRead;
 
 	protected HDF5ReaderNodeModel() {
 		super(0, 1);
@@ -74,16 +71,18 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
 		
-		String[] dataRead = createFile();
+		 discoverFile(fname);
+
+		//String[] dataRead = createFile();
         
 		DataTableSpec outSpec = createOutSpec();
 		BufferedDataContainer outContainer = exec.createDataContainer(outSpec);
 		
-		System.out.println("\n");
+		//System.out.println("\n");
 		for (int i = 0; i < dims2D[0]; i++) {
 			DefaultRow row = null;
 			JoinedRow jrow = null;
-			System.out.println(i + ": " + dataRead.length);
+			//System.out.println(i + ": " + dataRead.length);
 			row = new DefaultRow("Row " + i, new StringCell(dataRead[(int) (dims2D[1] * i)]));
 			for (int j = 1; j < dims2D[1]; j++) {
 				DefaultRow newRow = new DefaultRow("Row " + i, new StringCell(dataRead[(int) dims2D[1] * i + j]));
@@ -91,116 +90,83 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			}
 			outContainer.addRowToTable(jrow);
 		}
-		System.out.println(File.separator);
+		//System.out.println(File.separator);
         outContainer.close();
 		return new BufferedDataTable[]{outContainer.getTable()};
 	}
 	
-	enum H5G_object {
-		H5G_UNKNOWN(-1), // Unknown object type
-		H5G_GROUP(0), // Object is a group
-		H5G_DATASET(1), // Object is a dataset
-		H5G_TYPE(2), // Object is a named data type
-		H5G_LINK(3), // Object is a symbolic link
-		H5G_UDLINK(4), // Object is a user-defined link
-		H5G_RESERVED_5(5), // Reserved for future use
-		H5G_RESERVED_6(6), // Reserved for future use
-		H5G_RESERVED_7(7); // Reserved for future use
-		private static final Map<Integer, H5G_object> lookup = new HashMap<Integer, H5G_object>();
 
-		static {
-			for (H5G_object s : EnumSet.allOf(H5G_object.class))
-				lookup.put(s.getCode(), s);
+	
+	
+	
+	
+	private static void discoverFile(String fname) {
+		Hdf5File file = new Hdf5File(fname);
+		discoverGroup(file, 0);
+		file.close();
+	}
+	
+	private static void discoverGroup(Hdf5Group group, int depth) {
+		String space = "";
+		for (int i = 0; i < depth; i++) {
+			space = "\t" + space;
 		}
-
-		private int code;
-
-		H5G_object(int layout_type) {
-			this.code = layout_type;
+		System.out.println(space + ((depth == 0) ? "File: " : "Group: ") + group.getName());
+		
+		Hdf5Group[] groups = group.listGroups();
+		if (groups != null) {
+			for (Hdf5Group grp: groups) {
+				discoverGroup(grp, depth + 1);
+				grp.close();
+			}
 		}
-
-		public int getCode() {
-			return this.code;
-		}
-
-		public static H5G_object get(int code) {
-			return lookup.get(code);
+		Hdf5DataSet<Byte>[] dataSets = group.listDataSets();
+		if (dataSets != null) {
+			for (Hdf5DataSet<Byte> ds: dataSets) {
+				System.out.println(space + "\tDataset: " + ds.getName() + ", Path: " + group.getPathFromFile());
+				if (dspath.equals(group.getPathFromFile()) && dsname.equals(ds.getName())) {
+					Byte[] dataReadByte = ds.read(new Byte[(int) ds.numberOfValues()]);
+					
+					System.out.println();
+					
+					for (Byte b: dataReadByte) {
+						System.out.println(b);
+					}
+					
+					String[] dataRead = new String[(int) ds.numberOfValuesRange(0, ds.getDimensions().length - 1)];
+					long SDIM = ds.getStringLength() + 1;
+					char[] tempbuf = new char[(int) SDIM];
+					for (int i = 0; i < dataReadByte.length; i++) {
+						tempbuf[i%(int) SDIM] = (char) (byte) dataReadByte[i];
+						if ((i+1) % (int) SDIM == 0) {
+							dataRead[i/(int) SDIM] = String.copyValueOf(tempbuf);
+						}
+					}
+					
+					HDF5ReaderNodeModel.dataRead = dataRead;
+					
+					// Output the data to the screen.
+					for (int i = 0; i < (int) ds.numberOfValuesRange(0, ds.getDimensions().length - 1); i++) {
+						System.out.println(dsname + " [" + i + "]: " + dataRead[i]);
+					}
+					
+			        System.out.println("\n\nStringCell 0 1 1: " + ds.getStringCell(dataReadByte, 0, 1, 1));
+			        System.out.println("\n\nCell 0 1 3: " + ds.getCell(dataReadByte, 0, 1, 3));
+				}
+				ds.close();
+			}
 		}
 	}
+	
 	
 	/**
      * create the file and add groups ans dataset into the file, which is the
      * same as javaExample.H5DatasetCreate
      * 
      * @see HDF5DatasetCreate.H5DatasetCreate
-     * @throws Exception
      */
 	
-    private static String[] createFile() {
-    	/*
-    	String FILENAME = "Data" + File.separator + "file01.h5";
-    	String DATASETNAME = "/";
-
-    	long file_id = -1;
-
-		// Open a file using default properties.
-		try {
-			file_id = H5.H5Fopen(FILENAME, HDF5Constants.H5F_ACC_RDONLY,
-					HDF5Constants.H5P_DEFAULT);
-		}
-		catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		// Begin iteration.
-		System.out.println("Objects in root group:");
-		
-		try {
-			if (file_id >= 0) {
-				long count = H5.H5Gn_members(file_id, DATASETNAME);
-				String[] oname = new String[(int) count];
-				int[] otype = new int[(int) count];
-				long[] orefs = new long[(int) count];
-				H5.H5Gget_obj_info_all(file_id, DATASETNAME, oname, otype, new int[otype.length], orefs, HDF5Constants.H5_INDEX_NAME);
-
-				// Get type of the object and display its name and type.
-				for (int indx = 0; indx < otype.length; indx++) {
-					switch (H5G_object.get(otype[indx])) {
-					case H5G_GROUP:
-						System.out.println("  Group: " + oname[indx]);
-						break;
-					case H5G_DATASET:
-						System.out.println("  Dataset: " + oname[indx]);
-						break;
-					case H5G_TYPE:
-						System.out.println("  Datatype: " + oname[indx]);
-						break;
-					default:
-						System.out.println("  Unknown: " + oname[indx]);
-					}
-				}
-			}
-		}
-		catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		// Close the file.
-		try {
-			if (file_id >= 0)
-				H5.H5Fclose(file_id);
-		}
-		catch (Exception e) {
-			e.printStackTrace();
-		}
-    	*/
-    	
-    	
-    	
-    	
-    	
-    	
-    	
+	private static void createFile() {
 		StringBuffer[][][] str_data = { { {new StringBuffer("1"), new StringBuffer("22")},
 				{new StringBuffer("333"), new StringBuffer("4444")} } , 
 				{ {new StringBuffer("55555"), new StringBuffer("666666")},
@@ -208,16 +174,16 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 		Hdf5File file = new Hdf5File(fname);
 		String[] pathTokens = dspath.split("/");
-		Hdf5Group[] groups = new Hdf5Group[pathTokens.length + 1];
+		Hdf5Group[] groups = new Hdf5Group[pathTokens.length - 1];
 		groups[0] = file;
 		for (int i = 1; i < groups.length; i++) {
-			Hdf5Group group = new Hdf5Group(pathTokens[i-1]);
-			group.addToGroupInFile(groups[i-1], file);
+			Hdf5Group group = new Hdf5Group(pathTokens[i]);
+			group.addToGroup(groups[i-1]);
 			groups[i] = group;
 		}
 		
 		Hdf5DataSet<Byte> dataSet = new Hdf5DataSet<>(dsname, dims2D, new Byte((byte) 0));
-		System.out.println("Added to file: " + dataSet.addToGroupInFile(groups[groups.length-1], file));
+		System.out.println("Added to file: " + dataSet.addToGroup(groups[groups.length-1]));
 		
 		long SDIM = dataSet.getStringLength() + 1;
 		Byte[] dstr = new Byte[(int) dataSet.numberOfValues()];
@@ -274,8 +240,6 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		}*/
 		file.closeAllBelow();
 		file.close();
-		
-		return dataRead;
         
         
         

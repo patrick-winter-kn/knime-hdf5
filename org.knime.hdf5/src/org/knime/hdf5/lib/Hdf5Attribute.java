@@ -299,6 +299,6 @@ public class Hdf5Attribute<Type> {
             e.printStackTrace();
         }
         
-        System.out.println("Attribute " + this.getName() + " closed.");
+        //System.out.println("Attribute " + this.getName() + " closed.");
 	}
 }

@@ -9,14 +9,17 @@ abstract public class Hdf5TreeElement {
 	protected final String name;
 	private final List<Hdf5Attribute<?>> attributes = new LinkedList<>();
 	private long element_id = -1;
+	private String pathFromFile = "";
+	private Hdf5Group groupAbove;
 	
 	public Hdf5TreeElement(final String name) {
-		this.name = name;
+		if (name.contains("/")) {
+			System.err.println("Name " + name + " contains '/'");
+			this.name = "";
+		} else {
+			this.name = name;
+		}
 	}
-	
-	/*public Hdf5TreeElement(long element_id) {
-		this.element_id = element_id;
-	}*/
 	
 	public String getName() {
 		return name;
@@ -34,6 +37,22 @@ abstract public class Hdf5TreeElement {
 		this.element_id = element_id;
 	}
 
+	public String getPathFromFile() {
+		return pathFromFile;
+	}
+
+	public void setPathFromFile(String pathFromFile) {
+		this.pathFromFile = pathFromFile;
+	}
+
+	public Hdf5Group getGroupAbove() {
+		return groupAbove;
+	}
+
+	public void setGroupAbove(Hdf5Group groupAbove) {
+		this.groupAbove = groupAbove;
+	}
+	
 	public Hdf5Attribute<?>[] listAttributes() {
 		Hdf5Attribute<?>[] attributes = new Hdf5Attribute<?>[this.getAttributes().size()];
 		Iterator<Hdf5Attribute<?>> iter = this.getAttributes().iterator();
@@ -59,4 +78,6 @@ abstract public class Hdf5TreeElement {
 			this.getAttributes().add(attribute);
 		}
 	}
+	
+	abstract public boolean addToGroup(Hdf5Group group);
 }
