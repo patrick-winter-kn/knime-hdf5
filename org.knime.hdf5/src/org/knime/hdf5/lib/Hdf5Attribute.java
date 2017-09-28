@@ -14,6 +14,17 @@ public class Hdf5Attribute<Type> {
 	private long dimension;
 	private boolean string;
 	
+	/**
+	 * Creates an attribute of the type of {@code type}. <br>
+	 * Possible types of numbers are Integer, Long and Double. <br>
+	 * <br>
+	 * You can also create an attribute with Strings by using Byte as attribute type. <br>
+	 * {@code value} always needs to be an array.
+	 * 
+	 * @param name
+	 * @param value
+	 */
+	
 	public Hdf5Attribute(final String name, final Type[] value) {
 		this.name = name;
 		this.value = value;
@@ -80,7 +91,12 @@ public class Hdf5Attribute<Type> {
 		this.string = string;
 	}
 	
-	public void updateDimensions() {
+	/**
+	 * Updates the dimensions array after opening an attribute to ensure that the
+	 * dimensions array is correct.
+	 */
+	
+	public void updateDimension() {
 		// Get dataspace and allocate memory for read buffer.
 		try {
 			if (this.getAttribute_id() >= 0) {
@@ -136,8 +152,7 @@ public class Hdf5Attribute<Type> {
 	
 	// TODO find a better method name
 	/**
-	 * 
-	 * @param dataSet
+	 * @param treeElement
 	 * @return {@code true} if the attribute is successfully added and written to the dataSet,
 	 * 			{@code false} if it already existed (value, dims could be changed) or it couldn't be opened
 	 */
@@ -149,7 +164,7 @@ public class Hdf5Attribute<Type> {
                         HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
                 treeElement.addAttribute(this);
                 
-                this.updateDimensions();
+                this.updateDimension();
             }
         } catch (HDF5LibraryException e) {
         	if (this.isString()) {
@@ -264,27 +279,24 @@ public class Hdf5Attribute<Type> {
 		 * 
 		 */
 		if (this.isString()) {
-	 		// Terminate access to the file type.
-	 		try {
-	 			if (this.getDatatype()[0] >= 0)
-	 				H5.H5Tclose(this.getDatatype()[0]);
-	 		} catch (Exception e) {
-	 			e.printStackTrace();
-	 		}
-	
-	 		// Terminate access to the mem type.
-	 		try {
-	 			if (this.getDatatype()[1] >= 0)
-	 				H5.H5Tclose(this.getDatatype()[1]);
-	 		} catch (Exception e) {
-	 			e.printStackTrace();
-	 		}
+	 		// Terminate access to the file and mem type.
+			for (long datatype: this.getDatatype()) {
+		 		try {
+		 			if (datatype >= 0) {
+		 				H5.H5Tclose(datatype);
+		 				datatype = -1;
+		 			}
+		 		} catch (Exception e) {
+		 			e.printStackTrace();
+		 		}
+			}
  		}
  		
         // Close the attribute.
         try {
             if (this.getAttribute_id() >= 0) {
                 H5.H5Aclose(this.getAttribute_id());
+                this.setAttribute_id(-1);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -294,11 +306,12 @@ public class Hdf5Attribute<Type> {
         try {
             if (this.getDataspace_id() >= 0) {
                 H5.H5Sclose(this.getDataspace_id());
+                this.setDataspace_id(-1);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
         
-        //System.out.println("Attribute " + this.getName() + " closed.");
+        System.out.println("Attribute " + this.getName() + " closed.");
 	}
 }

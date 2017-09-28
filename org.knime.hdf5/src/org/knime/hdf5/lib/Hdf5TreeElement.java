@@ -12,10 +12,17 @@ abstract public class Hdf5TreeElement {
 	private String pathFromFile = "";
 	private Hdf5Group groupAbove;
 	
+	/**
+	 * Creates a treeElement with the name {@code name}. <br>
+	 * The name may not contain '/'.
+	 * 
+	 * @param name
+	 */
+	
 	public Hdf5TreeElement(final String name) {
 		if (name.contains("/")) {
 			System.err.println("Name " + name + " contains '/'");
-			this.name = "";
+			this.name = null;
 		} else {
 			this.name = name;
 		}

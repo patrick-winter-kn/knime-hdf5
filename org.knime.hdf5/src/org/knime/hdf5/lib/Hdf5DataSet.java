@@ -14,6 +14,20 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	private long stringLength;
 	private boolean string;
 	
+	/**
+	 * Creates a dataSet of the type of {@code type}. <br>
+	 * Possible types of numbers are Integer, Long and Double. <br>
+	 * <br>
+	 * You can also create a dataSet with Strings by using Byte as dataSet type. <br>
+	 * The last index of the dimensions array represents the maximum length of
+	 * the strings plus one more space for the null terminator. <br>
+	 * So if you want the stringLength 7, the last index of the array should be 8.
+	 * 
+	 * @param name
+	 * @param dimensions
+	 * @param type
+	 */
+	
 	// TODO find a way to do it without the parameter Type type
 	public Hdf5DataSet(final String name, long[] dimensions, Type type) {
 		super(name);
@@ -93,6 +107,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return 0;
 	}
 	
+	/**
+	 * Updates the dimensions array after opening a dataset to ensure that the
+	 * dimensions array is correct.
+	 */
+	
 	public void updateDimensions() {
 		// Get dataspace and allocate memory for read buffer.
 		long dataspace_id = -1;
@@ -168,9 +187,10 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	/**
-	 * Adds this dataset to the group.
+	 * Adds this dataset to a group which has already been added to another group
+	 * or is a file.
 	 * 
-	 * @param group
+	 * @param group the destination group
 	 * @return {@code true} if the dataSet is successfully added to the group
 	 */
 	public boolean addToGroup(Hdf5Group group) {
@@ -217,16 +237,17 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		            e2.printStackTrace();
 		        }
 		        System.out.println("Dataspace: " + dataspace_id);
+		        
 		        // Create the dataset.
 		        try {
 		            if ((group.getElement_id() >= 0) && (dataspace_id >= 0) && (this.getDatatype()[0] >= 0)) {
 		                this.setElement_id(H5.H5Dcreate(group.getElement_id(), this.getName(),
 		                        this.getDatatype()[0], dataspace_id,
 		                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
-			            System.out.println("Create: " + group.getPathFromFile() + "/" + this.getName());
+			            System.out.println("Create: " + group.getPathFromFile() + this.getName());
 						this.setPathFromFile(group.getPathFromFile() + this.getName());
 						this.setGroupAbove(group);
-		                //group.addDataSet(this);
+		                group.addDataSet(this);
 			        }
 		        } catch (Exception e2) {
 		            e2.printStackTrace();
@@ -321,32 +342,27 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         try {
             if (this.getElement_id() >= 0) {
                 H5.H5Dclose(this.getElement_id());
+                this.setElement_id(-1);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
         
         if (this.isString()) {
-			// Terminate access to the file type.
-			try {
-				if (this.getDatatype()[0] >= 0) {
-					H5.H5Tclose(this.getDatatype()[0]);
+			// Terminate access to the file and mem type.
+			for (long datatype: this.getDatatype()) {
+	        	try {
+					if (datatype >= 0) {
+						H5.H5Tclose(datatype);
+						datatype = -1;
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-	
-			// Terminate access to the mem type.
-			try {
-				if (this.getDatatype()[1] >= 0) {
-					H5.H5Tclose(this.getDatatype()[1]);
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
 			}
 		}
         
-        //System.out.println("Dataset " + this.getName() + " closed.");
+        System.out.println("Dataset " + this.getName() + " closed.");
 	}
 
 	public Type getCell(Type[] data, int... indices) {
@@ -368,6 +384,15 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				+ this.getDimensions().length + ") of indices!: " + indices.length);
 		return null;
 	}
+	
+	/**
+	 * This method should only be used for a dataset with the type Byte so that
+	 * it is also possible to see the String values.  
+	 * 
+	 * @param data
+	 * @param indices
+	 * @return
+	 */
 	
 	public String getStringCell(Byte[] data, int... indices) {
 		if (this.isString()) {

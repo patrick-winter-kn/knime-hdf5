@@ -95,11 +95,6 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		return new BufferedDataTable[]{outContainer.getTable()};
 	}
 	
-
-	
-	
-	
-	
 	private static void discoverFile(String fname) {
 		Hdf5File file = new Hdf5File(fname);
 		discoverGroup(file, 0);
@@ -113,14 +108,14 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		}
 		System.out.println(space + ((depth == 0) ? "File: " : "Group: ") + group.getName());
 		
-		Hdf5Group[] groups = group.listGroups();
+		Hdf5Group[] groups = group.loadGroups();
 		if (groups != null) {
 			for (Hdf5Group grp: groups) {
 				discoverGroup(grp, depth + 1);
-				grp.close();
+				//grp.close();
 			}
 		}
-		Hdf5DataSet<Byte>[] dataSets = group.listDataSets();
+		Hdf5DataSet<Byte>[] dataSets = group.loadDataSets();
 		if (dataSets != null) {
 			for (Hdf5DataSet<Byte> ds: dataSets) {
 				System.out.println(space + "\tDataset: " + ds.getName() + ", Path: " + group.getPathFromFile());
@@ -153,7 +148,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			        System.out.println("\n\nStringCell 0 1 1: " + ds.getStringCell(dataReadByte, 0, 1, 1));
 			        System.out.println("\n\nCell 0 1 3: " + ds.getCell(dataReadByte, 0, 1, 3));
 				}
-				ds.close();
+				//ds.close();
 			}
 		}
 	}
@@ -190,7 +185,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 		// Write the data to the dataset.
 		for (int i = 0; i < dataSet.numberOfValuesRange(0, dataSet.getDimensions().length - 1); i++) {
-			// TODO das mit dimensions aus Datasets schreiben
+			// TODO write it with dimensions from Hdf5Dataset
 			StringBuffer buf = str_data[(i / (int) dims2D[2]) / (int) dims2D[1]][(i / (int) dims2D[2]) % (int) dims2D[1]][i % (int) dims2D[2]];
 			for (int j = 0; j < SDIM; j++) {
 				if (j < buf.length()) {
@@ -235,15 +230,10 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		addAttribute2(groups[2]);
 		
 		dataSet.close();
-		/*for (Hdf5Group group: groups) {
-			group.close();
-		}*/
-		file.closeAllBelow();
 		file.close();
         
         
-        
-/*
+		/*
         // set the data values
         String[] dataIn = new String[(int) (dims2D[0] * dims2D[1])];
         for (int i = 0; i < dims2D[0]; i++) {
@@ -282,9 +272,10 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		addAttribute(dataSet);
 		
         dataSet.close();
-        file.closeAll();
+        file.close();
         
-        return dataRead;*/
+        return dataRead;
+        */
     }
 	
 	public static void addAttribute(Hdf5TreeElement treeElement) {
@@ -308,7 +299,6 @@ public class HDF5ReaderNodeModel extends NodeModel {
         }
 
         attribute.close();
-        
 	}
 
 	public static void addAttribute2(Hdf5TreeElement treeElement) {

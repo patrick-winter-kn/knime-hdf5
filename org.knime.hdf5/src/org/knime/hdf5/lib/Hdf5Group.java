@@ -3,6 +3,9 @@ package org.knime.hdf5.lib;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import hdf.hdf5lib.H5;
@@ -11,8 +14,8 @@ import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5Group extends Hdf5TreeElement {
 	
-	//private final List<Hdf5Group> groups = new LinkedList<>();
-	//private final List<Hdf5DataSet<?>> dataSets = new LinkedList<>();
+	private final List<Hdf5Group> groups = new LinkedList<>();
+	private final List<Hdf5DataSet<?>> dataSets = new LinkedList<>();
 
 	enum Hdf5Object {
 		UNKNOWN(-1),		// Unknown object type
@@ -47,18 +50,37 @@ public class Hdf5Group extends Hdf5TreeElement {
 		}
 	}
 	
+	/**
+	 * Creates a group with the name {@code name}. <br>
+	 * The name may not contain '/'. <br>
+	 * The group has not been added to another group yet. Use the method addToGroup() for that. 
+	 * 
+	 * @param name
+	 */
+	
 	public Hdf5Group(final String name) {
 		super(name);
 	}
 
-	
 	/**
-	 * 
-	 * @param file
-	 * @param path
-	 * @return null if the file_id = -1
+	 * @return a list of all direct subGroups which were either already loaded by loadGroups() or
+	 * created in the same run.
 	 */
 	
+	public List<Hdf5Group> getGroups() {
+		return groups;
+	}
+
+	/**
+	 * @return a list of all datasets which were either already loaded by loadDataSets() or
+	 * created in the same run.
+	 */
+	
+	public List<Hdf5DataSet<?>> getDataSets() {
+		return dataSets;
+	}
+	
+	/*
 	public static Hdf5Group addToFile(Hdf5File file, String path) {
 		Hdf5Group group = null; 
 		if (file.getElement_id() >= 0) {
@@ -69,7 +91,7 @@ public class Hdf5Group extends Hdf5TreeElement {
     	}
     	return group;
 	}
-
+	
 	public static Hdf5Group getLastGroup(String path) {
 		int lastIndex = path.lastIndexOf("/");
 		String name = (lastIndex != -1) ? path.substring(lastIndex + 1) : path;
@@ -80,8 +102,9 @@ public class Hdf5Group extends Hdf5TreeElement {
 		int lastIndex = path.lastIndexOf("/");
 		return (lastIndex != -1) ? path.substring(0, lastIndex) : "";
 	}
-
-	private String[] listObjectNames(Hdf5Object object) {
+	*/
+	
+	private String[] loadObjectNames(Hdf5Object object) {
 		String[] names = null;
 		int index = 0;
 		
@@ -118,11 +141,19 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return names != null ? Arrays.copyOf(names, index) : null;
 	}
 	
-	public Hdf5Group[] listGroups() {
-		String[] names = this.listObjectNames(Hdf5Object.GROUP);
+	/**
+	 * Loads all direct subGroups which are accessible from this group. <br>
+	 * All subGroups will also be opened and the list {@code groups} will be updated.
+	 * 
+	 * @return the array of all accessible subGroups
+	 */
+	
+	public Hdf5Group[] loadGroups() {
+		String[] names = this.loadObjectNames(Hdf5Object.GROUP);
 		if (names != null) {
 			Hdf5Group[] groups = new Hdf5Group[names.length];
 			Hdf5Group group;
+			this.getGroups().clear();
 			for (int i = 0; i < names.length; i++) {
 				group = new Hdf5Group(names[i]);
 				group.setPathFromFile(this.getPathFromFile() + group.getName() + "/");
@@ -133,6 +164,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 					e.printStackTrace();
 				}
 				groups[i] = group;
+				this.addGroup(group);
 			}
 			return groups;
 		}
@@ -140,7 +172,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 	
 	public Hdf5Group getGroup(final String name) {
-		for (Hdf5Group group: this.listGroups()) {
+		for (Hdf5Group group: this.loadGroups()) {
 			if (group.getName().equals(name)) {
 				return group;
 			}
@@ -148,19 +180,25 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return null;
 	}
 	
-	/*
 	public void addGroup(Hdf5Group group) {
 		if (this.getGroup(group.getName()) == null) {
 			this.getGroups().add(group);
 		}
 	}
-	*/
 	
-	public Hdf5DataSet<Byte>[] listDataSets() {
-		String[] names = this.listObjectNames(Hdf5Object.DATASET);
+	/**
+	 * Loads all datasets which are accessible from this group. <br>
+	 * All datasets will also be opened and the list {@code dataSets} will be updated.
+	 * 
+	 * @return the array of all accessible datasets
+	 */
+	
+	public Hdf5DataSet<Byte>[] loadDataSets() {
+		String[] names = this.loadObjectNames(Hdf5Object.DATASET);
 		if (names != null) {
 			Hdf5DataSet<Byte>[] dataSets = new Hdf5DataSet[names.length];
 			Hdf5DataSet<Byte> dataSet;
+			this.getDataSets().clear();
 			long[] dims2D = { 2, 2, 2, 7+1 };
 			for (int i = 0; i < names.length; i++) {
 				// in case it is String
@@ -175,6 +213,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 					e.printStackTrace();
 				}
 				dataSets[i] = dataSet;
+				this.addDataSet(dataSet);
 			}
 			return dataSets;
 		}
@@ -182,7 +221,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 	
 	public Hdf5DataSet<?> getDataSet(final String name) {
-		for (Hdf5DataSet<?> dataSet: this.listDataSets()) {
+		for (Hdf5DataSet<?> dataSet: this.loadDataSets()) {
 			if (dataSet.getName().equals(name)) {
 				return dataSet;
 			}
@@ -190,13 +229,11 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return null;
 	}
 	
-	/*
 	public void addDataSet(Hdf5DataSet<?> dataSet) {
 		if (this.getDataSet(dataSet.getName()) == null) {
 			this.getDataSets().add(dataSet);
 		}
 	}
-	*/
 	
 	public boolean addToGroup(Hdf5Group group) {
 		if (this instanceof Hdf5File) {
@@ -212,6 +249,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 								HDF5Constants.H5P_DEFAULT));
 						this.setPathFromFile(group.getPathFromFile() + this.getName() + "/");
 						this.setGroupAbove(group);
+						group.addGroup(this);
 						return true;
 					} catch (HDF5LibraryException | NullPointerException e) {
 						e.printStackTrace();
@@ -220,10 +258,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 			}
 		}
 		return false;
-		
-		
-		
-		
 		
 		/*
 		if (!(this instanceof Hdf5File)) {
@@ -256,6 +290,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		*/
 	}
 	
+	/*
 	private void addGroupToFile(Hdf5File file, String path) {
 		if (!(this instanceof Hdf5File)) {
 			if (file.getElement_id() >= 0) {
@@ -287,26 +322,46 @@ public class Hdf5Group extends Hdf5TreeElement {
 			System.err.println("Cannot add file to file!");
 		}
 	}
+	*/
+	
+	/**
+	 * Closes the group and all elements in this group.
+	 * 
+	 */
 	
 	public void close() {
 		try {
             if (this.getElement_id() >= 0) {
-            	H5.H5Gclose(this.getElement_id());
-                //System.out.println("Group " + this.getName() + " closed: " + H5.H5Gclose(this.getElement_id()));
+            	Iterator<Hdf5DataSet<?>> iterDS = this.getDataSets().iterator();
+	    		while (iterDS.hasNext()) {
+	    			Hdf5DataSet<?> dataSet = iterDS.next();
+	    			if (dataSet.getElement_id() >= 0) {
+	    				dataSet.close();
+	    			}
+	    		}
+
+            	Hdf5Attribute<?>[] attributes = this.listAttributes();
+	    		if (attributes != null) {
+	    			for (Hdf5Attribute<?> attribute: attributes) {
+	    				if (attribute.getAttribute_id() >= 0) {
+	    					attribute.close();
+	    				}
+	    			}
+	    		}
+	    		
+	    		Iterator<Hdf5Group> iterG = this.getGroups().iterator();
+	    		while (iterG.hasNext()) {
+	    			Hdf5Group group = iterG.next();
+	    			if (group.getElement_id() >= 0) {
+	    				group.close();
+	    			}
+	    		}
+	    		
+                System.out.println("Group " + this.getName() + " closed: " + H5.H5Gclose(this.getElement_id()));
                 this.setElement_id(-1);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
-	}
-	
-	public void closeAllBelow() {
-		Hdf5Group[] groups = this.listGroups();
-		if (groups != null) {
-			for (Hdf5Group group: groups) {
-				group.closeAllBelow();
-				group.close();
-			}
-		}
 	}
 }
