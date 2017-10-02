@@ -6,9 +6,11 @@ import java.util.List;
 
 abstract public class Hdf5TreeElement {
 
-	protected final String name;
+	private final String name;
 	private final List<Hdf5Attribute<?>> attributes = new LinkedList<>();
 	private long element_id = -1;
+	private boolean opened;
+	private final String filePath;
 	private String pathFromFile = "";
 	private Hdf5Group groupAbove;
 	
@@ -19,13 +21,14 @@ abstract public class Hdf5TreeElement {
 	 * @param name
 	 */
 	
-	public Hdf5TreeElement(final String name) {
+	public Hdf5TreeElement(final String name, final String filePath) {
 		if (name.contains("/")) {
 			System.err.println("Name " + name + " contains '/'");
 			this.name = null;
 		} else {
 			this.name = name;
 		}
+		this.filePath = filePath;
 	}
 	
 	public String getName() {
@@ -42,6 +45,18 @@ abstract public class Hdf5TreeElement {
 
 	public void setElement_id(long element_id) {
 		this.element_id = element_id;
+	}
+
+	public boolean isOpened() {
+		return opened;
+	}
+
+	public void setOpened(boolean opened) {
+		this.opened = opened;
+	}
+
+	public String getFilePath() {
+		return filePath;
 	}
 
 	public String getPathFromFile() {
@@ -86,5 +101,12 @@ abstract public class Hdf5TreeElement {
 		}
 	}
 	
-	abstract public boolean addToGroup(Hdf5Group group);
+	public void closeAttributes() {
+		Hdf5Attribute<?>[] attributes = this.listAttributes();
+		if (attributes != null) {
+			for (Hdf5Attribute<?> attribute: attributes) {
+				attribute.close();
+			}
+		}
+	}
 }

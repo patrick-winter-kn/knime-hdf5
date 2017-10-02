@@ -12,6 +12,7 @@ public class Hdf5Attribute<Type> {
 	private long dataspace_id = -1;
 	private long attribute_id = -1;
 	private long dimension;
+	private boolean opened;
 	private boolean string;
 	
 	/**
@@ -81,6 +82,14 @@ public class Hdf5Attribute<Type> {
 
 	public void setDimension(long dimension) {
 		this.dimension = dimension;
+	}
+
+	public boolean isOpened() {
+		return opened;
+	}
+
+	public void setOpened(boolean opened) {
+		this.opened = opened;
 	}
 
 	public boolean isString() {
@@ -162,6 +171,8 @@ public class Hdf5Attribute<Type> {
             if (treeElement.getElement_id() >= 0) {
                 this.setAttribute_id(H5.H5Aopen_by_name(treeElement.getElement_id(), ".", this.getName(), 
                         HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
+                this.setOpened(true);
+                System.out.println("Attribute " + this.getName() + " opened: " + this.getAttribute_id());
                 treeElement.addAttribute(this);
                 
                 this.updateDimension();
@@ -211,6 +222,8 @@ public class Hdf5Attribute<Type> {
                     this.setAttribute_id(H5.H5Acreate(treeElement.getElement_id(), this.getName(),
                     		this.getDatatype()[0], this.getDataspace_id(),
                             HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
+                    this.setOpened(true);
+                    System.out.println("Attribute " + this.getName() + " created: " + this.getAttribute_id());
                     return this.write(treeElement);
                 }
             }
@@ -222,29 +235,6 @@ public class Hdf5Attribute<Type> {
 	}
 	
 	public Type[] read(Type[] attrData) {
-		// Allocate array of pointers to two-dimensional arrays (the
-        // elements of the dataset. (Type[] attrData)
-		
-		/*
-		// Get dataspace and allocate memory for read buffer.
-        try {
-            if (this.getAttribute_id() >= 0) {
-                this.setDataspace_id(H5.H5Aget_space(this.getAttribute_id()));
-            }
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
-        
-        try {
-            if (this.getDataspace_id() >= 0)
-                H5.H5Sget_simple_extent_dims(this.getDataspace_id(), this.getDimensions(), null);
-        }
-        catch (Exception e) {
-            e.printStackTrace();
-        }
-        */
-		
         // Read data.
         try {
             if (this.getAttribute_id() >= 0 && this.getDatatype()[1] >= 0) {
@@ -278,40 +268,32 @@ public class Hdf5Attribute<Type> {
 		 * this (Close the attribute.) is missing after the data was read
 		 * 
 		 */
-		if (this.isString()) {
-	 		// Terminate access to the file and mem type.
-			for (long datatype: this.getDatatype()) {
-		 		try {
-		 			if (datatype >= 0) {
-		 				H5.H5Tclose(datatype);
-		 				datatype = -1;
-		 			}
-		 		} catch (Exception e) {
-		 			e.printStackTrace();
-		 		}
-			}
- 		}
- 		
-        // Close the attribute.
         try {
-            if (this.getAttribute_id() >= 0) {
-                H5.H5Aclose(this.getAttribute_id());
-                this.setAttribute_id(-1);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+            if (this.isOpened()) {
+                if (this.isString()) {
+        	 		// Terminate access to the file and mem type.
+        			for (long datatype: this.getDatatype()) {
+        		 		if (datatype >= 0) {
+    		 				H5.H5Tclose(datatype);
+    		 				datatype = -1;
+    		 			}
+        			}
+         		}
 
-        // Close the dataspace.
-        try {
-            if (this.getDataspace_id() >= 0) {
-                H5.H5Sclose(this.getDataspace_id());
-                this.setDataspace_id(-1);
+                // Close the dataspace.
+                if (this.getDataspace_id() >= 0) {
+                    H5.H5Sclose(this.getDataspace_id());
+                    this.setDataspace_id(-1);
+                }
+
+                // Close the attribute.
+                H5.H5Aclose(this.getAttribute_id());
+                this.setOpened(false);
+
+                System.out.println("Attribute " + this.getName() + " closed.");
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
-        
-        System.out.println("Attribute " + this.getName() + " closed.");
 	}
 }
