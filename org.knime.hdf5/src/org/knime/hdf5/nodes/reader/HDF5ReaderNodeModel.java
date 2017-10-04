@@ -68,10 +68,10 @@ public class HDF5ReaderNodeModel extends NodeModel {
     private static String dspath  = "/tests/stringTests/second/";
     private static String dsname  = "stringDS";
     //stringLength = 7, +1 for the null terminator
-    private static long[] dims2D = { 2, 2, 2, 7+1 };
-    //private static long[] dims2D = { 7, 4 };
-    private static String[] dataRead;
-    //private static Integer[] dataRead;
+    //private static long[] dims2D = { 2, 2, 2, 7+1 };
+    private static long[] dims2D = { 7, 4 };
+    //private static String[] dataRead;
+    private static Integer[] dataRead;
 
 	protected HDF5ReaderNodeModel() {
 		super(0, 1);
@@ -90,9 +90,9 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		for (int i = 0; i < dims2D[0]; i++) {
 			DefaultRow row = null;
 			JoinedRow jrow = null;
-			row = new DefaultRow("Row " + i, new StringCell(dataRead[(int) (dims2D[1] * i)]));
+			row = new DefaultRow("Row " + i, new IntCell(dataRead[(int) (dims2D[1] * i)]));
 			for (int j = 1; j < dims2D[1]; j++) {
-				DefaultRow newRow = new DefaultRow("Row " + i, new StringCell(dataRead[(int) dims2D[1] * i + j]));
+				DefaultRow newRow = new DefaultRow("Row " + i, new IntCell(dataRead[(int) dims2D[1] * i + j]));
 				jrow = (j == 1) ? new JoinedRow(row, newRow) : new JoinedRow(jrow, newRow);
 			}
 			outContainer.addRowToTable(jrow);
@@ -112,11 +112,10 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			dataRead[i] = 2 * i;
 		}		
 		dataSet.write(dataRead);
-		dataSet.close();
-		group.close();
-		file.close();
 		
-		//HDF5ReaderNodeModel.dataRead = dataRead;
+		file.closeAll();
+		
+		HDF5ReaderNodeModel.dataRead = dataRead;
 	}
 	
 	private static void createStringFile() {
@@ -190,7 +189,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		
 		file.closeAll();
 		
-		HDF5ReaderNodeModel.dataRead = dataRead;
+		//HDF5ReaderNodeModel.dataRead = dataRead;
     }
 	
 	private static void discoverFile(String fname) {
@@ -244,7 +243,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			        System.out.println("\n\nStringCell 0 1 1: " + ds.getStringCell(dataReadByte, 0, 1, 1));
 			        System.out.println("\n\nCell 0 1 1 3: " + ds.getCell(dataReadByte, 0, 1, 1, 3));
 			        
-					HDF5ReaderNodeModel.dataRead = dataRead;
+					//HDF5ReaderNodeModel.dataRead = dataRead;
 				}
 			}
 		}
@@ -310,7 +309,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	private DataTableSpec createOutSpec() {
 		DataColumnSpec[] colSpecs = new DataColumnSpec[(int) dims2D[1]];
 		for (int i = 0; i < colSpecs.length; i++) {
-	        colSpecs[i] = new DataColumnSpecCreator("Column " + i, StringCell.TYPE).createSpec();
+	        colSpecs[i] = new DataColumnSpecCreator("Column " + i, IntCell.TYPE).createSpec();
 		}
         return new DataTableSpec(colSpecs);
     }
