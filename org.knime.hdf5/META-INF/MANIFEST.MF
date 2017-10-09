@@ -1,9 +1,9 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
-Bundle-Name: KNIME HDF5 Nodes
+Bundle-Name: HDF5 Nodes
 Bundle-SymbolicName: org.knime.hdf5;singleton:=true
 Bundle-Version: 1.0.0.qualifier
-Bundle-Vendor: University Konstance
+Bundle-Vendor: University of Konstanz
 Bundle-RequiredExecutionEnvironment: JavaSE-1.8
 Require-Bundle: org.knime.workbench.repository;bundle-version="3.4.0",
  org.knime.core;bundle-version="3.4.0"
