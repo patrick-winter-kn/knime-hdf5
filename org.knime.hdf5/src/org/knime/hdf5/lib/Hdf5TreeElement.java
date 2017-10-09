@@ -22,11 +22,16 @@ abstract public class Hdf5TreeElement {
 	 */
 	
 	public Hdf5TreeElement(final String name, final String filePath) {
-		if (name.contains("/")) {
-			System.err.println("Name " + name + " contains '/'");
+		if (name.equals("")) {
+			System.err.println("Name of " + filePath +  " may not be the empty String!");
 			this.name = null;
 		} else {
-			this.name = name;
+			if (name.contains("/")) {
+				System.err.println("Name " + name + " contains '/'");
+				this.name = null;
+			} else {
+				this.name = name;
+			}
 		}
 		this.filePath = filePath;
 	}

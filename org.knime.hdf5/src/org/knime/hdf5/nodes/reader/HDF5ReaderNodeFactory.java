@@ -6,34 +6,44 @@ import org.knime.core.node.NodeView;
 
 public class HDF5ReaderNodeFactory extends NodeFactory<HDF5ReaderNodeModel> {
 
+    /**
+     * {@inheritDoc}
+     */
 	@Override
 	public HDF5ReaderNodeModel createNodeModel() {
-		// TODO Auto-generated method stub
 		return new HDF5ReaderNodeModel();
 	}
 
+    /**
+     * {@inheritDoc}
+     */
 	@Override
 	protected int getNrNodeViews() {
-		// TODO Auto-generated method stub
 		return 0;
 	}
 
+    /**
+     * {@inheritDoc}
+     */
 	@Override
 	public NodeView<HDF5ReaderNodeModel> createNodeView(int viewIndex, HDF5ReaderNodeModel nodeModel) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
+    /**
+     * {@inheritDoc}
+     */
 	@Override
 	protected boolean hasDialog() {
-		// TODO Auto-generated method stub
-		return false;
+		return true;
 	}
 
+    /**
+     * {@inheritDoc}
+     */
 	@Override
 	protected NodeDialogPane createNodeDialogPane() {
-		// TODO Auto-generated method stub
-		return null;
+		return new HDF5ReaderNodeDialog();
 	}
 
 }

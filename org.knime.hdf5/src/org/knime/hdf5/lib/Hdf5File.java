@@ -67,12 +67,12 @@ public class Hdf5File extends Hdf5Group {
 	 * <br>
 	 * <b>Types</b>:
 	 * <ul>
-	 *   <li> 1 - File
-	 *   <li> 2 - Group
-	 *   <li> 3 - DataType
-	 *   <li> 4 - DataSpace
-	 *   <li> 5 - DataSet
-	 *   <li> 6 - Attribute
+	 *   <li> 1 - File </li>
+	 *   <li> 2 - Group </li>
+	 *   <li> 3 - DataType </li>
+	 *   <li> 4 - DataSpace </li>
+	 *   <li> 5 - DataSet </li>
+	 *   <li> 6 - Attribute </li>
 	 * </ul>
 	 * 
 	 * @return number of opened objects
