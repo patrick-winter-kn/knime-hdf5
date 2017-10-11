@@ -5,8 +5,7 @@ import org.knime.core.node.NodeFactory;
 import org.knime.core.node.NodeView;
 
 public class HDF5ReaderNodeFactory extends NodeFactory<HDF5ReaderNodeModel> {
-
-    /**
+	/**
      * {@inheritDoc}
      */
 	@Override
@@ -45,5 +44,4 @@ public class HDF5ReaderNodeFactory extends NodeFactory<HDF5ReaderNodeModel> {
 	protected NodeDialogPane createNodeDialogPane() {
 		return new HDF5ReaderNodeDialog();
 	}
-
 }

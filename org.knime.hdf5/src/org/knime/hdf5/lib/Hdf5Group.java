@@ -1,6 +1,7 @@
 package org.knime.hdf5.lib;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -195,6 +196,13 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return names != null ? Arrays.copyOf(names, index) : null;
 	}
 	
+	public String[] getGroupNames() {
+		List<String> names = new LinkedList<>();
+		names.add(" ");
+		Collections.addAll(names, this.loadObjectNames(Hdf5Object.GROUP));
+		return names.toArray(new String[0]);
+	}
+	
 	/**
 	 * Loads all direct subGroups which are accessible from this group. <br>
 	 * All subGroups will also be opened and the list {@code groups} will be updated.
@@ -205,11 +213,9 @@ public class Hdf5Group extends Hdf5TreeElement {
 		String[] names = this.loadObjectNames(Hdf5Object.GROUP);
 		if (names != null) {
 			Hdf5Group[] groups = new Hdf5Group[names.length];
-			Hdf5Group group;
 			for (int i = 0; i < names.length; i++) {
 				// the object list groups will be updated in here
-				group = Hdf5Group.getInstance(this, names[i]);
-				groups[i] = group;
+				groups[i] = Hdf5Group.getInstance(this, names[i]);
 			}
 			return groups;
 		}
@@ -246,8 +252,15 @@ public class Hdf5Group extends Hdf5TreeElement {
 		}
 	}
 	
+	public String[] getDataSetNames() {
+		List<String> names = new LinkedList<>();
+		names.add(" ");
+		Collections.addAll(names, this.loadObjectNames(Hdf5Object.DATASET));
+		return names.toArray(new String[0]);
+	}
+	
 	/**
-	 * Loads all datasets which are accessible from this group. <br>
+	 * Loads all datasets which are accessible from this group with the respective type. <br>
 	 * All datasets will also be opened and the list {@code dataSets} will be updated.
 	 * 
 	 * @return the array of all accessible datasets
@@ -256,15 +269,27 @@ public class Hdf5Group extends Hdf5TreeElement {
 		String[] names = this.loadObjectNames(Hdf5Object.DATASET);
 		if (names != null) {
 			Hdf5DataSet<?>[] dataSets = new Hdf5DataSet[names.length];
-			Hdf5DataSet<?> dataSet;
 			for (int i = 0; i < names.length; i++) {
 				// in case it is String
-				dataSet = Hdf5DataSet.getInstance(this, names[i], null, type);
-				dataSets[i] = dataSet;
+				dataSets[i] = Hdf5DataSet.getInstance(this, names[i], null, type);
 			}
 			return dataSets;
 		}
 		return null;
+	}
+	
+	/**
+	 * Loads all datasets which are accessible from this group. <br>
+	 * All datasets will also be opened and the list {@code dataSets} will be updated.
+	 * 
+	 * @return the array of all accessible datasets
+	 */
+	public Hdf5DataSet<?>[] loadDataSets() {
+		List<Hdf5DataSet<?>> dataSets = new LinkedList<>();
+		Collections.addAll(dataSets, this.loadDataSets(Hdf5DataType.INTEGER));
+		Collections.addAll(dataSets, this.loadDataSets(Hdf5DataType.LONG));
+		Collections.addAll(dataSets, this.loadDataSets(Hdf5DataType.DOUBLE));
+		return dataSets.toArray(this.loadDataSets(Hdf5DataType.STRING));
 	}
 	
 	/**

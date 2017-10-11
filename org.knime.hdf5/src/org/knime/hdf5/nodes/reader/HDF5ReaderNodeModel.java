@@ -78,6 +78,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
 		
+		System.out.println("Complete path: " + fname + dspath + dsname);
+		
 		//createIntFile();
 		createStringFile();
 		//discoverFile();

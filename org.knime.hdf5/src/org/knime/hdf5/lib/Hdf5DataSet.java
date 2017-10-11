@@ -141,6 +141,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		}
 	}
 	
+	// TODO here try to do it that the arguments only are group and name
 	public static Hdf5DataSet<?> getInstance(final Hdf5Group group, final String name,
 			long[] dimensions, Hdf5DataType type) {
 		Iterator<Hdf5DataSet<?>> iter = ALL_DATASETS.iterator();
