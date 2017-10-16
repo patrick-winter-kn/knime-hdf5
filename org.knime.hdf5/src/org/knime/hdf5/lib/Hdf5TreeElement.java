@@ -4,15 +4,24 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.knime.core.node.NodeLogger;
+
 abstract public class Hdf5TreeElement {
 
-	private final String name;
-	private final List<Hdf5Attribute<?>> attributes = new LinkedList<>();
-	private long element_id = -1;
-	private boolean opened;
-	private final String filePath;
-	private String pathFromFile = "";
-	private Hdf5Group groupAbove;
+	private final String m_name;
+	
+	private final String m_filePath;
+	
+	private final List<Hdf5Attribute<?>> m_attributes = new LinkedList<>();
+	
+	private long m_elementId = -1;
+	
+	private boolean m_open;
+	
+	private String m_pathFromFile = "";
+	
+	// TODO maybe not necessary anymore
+	private Hdf5Group m_parent;
 	
 	/**
 	 * Creates a treeElement with the name {@code name}. <br>
@@ -20,82 +29,80 @@ abstract public class Hdf5TreeElement {
 	 * 
 	 * @param name
 	 */
-	
-	public Hdf5TreeElement(final String name, final String filePath) {
+	protected Hdf5TreeElement(final String name, final String filePath) {
 		if (name.equals("")) {
-			System.err.println("Name of " + filePath +  " may not be the empty String!");
-			this.name = null;
+			NodeLogger.getLogger("HDF5 Files").error("Name of " + filePath +  " may not be the empty String!" ,
+					new IllegalArgumentException());
+			// this is necessary because m_name is final
+			m_name = null;
 		} else if (name.contains("/")) {
-			System.err.println("Name " + name + " contains '/'");
-			this.name = null;
+			NodeLogger.getLogger("HDF5 Files").error("Name " + name + " contains '/'",
+					new IllegalArgumentException());
+			m_name = null;
 		} else {
-			this.name = name;
+			m_name = name;
 		}
-		this.filePath = filePath;
+		m_filePath = filePath;
 	}
 	
 	public String getName() {
-		return name;
+		return m_name;
 	}
 
-	private List<Hdf5Attribute<?>> getAttributes() {
-		return attributes;
+	protected String getFilePath() {
+		return m_filePath;
 	}
 
-	public long getElement_id() {
-		return element_id;
+	protected List<Hdf5Attribute<?>> getAttributes() {
+		return m_attributes;
 	}
 
-	public void setElement_id(long element_id) {
-		this.element_id = element_id;
+	protected long getElementId() {
+		return m_elementId;
 	}
 
-	public boolean isOpened() {
-		return opened;
+	protected void setElementId(long elementId) {
+		m_elementId = elementId;
 	}
 
-	public void setOpened(boolean opened) {
-		this.opened = opened;
+	protected boolean isOpen() {
+		return m_open;
 	}
 
-	public String getFilePath() {
-		return filePath;
+	protected void setOpen(boolean open) {
+		m_open = open;
 	}
 
 	public String getPathFromFile() {
-		return pathFromFile;
+		return m_pathFromFile;
 	}
 
-	public void setPathFromFile(String pathFromFile) {
-		this.pathFromFile = pathFromFile;
+	protected void setPathFromFile(String pathFromFile) {
+		m_pathFromFile = pathFromFile;
 	}
 
-	public Hdf5Group getGroupAbove() {
-		return groupAbove;
+	protected Hdf5Group getParent() {
+		return m_parent;
 	}
 
-	public void setGroupAbove(Hdf5Group groupAbove) {
-		this.groupAbove = groupAbove;
-	}
-	
-	public Hdf5Attribute<?>[] listAttributes() {
-		Hdf5Attribute<?>[] attributes = new Hdf5Attribute<?>[this.getAttributes().size()];
-		Iterator<Hdf5Attribute<?>> iter = this.getAttributes().iterator();
-		int i = 0;
-		while (iter.hasNext()) {
-			attributes[i] = iter.next();
-			i++;
-		}
-		return attributes;
+	protected void setParent(Hdf5Group parent) {
+		m_parent = parent;
 	}
 
 	public Hdf5Attribute<?> getAttribute(final String name) {
-		for (Hdf5Attribute<?> attr: this.listAttributes()) {
+		Iterator<Hdf5Attribute<?>> iter = this.getAttributes().iterator();
+		Hdf5Attribute<?> attribute = null;
+		boolean found = false;
+		
+		while (!found && iter.hasNext()) {
+			Hdf5Attribute<?> attr = iter.next();
 			if (attr.getName().equals(name)) {
-				return attr;
+				attribute = attr;
+				found = true;
 			}
 		}
-		return null;
+		
+		return attribute;
 	}
 
 	public void addAttribute(Hdf5Attribute<?> attribute) {
@@ -105,11 +112,9 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	public void closeAttributes() {
-		Hdf5Attribute<?>[] attributes = this.listAttributes();
-		if (attributes != null) {
-			for (Hdf5Attribute<?> attribute: attributes) {
-				attribute.close();
-			}
+		Iterator<Hdf5Attribute<?>> iter = this.getAttributes().iterator();
+		while (iter.hasNext()) {
+			iter.next().close();
 		}
 	}
 }

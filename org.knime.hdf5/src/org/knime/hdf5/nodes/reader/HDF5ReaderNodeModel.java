@@ -2,10 +2,7 @@ package org.knime.hdf5.nodes.reader;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
-import org.knime.core.data.DataColumnProperties;
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataColumnSpecCreator;
 import org.knime.core.data.DataTableSpec;
@@ -18,6 +15,7 @@ import org.knime.core.node.CanceledExecutionException;
 import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.ExecutionMonitor;
 import org.knime.core.node.InvalidSettingsException;
+import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeModel;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
@@ -27,36 +25,6 @@ import org.knime.hdf5.lib.Hdf5DataSet.Hdf5DataType;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.Hdf5TreeElement;
-
-/* what's possible so far:
- * HDF5 - Java:		1acd
- * 					1b		(maybe add another class Hdf5Path to access the groups along this path)
- * 					2ab
- * KNIME - Java:	
- * 	
- * what's possible so far, but can be done differently/better:
- * HDF5 - Java:		2c		(TODO automatically recognize the datatype of the dataset)
- * 					2d 		(TODO not possible to see a list of all attributes in a treeElement)
- * KNIME - Java:	1c		(TODO not possible to write datasets with more than 2 dimensions or variable datatypes)
- * 
- * what's not possible so far:
- * HDF5 - Java:		3abcd	(maybe also not necessary)
- * KNIME - Java:	1ab		(not necessary)
- * 					1d		(TODO still missing)
- * 					2abcd	(TODO the whole thing with reading KNIME datasets in Java is still missing)
- * 					3abcd	(maybe also not necessary)
- * 
- * abbreviations: (A = (HDF5|KNIME))
- * 1 - write something in A with methods from Java
- * 2 - read something in Java which is already available in A
- * 3 - delete something in A with methods from Java
- * 
- * something:
- * a - file
- * b - a group which isn't a file
- * c - dataset
- * d - attribute
- */
 
 public class HDF5ReaderNodeModel extends NodeModel {
 
@@ -78,6 +46,14 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
 		
 		System.out.println("Complete path: " + fname + dspath + dsname);
+
+		NodeLogger.getLogger("abcxyzz").info(new String("abcxyz info"), new NullPointerException("hallo null"));
+		NodeLogger.getLogger("").coding(new String("abcxyz coding"));
+		NodeLogger.getLogger("").error(new String("abcxyz error"));
+		NodeLogger.getLogger("").debug(new String("abcxyz debug"));
+		Hdf5Attribute<Boolean> attr = new Hdf5Attribute<>("bool", new Boolean[]{true, false});
+		Object a = null;
+		a.equals(null);
 		
 		//createIntFile();
 		createStringFile();
@@ -104,6 +80,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	public static void createIntFile() {
 		Hdf5File file = Hdf5File.createInstance(fname);
 		Hdf5Group group = Hdf5Group.createInstance(file, "group");
+		@SuppressWarnings("unchecked")
 		Hdf5DataSet<Integer> dataSet = (Hdf5DataSet<Integer>) Hdf5DataSet.createInstance(group, dsname, dims2D, Hdf5DataType.INTEGER);
 		
 		Integer[] dataRead = new Integer[7 * 4];
@@ -133,6 +110,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			groups[i] = group;
 		}
 		
+		@SuppressWarnings("unchecked")
 		Hdf5DataSet<Byte> dataSet = (Hdf5DataSet<Byte>) Hdf5DataSet.createInstance(groups[groups.length-1], dsname, dims2D, Hdf5DataType.STRING);
 		
 		long SDIM = dataSet.getStringLength() + 1;
@@ -258,8 +236,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
         Hdf5Attribute<Double> attribute = new Hdf5Attribute<>(attrname, attrValue);
         long DIM0 = attribute.getDimension();
         
-        System.out.println("\n\naddToTreeElement: " + attribute.writeToTreeElement(treeElement));
-        System.out.println("ds: " + attribute.getDataspace_id() + "\na: " + attribute.getAttribute_id());
+        NodeLogger.getLogger("HDF5 Files").info("\n\naddToTreeElement: " + attribute.writeToTreeElement(treeElement));
 
         Double[] attrData = attribute.read(new Double[(int) DIM0]);
         
@@ -309,11 +286,6 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	
 	private DataTableSpec createOutSpec() {
 		DataColumnSpec[] colSpecs = new DataColumnSpec[(int) dims2D[1]];
-        Map<String, String> map = new HashMap<>();
-        map.put("Platz_01", "BVB");
-        map.put("Platz_02", "Bayern");
-        map.put("Platz_03", "Hoffenheim");
-        DataColumnProperties pro = new DataColumnProperties(map);
 		for (int i = 0; i < colSpecs.length; i++) {
 	        colSpecs[i] = new DataColumnSpecCreator("Column " + i, StringCell.TYPE).createSpec();
 		}
@@ -323,6 +295,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	
 	@Override
 	protected DataTableSpec[] configure(DataTableSpec[] inSpecs) throws InvalidSettingsException {
+		// TODO here for Exceptions you know before using execute()
 		return new DataTableSpec[]{createOutSpec()};
     }
 	
