@@ -12,8 +12,6 @@ public class Hdf5Attribute<Type> {
 	
 	private final Type[] m_value;
 	
-	private final long[] m_datatype = new long[2];
-	
 	private long m_dataspaceId = -1;
 	
 	private long m_attributeId = -1;
@@ -22,7 +20,7 @@ public class Hdf5Attribute<Type> {
 	
 	private boolean m_open;
 	
-	private boolean m_string;
+	private Hdf5DataType m_type;
 	
 	/**
 	 * Creates an attribute of the type of {@code type}. <br>
@@ -38,22 +36,10 @@ public class Hdf5Attribute<Type> {
 		m_name = name;
 		m_value = value;
 		this.setDimension(value.length);
-		if (value[0] instanceof Byte) {
-			m_string = true;
+		m_type = Hdf5DataType.get(Hdf5DataType.getTypeIdByArray(value));
+		
+		if (m_type.isString()) {
 			this.setDimension(this.getDimension() + 1);
-			//this.datatype will get values in writeToTreeElement()
-		} else if (value[0] instanceof Integer) {
-			m_datatype[0] = HDF5Constants.H5T_STD_I32BE;
-			m_datatype[1] = HDF5Constants.H5T_NATIVE_INT32;
-		} else if (value[0] instanceof Long) {
-			m_datatype[0] = HDF5Constants.H5T_STD_I64BE;
-			m_datatype[1] = HDF5Constants.H5T_NATIVE_INT64;
-		} else if (value[0] instanceof Double) {
-			m_datatype[0] = HDF5Constants.H5T_ALPHA_F64;
-			m_datatype[1] = HDF5Constants.H5T_NATIVE_DOUBLE;
-		} else {
-			// TODO find out if there's another way to find the name "HDF5 Files"
-			NodeLogger.getLogger("HDF5 Files").error("Datatype is not supported", new IllegalArgumentException());
 		}
 	}
 	
@@ -63,10 +49,6 @@ public class Hdf5Attribute<Type> {
 	
 	private Type[] getValue() {
 		return m_value;
-	}
-
-	private long[] getDatatype() {
-		return m_datatype;
 	}
 
 	private long getDataspaceId() {
@@ -100,15 +82,15 @@ public class Hdf5Attribute<Type> {
 	private void setOpen(boolean open) {
 		m_open = open;
 	}
-
-	private boolean isString() {
-		return m_string;
-	}
-
-	private void setString(boolean string) {
-		m_string = string;
-	}
 	
+	public Hdf5DataType getType() {
+		return m_type;
+	}
+
+	public void setType(Hdf5DataType m_type) {
+		this.m_type = m_type;
+	}
+
 	/**
 	 * Updates the dimensions array after opening an attribute to ensure that the
 	 * dimensions array is correct.
@@ -125,7 +107,7 @@ public class Hdf5Attribute<Type> {
 		}
 		
 		long[] dims = new long[1];
-		if (this.isString()) {
+		if (this.getType().isString()) {
 			long filetypeId = -1;
 			long memtypeId = -1;
 			
@@ -152,15 +134,15 @@ public class Hdf5Attribute<Type> {
 				e.printStackTrace();
 			}
 			
-			this.getDatatype()[0] = filetypeId;
-			this.getDatatype()[1] = memtypeId;
+			this.getType().getConstants()[0] = filetypeId;
+			this.getType().getConstants()[1] = memtypeId;
 		} else {
 			try {
 				if (this.getDataspaceId() >= 0) {
 					H5.H5Sget_simple_extent_dims(this.getDataspaceId(), dims, null);
 				}
-			} catch (HDF5LibraryException | NullPointerException e1) {
-				e1.printStackTrace();
+			} catch (HDF5LibraryException | NullPointerException lnpe) {
+				lnpe.printStackTrace();
 			}
 		}
 
@@ -185,8 +167,8 @@ public class Hdf5Attribute<Type> {
                 
                 this.updateDimension();
             }
-        } catch (HDF5LibraryException e) {
-        	if (this.isString()) {
+        } catch (HDF5LibraryException le) {
+        	if (this.getType().isString()) {
 				long filetypeId = -1;
 				long memtypeId = -1;
 				
@@ -198,7 +180,7 @@ public class Hdf5Attribute<Type> {
 	    			if (filetypeId >= 0) {
 	    				H5.H5Tset_size(filetypeId, this.getDimension() - 1);
 	    			}
-	    		} catch (Exception e2) {
+	    		} catch (Exception e) {
 	    			e.printStackTrace();
 	    		}
 	    		
@@ -207,36 +189,36 @@ public class Hdf5Attribute<Type> {
 	    			if (memtypeId >= 0) {
 	    				H5.H5Tset_size(memtypeId, this.getDimension());
 	    			}
-	    		} catch (Exception e2) {
+	    		} catch (Exception e) {
 	    			e.printStackTrace();
 	    		}
 	    		
-				this.getDatatype()[0] = filetypeId;
-				this.getDatatype()[1] = memtypeId;
+				this.getType().getConstants()[0] = filetypeId;
+				this.getType().getConstants()[1] = memtypeId;
         	}
         	
         	// Create the data space for the attribute.
         	// the array length can only be 1 for Strings
-        	long[] dims = { isString() ? 1 : this.getDimension() };
+        	long[] dims = { this.getType().isString() ? 1 : this.getDimension() };
             try {
                 this.setDataspaceId(H5.H5Screate_simple(1, dims, null));
             }
-            catch (Exception e2) {
+            catch (Exception e) {
                 e.printStackTrace();
             }
 
             // Create a dataset attribute.
             try {
-                if (treeElement.getElementId() >= 0 && this.getDataspaceId() >= 0 && this.getDatatype()[0] >= 0) {
+                if (treeElement.getElementId() >= 0 && this.getDataspaceId() >= 0 && this.getType().getConstants()[0] >= 0) {
                     this.setAttributeId(H5.H5Acreate(treeElement.getElementId(), this.getName(),
-                    		this.getDatatype()[0], this.getDataspaceId(),
+                    		this.getType().getConstants()[0], this.getDataspaceId(),
                             HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
                     this.setOpen(true);
                     NodeLogger.getLogger("HDF5 Files").info("Attribute " + this.getName() + " created: " + this.getAttributeId());
                     return this.write(treeElement);
                 }
             }
-            catch (Exception e2) {
+            catch (Exception e) {
                 e.printStackTrace();
             }
         }
@@ -246,8 +228,8 @@ public class Hdf5Attribute<Type> {
 	public Type[] read(Type[] attrData) {
         // Read data.
         try {
-            if (this.getAttributeId() >= 0 && this.getDatatype()[1] >= 0) {
-                H5.H5Aread(this.getAttributeId(), this.getDatatype()[1], attrData);
+            if (this.getAttributeId() >= 0 && this.getType().getConstants()[1] >= 0) {
+                H5.H5Aread(this.getAttributeId(), this.getType().getConstants()[1], attrData);
             }
         }
         catch (Exception e) {
@@ -260,8 +242,8 @@ public class Hdf5Attribute<Type> {
 	private boolean write(Hdf5TreeElement treeElement) {
 		// Write the attribute data.
         try {
-            if (this.getAttributeId() >= 0 && this.getDatatype()[1] >= 0) {
-                H5.H5Awrite(this.getAttributeId(), this.getDatatype()[1], this.getValue());
+            if (this.getAttributeId() >= 0 && this.getType().getConstants()[1] >= 0) {
+                H5.H5Awrite(this.getAttributeId(), this.getType().getConstants()[1], this.getValue());
                 treeElement.addAttribute(this);
                 return true;
             }
@@ -279,9 +261,9 @@ public class Hdf5Attribute<Type> {
 		 */
         try {
             if (this.isOpen()) {
-                if (this.isString()) {
+                if (this.getType().isString()) {
         	 		// Terminate access to the file and mem type.
-        			for (long datatype: this.getDatatype()) {
+        			for (long datatype: this.getType().getConstants()) {
         		 		if (datatype >= 0) {
     		 				H5.H5Tclose(datatype);
     		 				datatype = -1;

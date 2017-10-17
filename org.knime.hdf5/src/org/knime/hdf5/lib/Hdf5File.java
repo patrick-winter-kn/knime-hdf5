@@ -140,7 +140,7 @@ public class Hdf5File extends Hdf5Group {
 
         System.out.println("Open objects:\n");
 
-        for (int i = 0; i < openedObjects; i++ ) {
+        for (int i = 0; i < openedObjects; i++) {
         	try {
         		objectType = H5.H5Iget_type(objects[i]);
 			} catch (HDF5LibraryException e) {
@@ -156,10 +156,30 @@ public class Hdf5File extends Hdf5Group {
          
         return openedObjects;
 	}
-	
+
+	/**
+	 * Closes the group and all elements in this group.
+	 * 
+	 */
+	@Override
 	public void close() {
 		try {
             if (this.isOpen()) {
+            	Iterator<Hdf5DataSet<?>> iterDss = this.getDataSets().iterator();
+	    		while (iterDss.hasNext()) {
+	    			iterDss.next().close();
+	    		}
+
+	    		Iterator<Hdf5Attribute<?>> iterAttrs = this.getAttributes().iterator();
+	    		while (iterAttrs.hasNext()) {
+	    			iterAttrs.next().close();
+	    		}
+	    		
+	    		Iterator<Hdf5Group> iterGrps = this.getGroups().iterator();
+	    		while (iterGrps.hasNext()) {
+	    			iterGrps.next().close();
+	    		}
+
             	this.whatIsOpen();
 				NodeLogger.getLogger("HDF5 Files").info("File " + this.getName() + " closed: "
 						+ H5.H5Fclose(this.getElementId()));

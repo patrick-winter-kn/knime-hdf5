@@ -6,8 +6,8 @@ import java.util.Arrays;
 import java.util.Scanner;
 
 import javax.swing.JFileChooser;
-import javax.swing.event.ChangeListener;
 import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 import org.knime.core.node.FlowVariableModel;
 import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
@@ -17,13 +17,13 @@ import org.knime.core.node.defaultnodesettings.DialogComponentStringSelection;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
-import org.knime.hdf5.lib.Hdf5DataSet.Hdf5DataType;
 
 class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 
     private static Hdf5Group group;
 
-    private static DialogComponentStringSelection subGroups;
+    // for selection of children of the group group
+    private static DialogComponentStringSelection children;
     
     private static DialogComponentStringSelection dataSets;
     
@@ -31,7 +31,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 
     private FlowVariableModel m_sourceFvm;
 
-    private SettingsModelString m_subGroups;
+    private SettingsModelString m_children;
     
     private SettingsModelString m_dataSets;
 
@@ -43,7 +43,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
         
         m_source = SettingsFactory.createSourceSettings();
         m_sourceFvm = super.createFlowVariableModel(m_source);
-        m_subGroups = SettingsFactory.createSourceSettings();
+        m_children = SettingsFactory.createSourceSettings();
         m_dataSets = SettingsFactory.createSourceSettings();
         
         // Source
@@ -68,20 +68,20 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		    		HDF5ReaderNodeModel.dspath = "/";
 		        	group = Hdf5File.createInstance(newValue);
 		        	
-		        	// TODO do some safety things, e.g., if the user did not choose a dataSet to work with
+		        	// TODO do it like in Column Filter
 		        	
 		            // subGroups in File
-		        	if (subGroups == null) {
-			            subGroups = new DialogComponentStringSelection(m_subGroups,
-			            		"Groups: ", group.getGroupNames());
+		        	if (children == null) {
+			            children = new DialogComponentStringSelection(m_children,
+			            		"Groups: ", group.loadGroupNames());
 		        	} else {
-			            subGroups.replaceListItems(Arrays.asList(group.getGroupNames()), null);
+			            children.replaceListItems(Arrays.asList(group.loadGroupNames()), null);
 		        	}
-		            addDialogComponent(subGroups);
-					subGroups.getModel().addChangeListener(new ChangeListener(){
+		            addDialogComponent(children);
+					children.getModel().addChangeListener(new ChangeListener(){
 						@Override
 						public void stateChanged(ChangeEvent e) {
-					        final SettingsModelString model = (SettingsModelString) subGroups.getModel();
+					        final SettingsModelString model = (SettingsModelString) children.getModel();
 					        final String newValue = model.getStringValue();
 
 					        if (!newValue.equals(" ")) {
@@ -89,10 +89,10 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 					        	group = Hdf5Group.getInstance(group, newValue);
 					        	
 								// subGroups in Group
-					            subGroups.replaceListItems(Arrays.asList(group.getGroupNames()), null);
+					            children.replaceListItems(Arrays.asList(group.loadGroupNames()), null);
 					            
 					            // dataSets in Group
-					            dataSets.replaceListItems(Arrays.asList(group.getDataSetNames()), null);
+					            dataSets.replaceListItems(Arrays.asList(group.loadDataSetNames()), null);
 				            }
 						}
 					});
@@ -100,9 +100,9 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		            // dataSets in File
 					if (dataSets == null) {
 			            dataSets = new DialogComponentStringSelection(m_dataSets,
-			            		"Datasets: ", group.getDataSetNames());
+			            		"Datasets: ", group.loadDataSetNames());
 		            } else {
-			            dataSets.replaceListItems(Arrays.asList(group.getDataSetNames()), null);
+			            dataSets.replaceListItems(Arrays.asList(group.loadDataSetNames()), null);
 		            }
 		            addDialogComponent(dataSets);
 		            dataSets.getModel().addChangeListener(new ChangeListener(){
@@ -146,7 +146,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		}
 		
 		scn.close();
-		file.closeAll();
+		file.close();
 		HDF5ReaderNodeModel.dspath = path;
 		System.out.print("\nGo back to KNIME to call execute().");
     }
@@ -154,13 +154,20 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     public static void showElements(Hdf5Group group) {
 		System.out.println("--------------------------------------------------------------------------------");
 		System.out.println("Groups in " + (group instanceof Hdf5File ? "File " : "Group ") + group.getName() + ":\n");
-		group.loadGroups();
+		String[] groupNames = group.loadGroupNames();
+		if (groupNames != null) {
+			for (String name: groupNames) {
+				System.out.println(name);
+			}
+		}
 		System.out.println("--------------------------------------------------------------------------------");
 		System.out.println("Datasets in " + (group instanceof Hdf5File ? "File " : "Group ") + group.getName() + ":\n");
-		group.loadDataSets(Hdf5DataType.INTEGER);
-		group.loadDataSets(Hdf5DataType.LONG);
-		group.loadDataSets(Hdf5DataType.DOUBLE);
-		group.loadDataSets(Hdf5DataType.STRING);
+		String[] dataSetNames = group.loadDataSetNames();
+		if (dataSetNames != null) {
+			for (String name: dataSetNames) {
+				System.out.println(name);
+			}
+		}
 		System.out.println("--------------------------------------------------------------------------------");
 	}
 }

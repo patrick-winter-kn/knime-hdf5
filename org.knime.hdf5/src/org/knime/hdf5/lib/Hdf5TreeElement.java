@@ -30,10 +30,14 @@ abstract public class Hdf5TreeElement {
 	 * @param name
 	 */
 	protected Hdf5TreeElement(final String name, final String filePath) {
-		if (name.equals("")) {
-			NodeLogger.getLogger("HDF5 Files").error("Name of " + filePath +  " may not be the empty String!" ,
-					new IllegalArgumentException());
+		if (name == null) {
+			NodeLogger.getLogger("HDF5 Files").error("Name is null",
+					new NullPointerException());
 			// this is necessary because m_name is final
+			m_name = null;
+		} else if (name.equals("")) {
+			NodeLogger.getLogger("HDF5 Files").error("Name may not be the empty String!",
+					new IllegalArgumentException());
 			m_name = null;
 		} else if (name.contains("/")) {
 			NodeLogger.getLogger("HDF5 Files").error("Name " + name + " contains '/'",
@@ -108,13 +112,6 @@ abstract public class Hdf5TreeElement {
 	public void addAttribute(Hdf5Attribute<?> attribute) {
 		if (this.getAttribute(attribute.getName()) == null) {
 			this.getAttributes().add(attribute);
-		}
-	}
-	
-	public void closeAttributes() {
-		Iterator<Hdf5Attribute<?>> iter = this.getAttributes().iterator();
-		while (iter.hasNext()) {
-			iter.next().close();
 		}
 	}
 }

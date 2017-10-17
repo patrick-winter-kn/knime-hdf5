@@ -2,15 +2,11 @@ package org.knime.hdf5.lib;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
 import org.knime.core.node.NodeLogger;
-import org.knime.hdf5.lib.Hdf5DataSet.Hdf5DataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -24,54 +20,33 @@ public class Hdf5Group extends Hdf5TreeElement {
 	
 	private final List<Hdf5DataSet<?>> m_dataSets = new LinkedList<>();
 
-	private enum Hdf5Object {
-		UNKNOWN(-1),		// Unknown object type
-		GROUP(0),			// Object is a group
-		DATASET(1),			// Object is a dataset
-		TYPE(2),			// Object is a named data type
-		LINK(3),			// Object is a symbolic link
-		UDLINK(4),			// Object is a user-defined link
-		RESERVED_5(5), 		// Reserved for future use
-		RESERVED_6(6),		// Reserved for future use
-		RESERVED_7(7);		// Reserved for future use
-		private static final Map<Integer, Hdf5Object> lookup = new HashMap<>();
-
-		static {
-			for (Hdf5Object o : EnumSet.allOf(Hdf5Object.class)) {
-				lookup.put(o.getType(), o);
-			}
-		}
-
-		private int m_type;
-
-		Hdf5Object(int type) {
-			m_type = type;
-		}
-
-		public int getType() {
-			return m_type;
-		}
-
-		public static Hdf5Object get(int type) {
-			return lookup.get(type);
-		}
-	}
-	
-	protected Hdf5Group(final Hdf5Group group, final String filePath, final String name, boolean create) {
+	protected Hdf5Group(final Hdf5Group parent, final String filePath, final String name, boolean create) {
 		super(name, filePath);
 		if (!(this instanceof Hdf5File)) {
 			ALL_GROUPS.add(this);
-		}
-		if (create) {
-			if (group != null) {
-				this.addToGroup(group);
+			if (parent != null) {
+				if (create) {
+					this.addToGroup(parent);
+				} else {
+					this.setParent(parent);
+					this.open();
+					this.setPathFromFile(parent.getPathFromFile() + this.getName() + "/");
+					parent.addGroup(this);
+				}
+			} else {
+				NodeLogger.getLogger("HDF5 Files").error("Parent group cannot be null",
+						new NullPointerException());
 			}
-		} else {
-			this.setParent(group);
-			this.open();
-			this.setPathFromFile(group.getPathFromFile() + this.getName() + "/");
-			group.addGroup(this);
 		}
+	}
+
+	public Hdf5Group createGroup(final String name) {
+		return Hdf5Group.createInstance(this, name);
+	}
+	
+	public Hdf5DataSet<?> createDataSet(final String name,
+			long[] dimensions, Hdf5DataType type) {
+		return Hdf5DataSet.createInstance(this, name, dimensions, type);
 	}
 	
 	/**
@@ -85,32 +60,44 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * name and location will be returned. <br>
 	 * The name may not contain '/'. <br>
 	 * 
-	 * @param group the parent group
+	 * @param parent the parent group
 	 * @param name the name of the new group
 	 * 
 	 * @return the new group 
 	 */
-	public static Hdf5Group createInstance(final Hdf5Group group, final String name) {
+	public static Hdf5Group createInstance(final Hdf5Group parent, final String name) {
+		Hdf5Group group = null;
+		boolean found = false;
+		
 		Iterator<Hdf5Group> iter = ALL_GROUPS.iterator();
-		while (iter.hasNext()) {
+		while (!found && iter.hasNext()) {
 			Hdf5Group grp = iter.next();
-			if (grp.getFilePath().equals(group.getFilePath())
-					&& grp.getPathFromFile().equals(group.getPathFromFile() + name + "/")) {
+			if (grp.getFilePath().equals(parent.getFilePath())
+					&& grp.getPathFromFile().equals(parent.getPathFromFile() + name + "/")) {
 				grp.open();
-				return grp;
+				group = grp;
+				found = true;
 			}
 		}
 		
-		Hdf5Group[] groups = group.loadGroups();
-		if (groups != null) {
-			for (Hdf5Group grp: groups) {
-				if (grp.getName().equals(name)) {
-					return grp;
+		if (!found) {
+			String[] groupNames = parent.loadGroupNames();
+			if (groupNames != null) {
+				for (String n: groupNames) {
+					if (n.equals(name)) {
+						group = Hdf5Group.getInstance(parent, name);
+						found = true;
+						break;
+					}
 				}
 			}
 		}
 		
-		return new Hdf5Group(group, group.getFilePath(), name, true);
+		if (!found) {
+			group = new Hdf5Group(parent, parent.getFilePath(), name, true);;
+		}
+		
+		return group;
 	}
 	
 	/**
@@ -124,22 +111,31 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * name and location will be returned. <br>
 	 * The name may not contain '/'. <br>
 	 * 
-	 * @param group the parent group
+	 * @param parent the parent group
 	 * @param name the name of this group
 	 * 
 	 * @return 
 	 */
-	public static Hdf5Group getInstance(final Hdf5Group group, final String name) {
+	public static Hdf5Group getInstance(final Hdf5Group parent, final String name) {
+		Hdf5Group group = null;
+		boolean found = false;
+		
 		Iterator<Hdf5Group> iter = ALL_GROUPS.iterator();
-		while (iter.hasNext()) {
+		while (!found && iter.hasNext()) {
 			Hdf5Group grp = iter.next();
-			if (grp.getFilePath().equals(group.getFilePath())
-					&& grp.getPathFromFile().equals(group.getPathFromFile() + name + "/")) {
+			if (grp.getFilePath().equals(parent.getFilePath())
+					&& grp.getPathFromFile().equals(parent.getPathFromFile() + name + "/")) {
 				grp.open();
-				return grp;
+				group = grp;
+				found = true;
 			}
 		}
-		return new Hdf5Group(group, group.getFilePath(), name, false);
+		
+		if (!found) {
+			group = new Hdf5Group(parent, parent.getFilePath(), name, false);
+		}
+		
+		return group;
 	}
 	
 	/**
@@ -196,30 +192,11 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return names != null ? Arrays.copyOf(names, index) : null;
 	}
 	
-	public String[] getGroupNames() {
+	public String[] loadGroupNames() {
 		List<String> names = new LinkedList<>();
 		names.add(" ");
 		Collections.addAll(names, this.loadObjectNames(Hdf5Object.GROUP));
 		return names.toArray(new String[0]);
-	}
-	
-	/**
-	 * Loads all direct subGroups which are accessible from this group. <br>
-	 * All subGroups will also be opened and the list {@code groups} will be updated.
-	 * 
-	 * @return the array of all accessible subGroups
-	 */
-	public Hdf5Group[] loadGroups() {
-		String[] names = this.loadObjectNames(Hdf5Object.GROUP);
-		if (names != null) {
-			Hdf5Group[] groups = new Hdf5Group[names.length];
-			for (int i = 0; i < names.length; i++) {
-				// the object list groups will be updated in here
-				groups[i] = Hdf5Group.getInstance(this, names[i]);
-			}
-			return groups;
-		}
-		return null;
 	}
 	
 	/**
@@ -257,44 +234,11 @@ public class Hdf5Group extends Hdf5TreeElement {
 		}
 	}
 	
-	public String[] getDataSetNames() {
+	public String[] loadDataSetNames() {
 		List<String> names = new LinkedList<>();
 		names.add(" ");
 		Collections.addAll(names, this.loadObjectNames(Hdf5Object.DATASET));
 		return names.toArray(new String[0]);
-	}
-	
-	/**
-	 * Loads all datasets which are accessible from this group with the respective type. <br>
-	 * All datasets will also be opened and the list {@code dataSets} will be updated.
-	 * 
-	 * @return the array of all accessible datasets
-	 */
-	public Hdf5DataSet<?>[] loadDataSets(Hdf5DataType type) {
-		String[] names = this.loadObjectNames(Hdf5Object.DATASET);
-		if (names != null) {
-			Hdf5DataSet<?>[] dataSets = new Hdf5DataSet[names.length];
-			for (int i = 0; i < names.length; i++) {
-				dataSets[i] = Hdf5DataSet.getInstance(this, names[i], null, type);
-			}
-			return dataSets;
-		}
-		return null;
-	}
-	
-	/**
-	 * Loads all datasets which are accessible from this group. <br>
-	 * All datasets will also be opened and the list {@code dataSets} will be updated.
-	 * 
-	 * @return the array of all accessible datasets
-	 */
-	public Hdf5DataSet<?>[] loadDataSets() {
-		List<Hdf5DataSet<?>> dataSets = new LinkedList<>();
-		Collections.addAll(dataSets, this.loadDataSets(Hdf5DataType.INTEGER));
-		Collections.addAll(dataSets, this.loadDataSets(Hdf5DataType.LONG));
-		Collections.addAll(dataSets, this.loadDataSets(Hdf5DataType.DOUBLE));
-		Collections.addAll(dataSets, this.loadDataSets(Hdf5DataType.STRING));
-		return (Hdf5DataSet<?>[]) dataSets.toArray();
 	}
 	
 	/**
@@ -377,37 +321,30 @@ public class Hdf5Group extends Hdf5TreeElement {
 		}
 	}
 	
-	public void close() {
-        try {
-        	if (this.isOpen()) {
-				NodeLogger.getLogger("HDF5 Files").info("Group " + this.getName() + " closed: " + H5.H5Gclose(this.getElementId()));
-		        this.setOpen(false);
-        	}
-	    } catch (Exception e) {
-	        e.printStackTrace();
-	    }
-	}
-	
 	/**
 	 * Closes the group and all elements in this group.
 	 * 
 	 */
-	public void closeAll() {
+	public void close() {
 		try {
             if (this.isOpen()) {
-            	Iterator<Hdf5DataSet<?>> iterDS = this.getDataSets().iterator();
-	    		while (iterDS.hasNext()) {
-	    			iterDS.next().close();
+            	Iterator<Hdf5DataSet<?>> iterDss = this.getDataSets().iterator();
+	    		while (iterDss.hasNext()) {
+	    			iterDss.next().close();
 	    		}
 
-            	this.closeAttributes();
-	    		
-	    		Iterator<Hdf5Group> iterG = this.getGroups().iterator();
-	    		while (iterG.hasNext()) {
-	    			iterG.next().closeAll();
+	    		Iterator<Hdf5Attribute<?>> iterAttrs = this.getAttributes().iterator();
+	    		while (iterAttrs.hasNext()) {
+	    			iterAttrs.next().close();
 	    		}
 	    		
-	    		this.close();
+	    		Iterator<Hdf5Group> iterGrps = this.getGroups().iterator();
+	    		while (iterGrps.hasNext()) {
+	    			iterGrps.next().close();
+	    		}
+	    		
+	    		NodeLogger.getLogger("HDF5 Files").info("Group " + this.getName() + " closed: " + H5.H5Gclose(this.getElementId()));
+		        this.setOpen(false);
             }
         } catch (Exception e) {
             e.printStackTrace();
