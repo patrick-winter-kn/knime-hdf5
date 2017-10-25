@@ -8,7 +8,7 @@ import org.knime.core.node.NodeLogger;
 
 import hdf.hdf5lib.HDF5Constants;
 
-public enum Hdf5DataType {
+public enum Hdf5DataType { 
 	INTEGER(0),			// data type is an Integer
 	LONG(1),			// data type is a Long
 	DOUBLE(2),			// data type is a Double
@@ -39,16 +39,15 @@ public enum Hdf5DataType {
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT64;
 			break;
 		case 2: 
-			m_constants[0] = HDF5Constants.H5T_STD_I64LE;
-			m_constants[1] = HDF5Constants.H5T_NATIVE_INT64;
+			m_constants[0] = HDF5Constants.H5T_IEEE_F64LE;
+			m_constants[1] = HDF5Constants.H5T_NATIVE_DOUBLE;
 			break;
 		case 3:
-			// for Hdf5DataSet: m_constants will get values in addToFile()
+			// for Hdf5DataSet: m_constants will get values in constructor or updateDimensions()
 			// for Hdf5Attribute: m_constants will get values in writeToTreeElement()
 			break;
 		default:
 			NodeLogger.getLogger("HDF5 Files").error("Datatype is not supported", new IllegalArgumentException());
-			break;
 		}
 	}
 	
@@ -58,13 +57,15 @@ public enum Hdf5DataType {
 
 	public static int getTypeIdByArray(Object[] objects) {
 		String type = objects.getClass().getComponentType().toString();
-		if (type.equals("Integer")) {
+		String pack = "class java.lang.";
+		System.out.println("Type: " + type);
+		if (type.equals(pack + "Integer")) {
 			return 0;
-		} else if (type.equals("Long")) {
+		} else if (type.equals(pack + "Long")) {
 			return 1;
-		} else if (type.equals("Double")) {
+		} else if (type.equals(pack + "Double")) {
 			return 2;
-		} else if (type.equals("Byte")) {
+		} else if (type.equals(pack + "Byte")) {
 			return 3;
 		} else {
 			return -1;

@@ -14,8 +14,6 @@ import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5Group extends Hdf5TreeElement {
 	
-	protected static final List<Hdf5Group> ALL_GROUPS = new LinkedList<>();
-	
 	private final List<Hdf5Group> m_groups = new LinkedList<>();
 	
 	private final List<Hdf5DataSet<?>> m_dataSets = new LinkedList<>();
@@ -23,135 +21,163 @@ public class Hdf5Group extends Hdf5TreeElement {
 	protected Hdf5Group(final Hdf5Group parent, final String filePath, final String name, boolean create) {
 		super(name, filePath);
 		if (!(this instanceof Hdf5File)) {
-			ALL_GROUPS.add(this);
-			if (parent != null) {
-				if (create) {
-					this.addToGroup(parent);
-				} else {
-					this.setParent(parent);
-					this.open();
-					this.setPathFromFile(parent.getPathFromFile() + this.getName() + "/");
-					parent.addGroup(this);
-				}
-			} else {
-				NodeLogger.getLogger("HDF5 Files").error("Parent group cannot be null",
+			if (parent == null) {
+				NodeLogger.getLogger("HDF5 Files").error("parent cannot be null",
 						new NullPointerException());
+			} else if (!parent.isOpen()) {
+				NodeLogger.getLogger("HDF5 Files").error("parent group " + parent.getName() + " is not open!",
+						new IllegalStateException());
+			} else if (!create) {
+				parent.addGroup(this);
+				this.open();
+			} else {
+				try {
+					this.setElementId(H5.H5Gcreate(parent.getElementId(), this.getName(), 
+							HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT,
+							HDF5Constants.H5P_DEFAULT));
+					NodeLogger.getLogger("HDF5 Files").info("Group " + this.getName() + " created: " + this.getElementId());
+					parent.addGroup(this);
+					this.setOpen(true);
+				} catch (HDF5LibraryException | NullPointerException e) {
+					e.printStackTrace();
+				}
 			}
 		}
 	}
 
-	public Hdf5Group createGroup(final String name) {
-		return Hdf5Group.createInstance(this, name);
-	}
-	
-	public Hdf5DataSet<?> createDataSet(final String name,
-			long[] dimensions, Hdf5DataType type) {
-		return Hdf5DataSet.createInstance(this, name, dimensions, type);
-	}
-	
 	/**
-	 * Creates a new instance of a group with the name {@code name} and
-	 * creates it physically in the group {@code group}. <br>
-	 * The method does may create the group physically on the file system.
-	 * If you do not want that, use getInstance(). <br>
-	 * If in {@code group} already exists a group with the same name,
-	 * the group will be opened and added to the list {@code ALL_GROUPS}. <br>
-	 * If it's already in this list, the group in this list with the same
-	 * name and location will be returned. <br>
-	 * The name may not contain '/'. <br>
-	 * 
-	 * @param parent the parent group
-	 * @param name the name of the new group
-	 * 
-	 * @return the new group 
-	 */
-	public static Hdf5Group createInstance(final Hdf5Group parent, final String name) {
-		Hdf5Group group = null;
-		boolean found = false;
-		
-		Iterator<Hdf5Group> iter = ALL_GROUPS.iterator();
-		while (!found && iter.hasNext()) {
-			Hdf5Group grp = iter.next();
-			if (grp.getFilePath().equals(parent.getFilePath())
-					&& grp.getPathFromFile().equals(parent.getPathFromFile() + name + "/")) {
-				grp.open();
-				group = grp;
-				found = true;
-			}
-		}
-		
-		if (!found) {
-			String[] groupNames = parent.loadGroupNames();
-			if (groupNames != null) {
-				for (String n: groupNames) {
-					if (n.equals(name)) {
-						group = Hdf5Group.getInstance(parent, name);
-						found = true;
-						break;
-					}
-				}
-			}
-		}
-		
-		if (!found) {
-			group = new Hdf5Group(parent, parent.getFilePath(), name, true);;
-		}
-		
-		return group;
-	}
-	
-	/**
-	 * Creates a new instance of a group with the name {@code name} and
-	 * relates it in the group {@code group}. <br>
-	 * The method does not create the group physically on the file system.
-	 * Use createInstance(). <br>
-	 * The group will be opened and added to the list ALL_GROUPS if that
-	 * did not already happen. <br>
-	 * If it's already in this list, the group in this list with the same
-	 * name and location will be returned. <br>
-	 * The name may not contain '/'. <br>
-	 * 
-	 * @param parent the parent group
-	 * @param name the name of this group
-	 * 
-	 * @return 
-	 */
-	public static Hdf5Group getInstance(final Hdf5Group parent, final String name) {
-		Hdf5Group group = null;
-		boolean found = false;
-		
-		Iterator<Hdf5Group> iter = ALL_GROUPS.iterator();
-		while (!found && iter.hasNext()) {
-			Hdf5Group grp = iter.next();
-			if (grp.getFilePath().equals(parent.getFilePath())
-					&& grp.getPathFromFile().equals(parent.getPathFromFile() + name + "/")) {
-				grp.open();
-				group = grp;
-				found = true;
-			}
-		}
-		
-		if (!found) {
-			group = new Hdf5Group(parent, parent.getFilePath(), name, false);
-		}
-		
-		return group;
-	}
-	
-	/**
-	 * @return a list of all direct subGroups which were either already loaded by loadGroups() or
-	 * created in the same run.
+	 * @return a list of all children groups of this group
 	 */
 	public List<Hdf5Group> getGroups() {
 		return m_groups;
 	}
-
+	
 	/**
-	 * @return a list of all datasets which were either already loaded by loadDataSets() or
-	 * created in the same run.
+	 * @return a list of all dataSets of this group
 	 */
 	public List<Hdf5DataSet<?>> getDataSets() {
 		return m_dataSets;
+	}
+	
+	/**
+	 * Creates a new child group with the name {@code name}.
+	 * If a group with this name already physically exists in the .h5 file,
+	 * the method will do nothing and return {@code null}. <br>
+	 * The name may not contain '/'.
+	 * 
+	 * @param name the name of the new group
+	 * 
+	 * @return the new group 
+	 */
+	// TODO add another argument for the mode (overwrite, abort, nameChange)
+	public Hdf5Group createGroup(final String name) {
+		if (!this.existsGroup(name)) {
+			return new Hdf5Group(this, this.getFilePath(), name, true);
+		}
+		return null;
+	}
+
+	public Hdf5DataSet<?> createDataSet(final String name,
+			long[] dimensions, Hdf5DataType type) {
+		if (!this.existsDataSet(name)) {		
+			return Hdf5DataSet.getInstance(this, name, dimensions, type, true);
+		}
+		return null;
+	}
+	
+	private boolean existsGroup(final String name) {
+		List<String> groupNames = this.loadGroupNames();
+		if (groupNames != null) {
+			for (String n: groupNames) {
+				if (n.equals(name)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	
+	private boolean existsDataSet(final String name) {
+		List<String> dataSetNames = this.loadDataSetNames();
+		if (dataSetNames != null) {
+			for (String n: dataSetNames) {
+				if (n.equals(name)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	
+	private void addGroup(Hdf5Group group) {
+		this.getGroups().add(group);
+		group.setPathFromFile(this.getPathFromFile() + this.getName() + "/");
+		group.setParent(this);
+	}
+
+	void addDataSet(Hdf5DataSet<?> dataSet) {
+		this.getDataSets().add(dataSet);
+		dataSet.setPathFromFile(this.getPathFromFile() + this.getName());
+		dataSet.setParent(this);
+	}
+	
+	/**
+	 * Finds the child group with the name {@code name}.
+	 * If the group doesn't exist in the list {@code m_groups}, but physically
+	 * exists in the .h5 file, a new instance of the group will be created
+	 * and added to the list {@code m_groups}.
+	 * 
+	 * @param name
+	 * @return child group
+	 */
+	public Hdf5Group getGroup(final String name) {
+		Iterator<Hdf5Group> iter = this.getGroups().iterator();
+		Hdf5Group group = null;
+		boolean found = false;
+		
+		while (!found && iter.hasNext()) {
+			Hdf5Group grp = iter.next();
+			if (grp.getName().equals(name)) {
+				group = grp;
+				found = true;
+			}
+		}
+		
+		if (!found && this.existsGroup(name)) {
+			group = new Hdf5Group(this, this.getFilePath(), name, false);
+		}
+		
+		return group;
+	}
+	
+	/**
+	 * Finds the dataSet with the name {@code name}.
+	 * If the dataSet doesn't exist in the list {@code m_dataSets}, but physically
+	 * exists in the .h5 file, a new instance of the dataSet will be created
+	 * and added to the list {@code m_dataSets}.
+	 * 
+	 * @param name
+	 * @return dataSet
+	 */
+	// TODO here try to do it that the arguments only are group and name, recognize the rest
+	public Hdf5DataSet<?> getDataSet(final String name, long[] dimensions, Hdf5DataType type) {
+		Iterator<Hdf5DataSet<?>> iter = this.getDataSets().iterator();
+		Hdf5DataSet<?> dataSet = null;
+		boolean found = false;
+		
+		while (!found && iter.hasNext()) {
+			Hdf5DataSet<?> ds = iter.next();
+			if (ds.getName().equals(name)) {
+				dataSet = ds;
+				found = true;
+			}
+		}
+		
+		if (!found && this.existsDataSet(name)) {
+			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, type, false);
+		}
+		
+		return dataSet;
 	}
 	
 	private String[] loadObjectNames(Hdf5Object object) {
@@ -192,120 +218,22 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return names != null ? Arrays.copyOf(names, index) : null;
 	}
 	
-	public String[] loadGroupNames() {
+	public List<String> loadGroupNames() {
 		List<String> names = new LinkedList<>();
-		names.add(" ");
-		Collections.addAll(names, this.loadObjectNames(Hdf5Object.GROUP));
-		return names.toArray(new String[0]);
-	}
-	
-	/**
-	 * Find the subGroup with the name {@code name} using the returned list of the method getGroups(). <br>
-	 * The list was updated at the latest call of loadGroups().
-	 * 
-	 * @param name
-	 * @return
-	 */
-	public Hdf5Group getGroup(final String name) {
-		Iterator<Hdf5Group> iter = this.getGroups().iterator();
-		Hdf5Group group = null;
-		boolean found = false;
-		
-		while (!found && iter.hasNext()) {
-			Hdf5Group grp = iter.next();
-			if (grp.getName().equals(name)) {
-				group = grp;
-				found = true;
-			}
+		String[] groupNames = this.loadObjectNames(Hdf5Object.GROUP);
+		if (groupNames != null) {
+			Collections.addAll(names, groupNames);
 		}
-		
-		return group;
+		return names;
 	}
 	
-	/**
-	 * Adds the group to the list if it is not already there. You might have to call the method
-	 * loadGroup() to update the list which is used in this method.
-	 * 
-	 * @param dataSet
-	 */
-	public void addGroup(Hdf5Group group) {
-		if (this.getGroup(group.getName()) == null) {
-			this.getGroups().add(group);
-		}
-	}
-	
-	public String[] loadDataSetNames() {
+	public List<String> loadDataSetNames() {
 		List<String> names = new LinkedList<>();
-		names.add(" ");
-		Collections.addAll(names, this.loadObjectNames(Hdf5Object.DATASET));
-		return names.toArray(new String[0]);
-	}
-	
-	/**
-	 * Find the dataset with the name {@code name} using the returned list of the method getDataSets(). <br>
-	 * The list was updated at the latest call of loadDataSets().
-	 * 
-	 * @param name
-	 * @return
-	 */
-	public Hdf5DataSet<?> getDataSet(final String name) {
-		Iterator<Hdf5DataSet<?>> iter = this.getDataSets().iterator();
-		Hdf5DataSet<?> dataSet = null;
-		boolean found = false;
-		
-		while (!found && iter.hasNext()) {
-			Hdf5DataSet<?> ds = iter.next();
-			if (ds.getName().equals(name)) {
-				dataSet = ds;
-				found = true;
-			}
+		String[] dataSetNames = this.loadObjectNames(Hdf5Object.DATASET);
+		if (dataSetNames != null) {
+			Collections.addAll(names, dataSetNames);
 		}
-		
-		return dataSet;
-	}
-	
-	/**
-	 * Adds the dataset to the list if it is not already there. You might have to call the method
-	 * loadDataSets() to update the list which is used in this method.
-	 * 
-	 * @param dataSet
-	 */
-	public void addDataSet(Hdf5DataSet<?> dataSet) {
-		if (this.getDataSet(dataSet.getName()) == null) {
-			this.getDataSets().add(dataSet);
-		}
-	}
-	
-	/**
-	 * Adds this (sub)group to a group which has already been added to another group
-	 * or is a file. <br>
-	 * If there is already another (sub)group with the same name in the group,
-	 * the (sub)group will just be opened.
-	 * 
-	 * @param group the destination group
-	 * @return {@code true} if the (sub)group is successfully added to the group
-	 */
-	private boolean addToGroup(Hdf5Group group) {
-		if (group.isOpen()) {
-			try {
-				this.setElementId(H5.H5Gcreate(group.getElementId(), this.getName(), 
-						HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT,
-						HDF5Constants.H5P_DEFAULT));
-				NodeLogger.getLogger("HDF5 Files").info("Group " + this.getName() + " created: " + this.getElementId());
-				this.setPathFromFile(group.getPathFromFile() + this.getName() + "/");
-				this.setParent(group);
-				group.addGroup(this);
-				this.setOpen(true);
-				return true;
-			} catch (HDF5LibraryException | NullPointerException e) {
-				e.printStackTrace();
-			}
-		} else {
-			NodeLogger.getLogger("HDF5 Files").error("This group " + this.getName() + " is not open!",
-					new IllegalStateException());
-			System.err.println();
-		}
-		return false;
+		return names;
 	}
 	
 	public void open() {

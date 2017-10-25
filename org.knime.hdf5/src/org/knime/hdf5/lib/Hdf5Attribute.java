@@ -47,23 +47,23 @@ public class Hdf5Attribute<Type> {
 		return m_name;
 	}
 	
-	private Type[] getValue() {
+	Type[] getValue() {
 		return m_value;
 	}
 
-	private long getDataspaceId() {
+	long getDataspaceId() {
 		return m_dataspaceId;
 	}
 
-	private void setDataspaceId(long dataspaceId) {
+	void setDataspaceId(long dataspaceId) {
 		m_dataspaceId = dataspaceId;
 	}
 
-	private long getAttributeId() {
+	long getAttributeId() {
 		return m_attributeId;
 	}
 
-	private void setAttributeId(long attributeId) {
+	void setAttributeId(long attributeId) {
 		m_attributeId = attributeId;
 	}
 
@@ -75,11 +75,11 @@ public class Hdf5Attribute<Type> {
 		m_dimension = dimension;
 	}
 
-	private boolean isOpen() {
+	boolean isOpen() {
 		return m_open;
 	}
 
-	private void setOpen(boolean open) {
+	void setOpen(boolean open) {
 		m_open = open;
 	}
 	
@@ -96,7 +96,7 @@ public class Hdf5Attribute<Type> {
 	 * dimensions array is correct.
 	 */
 	
-	private void updateDimension() {
+	void updateDimension() {
 		// Get dataspace and allocate memory for read buffer.
 		try {
 			if (this.getAttributeId() >= 0) {
@@ -149,108 +149,17 @@ public class Hdf5Attribute<Type> {
 		this.setDimension(dims[0]);
 	}
 	
-	
-	// TODO find a better method name
-	/**
-	 * @param treeElement
-	 * @return {@code true} if the attribute is successfully added and written to the dataSet,
-	 * 			{@code false} if it already existed (value, dims could be changed) or it couldn't be opened
-	 */
-	public boolean writeToTreeElement(Hdf5TreeElement treeElement) {
-		try {
-            if (treeElement.getElementId() >= 0) {
-                this.setAttributeId(H5.H5Aopen_by_name(treeElement.getElementId(), ".", this.getName(), 
-                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
-                this.setOpen(true);
-                NodeLogger.getLogger("HDF5 Files").info("Attribute " + this.getName() + " opened: " + this.getAttributeId());
-                treeElement.addAttribute(this);
-                
-                this.updateDimension();
-            }
-        } catch (HDF5LibraryException le) {
-        	if (this.getType().isString()) {
-				long filetypeId = -1;
-				long memtypeId = -1;
-				
-	        	// Create file and memory datatypes. For this example we will save
-	    		// the strings as FORTRAN strings, therefore they do not need space
-	    		// for the null terminator in the file.
-	    		try {
-	    			filetypeId = H5.H5Tcopy(HDF5Constants.H5T_FORTRAN_S1);
-	    			if (filetypeId >= 0) {
-	    				H5.H5Tset_size(filetypeId, this.getDimension() - 1);
-	    			}
-	    		} catch (Exception e) {
-	    			e.printStackTrace();
-	    		}
-	    		
-	    		try {
-	    			memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-	    			if (memtypeId >= 0) {
-	    				H5.H5Tset_size(memtypeId, this.getDimension());
-	    			}
-	    		} catch (Exception e) {
-	    			e.printStackTrace();
-	    		}
-	    		
-				this.getType().getConstants()[0] = filetypeId;
-				this.getType().getConstants()[1] = memtypeId;
-        	}
-        	
-        	// Create the data space for the attribute.
-        	// the array length can only be 1 for Strings
-        	long[] dims = { this.getType().isString() ? 1 : this.getDimension() };
-            try {
-                this.setDataspaceId(H5.H5Screate_simple(1, dims, null));
-            }
-            catch (Exception e) {
-                e.printStackTrace();
-            }
-
-            // Create a dataset attribute.
-            try {
-                if (treeElement.getElementId() >= 0 && this.getDataspaceId() >= 0 && this.getType().getConstants()[0] >= 0) {
-                    this.setAttributeId(H5.H5Acreate(treeElement.getElementId(), this.getName(),
-                    		this.getType().getConstants()[0], this.getDataspaceId(),
-                            HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
-                    this.setOpen(true);
-                    NodeLogger.getLogger("HDF5 Files").info("Attribute " + this.getName() + " created: " + this.getAttributeId());
-                    return this.write(treeElement);
-                }
-            }
-            catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-		return false;
-	}
-	
 	public Type[] read(Type[] attrData) {
         // Read data.
         try {
             if (this.getAttributeId() >= 0 && this.getType().getConstants()[1] >= 0) {
                 H5.H5Aread(this.getAttributeId(), this.getType().getConstants()[1], attrData);
             }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
         
         return attrData;
-	}
-	
-	private boolean write(Hdf5TreeElement treeElement) {
-		// Write the attribute data.
-        try {
-            if (this.getAttributeId() >= 0 && this.getType().getConstants()[1] >= 0) {
-                H5.H5Awrite(this.getAttributeId(), this.getType().getConstants()[1], this.getValue());
-                treeElement.addAttribute(this);
-                return true;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return false;
 	}
 	
 	public void close() {

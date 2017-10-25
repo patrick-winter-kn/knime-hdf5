@@ -31,7 +31,7 @@ public class Hdf5File extends Hdf5Group {
 	 * 
 	 * @param filePath The path to the file from the src directory.
 	 */
-	public static Hdf5File createInstance(final String filePath) {
+	public static Hdf5File createFile(final String filePath) {
 		Iterator<Hdf5File> iter = ALL_FILES.iterator();
 		while (iter.hasNext()) {
 			Hdf5File file = iter.next();
@@ -86,31 +86,6 @@ public class Hdf5File extends Hdf5Group {
         long objectType = -1;
         long[] objects;
         String pathFromFile = "";
-
-        /* 
-      	 * This is to check whether something except the file itself is still open.
-         * 
-         */
-		System.out.println("Files:");
-        Iterator<Hdf5File> iterF = Hdf5File.ALL_FILES.iterator();
-		while (iterF.hasNext()) {
-			Hdf5File f = iterF.next();
-			System.out.println(f.getFilePath() + " - Name: " + f.getName() + ", ID: " + f.getElementId() + ", opened: " + f.isOpen());
-		}
-
-		System.out.println("Groups:");
-		Iterator<Hdf5Group> iterG = Hdf5Group.ALL_GROUPS.iterator();
-		while (iterG.hasNext()) {
-			Hdf5Group grp = iterG.next();
-			System.out.println(grp.getPathFromFile() + " - Name: " + grp.getName() + ", ID: " + grp.getElementId() + ", opened: " + grp.isOpen());
-		}
-
-		System.out.println("Datasets:");
-		Iterator<Hdf5DataSet<?>> iterD = Hdf5DataSet.ALL_DATASETS.iterator();
-		while (iterD.hasNext()) {
-			Hdf5DataSet<?> ds = iterD.next();
-			System.out.println(ds.getPathFromFile() + " - Name: " + ds.getName() + ", ID: " + ds.getElementId() + ", opened: " + ds.isOpen());
-		}
 		
         try {
         	if (this.isOpen()) {
