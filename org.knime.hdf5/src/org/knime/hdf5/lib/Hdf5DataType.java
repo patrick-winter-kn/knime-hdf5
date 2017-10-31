@@ -8,7 +8,8 @@ import org.knime.core.node.NodeLogger;
 
 import hdf.hdf5lib.HDF5Constants;
 
-public enum Hdf5DataType { 
+public enum Hdf5DataType {
+	UNKNOWN(-1),		// data type is unknown
 	INTEGER(0),			// data type is an Integer
 	LONG(1),			// data type is a Long
 	DOUBLE(2),			// data type is a Double
@@ -27,8 +28,6 @@ public enum Hdf5DataType {
 	Hdf5DataType(final int typeId) {
 		m_typeId = typeId;
 
-		System.out.println(m_typeId);
-		NodeLogger.getLogger("HDF5 Files").info(m_typeId);
 		switch (m_typeId) {
 		case 0: 
 			m_constants[0] = HDF5Constants.H5T_STD_I32LE;
@@ -44,10 +43,10 @@ public enum Hdf5DataType {
 			break;
 		case 3:
 			// for Hdf5DataSet: m_constants will get values in constructor or updateDimensions()
-			// for Hdf5Attribute: m_constants will get values in writeToTreeElement()
+			// for Hdf5Attribute: m_constants will get values in Hdf5TreeElement.addAttribute() or updateDimension()
 			break;
 		default:
-			NodeLogger.getLogger("HDF5 Files").error("Datatype is not supported", new IllegalArgumentException());
+			NodeLogger.getLogger("HDF5 Files").info("Datatype is not supported");
 		}
 	}
 	

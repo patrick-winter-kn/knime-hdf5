@@ -17,6 +17,7 @@ import org.knime.core.node.defaultnodesettings.DialogComponentStringSelection;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
+import org.knime.hdf5.lib.Hdf5OverwritePolicy;
 
 class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 
@@ -89,7 +90,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 
 					        if (!newValue.equals(" ")) {
 					    		HDF5ReaderNodeModel.dspath = HDF5ReaderNodeModel.dspath + newValue + "/";
-					        	group = group.getGroup(newValue);
+					        	group = group.createGroup(newValue, Hdf5OverwritePolicy.ABORT);
 					        	
 								// subGroups in Group
 					        	List<String> groupNames = group.loadGroupNames();
@@ -147,7 +148,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 			next = scn.nextLine();
 			if (next.endsWith("/")) {
 				path = path + next;
-				group = group.createGroup(next.substring(0, next.length() - 1));
+				group = group.createGroup(next.substring(0, next.length() - 1), Hdf5OverwritePolicy.ABORT);
 				showElements(group);
 			} else {
 				HDF5ReaderNodeModel.dsname = next;

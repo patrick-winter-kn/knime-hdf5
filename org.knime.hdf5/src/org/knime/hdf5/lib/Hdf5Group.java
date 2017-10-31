@@ -70,19 +70,109 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * @return the new group 
 	 */
 	// TODO add another argument for the mode (overwrite, abort, nameChange)
-	public Hdf5Group createGroup(final String name) {
-		if (!this.existsGroup(name)) {
-			return new Hdf5Group(this, this.getFilePath(), name, true);
+	public Hdf5Group createGroup(final String name, Hdf5OverwritePolicy policy) {
+		Hdf5Group group = null;
+		
+		if (!this.existsGroup(name) || policy == Hdf5OverwritePolicy.OVERWRITE) {
+			group = new Hdf5Group(this, this.getFilePath(), name, true);
+		} else if (policy == Hdf5OverwritePolicy.ABORT) {
+			Iterator<Hdf5Group> iter = this.getGroups().iterator();
+			boolean found = false;
+			
+			while (!found && iter.hasNext()) {
+				Hdf5Group grp = iter.next();
+				if (grp.getName().equals(name)) {
+					group = grp;
+					found = true;
+				}
+			}
+			
+			if (!found) {
+				group = new Hdf5Group(this, this.getFilePath(), name, false);
+			}
+		} else if (policy == Hdf5OverwritePolicy.KEEP_BOTH) {
+			String oldName = name;
+			int i = 1;
+			
+			if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
+				oldName = oldName.substring(0, oldName.lastIndexOf("("));
+				i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
+			}
+			
+			String newName;
+			do {
+				 newName = oldName + "(" + i + ")";
+				 i++;
+			} while (this.existsGroup(newName));
+			
+			group = new Hdf5Group(this, this.getFilePath(), newName, true);
 		}
-		return null;
+		
+		return group;
 	}
 
 	public Hdf5DataSet<?> createDataSet(final String name,
-			long[] dimensions, Hdf5DataType type) {
-		if (!this.existsDataSet(name)) {		
-			return Hdf5DataSet.getInstance(this, name, dimensions, type, true);
+			long[] dimensions, Hdf5DataType type, Hdf5OverwritePolicy policy) {
+		Hdf5DataSet<?> dataSet = null;
+		
+		if (!this.existsDataSet(name)) {
+			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, type, true);
+		} else if (policy == Hdf5OverwritePolicy.OVERWRITE) {
+			
+		} else if (policy == Hdf5OverwritePolicy.ABORT) {
+			Iterator<Hdf5DataSet<?>> iter = this.getDataSets().iterator();
+			boolean found = false;
+			
+			while (!found && iter.hasNext()) {
+				Hdf5DataSet<?> ds = iter.next();
+				if (ds.getName().equals(name)) {
+					dataSet = ds;
+					found = true;
+				}
+			}
+			
+			if (!found) {
+				dataSet = Hdf5DataSet.getInstance(this, name, dimensions, this.findDataSetType(name), false);
+			}
+		} else if (policy == Hdf5OverwritePolicy.KEEP_BOTH) {
+			String oldName = name;
+			int i = 1;
+			
+			if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
+				oldName = oldName.substring(0, oldName.lastIndexOf("("));
+				i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
+			}
+			
+			String newName;
+			do {
+				 newName = oldName + "(" + i + ")";
+				 i++;
+			} while (this.existsDataSet(newName));
+			
+			dataSet = Hdf5DataSet.getInstance(this, newName, dimensions, type, true);
 		}
-		return null;
+		
+		return dataSet;
+	}
+	
+	public Hdf5DataSet<?> getDataSet(final String name, long[] dimensions) {
+		Hdf5DataSet<?> dataSet = null;
+		Iterator<Hdf5DataSet<?>> iter = this.getDataSets().iterator();
+		boolean found = false;
+		
+		while (!found && iter.hasNext()) {
+			Hdf5DataSet<?> ds = iter.next();
+			if (ds.getName().equals(name)) {
+				dataSet = ds;
+				found = true;
+			}
+		}
+		
+		if (!found) {
+			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, this.findDataSetType(name), false);
+		}
+	
+		return dataSet;
 	}
 	
 	private boolean existsGroup(final String name) {
@@ -97,7 +187,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return false;
 	}
 	
-	private boolean existsDataSet(final String name) {
+	public boolean existsDataSet(final String name) {
 		List<String> dataSetNames = this.loadDataSetNames();
 		if (dataSetNames != null) {
 			for (String n: dataSetNames) {
@@ -119,65 +209,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 		this.getDataSets().add(dataSet);
 		dataSet.setPathFromFile(this.getPathFromFile() + this.getName());
 		dataSet.setParent(this);
-	}
-	
-	/**
-	 * Finds the child group with the name {@code name}.
-	 * If the group doesn't exist in the list {@code m_groups}, but physically
-	 * exists in the .h5 file, a new instance of the group will be created
-	 * and added to the list {@code m_groups}.
-	 * 
-	 * @param name
-	 * @return child group
-	 */
-	public Hdf5Group getGroup(final String name) {
-		Iterator<Hdf5Group> iter = this.getGroups().iterator();
-		Hdf5Group group = null;
-		boolean found = false;
-		
-		while (!found && iter.hasNext()) {
-			Hdf5Group grp = iter.next();
-			if (grp.getName().equals(name)) {
-				group = grp;
-				found = true;
-			}
-		}
-		
-		if (!found && this.existsGroup(name)) {
-			group = new Hdf5Group(this, this.getFilePath(), name, false);
-		}
-		
-		return group;
-	}
-	
-	/**
-	 * Finds the dataSet with the name {@code name}.
-	 * If the dataSet doesn't exist in the list {@code m_dataSets}, but physically
-	 * exists in the .h5 file, a new instance of the dataSet will be created
-	 * and added to the list {@code m_dataSets}.
-	 * 
-	 * @param name
-	 * @return dataSet
-	 */
-	// TODO here try to do it that the arguments only are group and name, recognize the rest
-	public Hdf5DataSet<?> getDataSet(final String name, long[] dimensions, Hdf5DataType type) {
-		Iterator<Hdf5DataSet<?>> iter = this.getDataSets().iterator();
-		Hdf5DataSet<?> dataSet = null;
-		boolean found = false;
-		
-		while (!found && iter.hasNext()) {
-			Hdf5DataSet<?> ds = iter.next();
-			if (ds.getName().equals(name)) {
-				dataSet = ds;
-				found = true;
-			}
-		}
-		
-		if (!found && this.existsDataSet(name)) {
-			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, type, false);
-		}
-		
-		return dataSet;
 	}
 	
 	private String[] loadObjectNames(Hdf5Object object) {
@@ -234,6 +265,39 @@ public class Hdf5Group extends Hdf5TreeElement {
 			Collections.addAll(names, dataSetNames);
 		}
 		return names;
+	}
+	
+	public Hdf5DataType findDataSetType(String name) {
+		if (this.loadDataSetNames().contains(name)) {
+			long dataSetId = -1;
+			String dataType = "";
+			int size = 0;
+			try {
+				dataSetId = H5.H5Dopen(this.getElementId(), name, HDF5Constants.H5P_DEFAULT);
+				dataType = H5.H5Tget_class_name(H5.H5Tget_class(H5.H5Dget_type(dataSetId)));
+				size = (int) H5.H5Tget_size(H5.H5Dget_type(dataSetId));
+				H5.H5Dclose(dataSetId);
+			} catch (HDF5LibraryException | NullPointerException lnpe) {
+				lnpe.printStackTrace();
+			}
+			System.out.println("Size: " + size);
+			if (dataType.equals("H5T_INTEGER") && size == 4) {
+				return Hdf5DataType.INTEGER;
+			} else if (dataType.equals("H5T_INTEGER") && size == 8) {
+				return Hdf5DataType.LONG;
+			} else if (dataType.equals("H5T_FLOAT") && size == 8) {
+				return Hdf5DataType.DOUBLE;
+			} else if (dataType.equals("H5T_STRING")) {
+				return Hdf5DataType.STRING;
+			} else {
+				NodeLogger.getLogger("HDF5 Files").error("Datatype is not supported", new IllegalArgumentException());
+				return Hdf5DataType.UNKNOWN;
+			}
+		} else {
+			NodeLogger.getLogger("HDF5 Files").error("There isn't a dataSet with this name in this group!",
+					new IllegalArgumentException());
+			return null;
+		}
 	}
 	
 	public void open() {
