@@ -33,14 +33,14 @@ import org.knime.hdf5.lib.Hdf5TreeElement;
 
 public class HDF5ReaderNodeModel extends NodeModel {
 
-    String fname = "Data" + File.separator + "dataTypes.h5";
+    static String fname = "Data" + File.separator + "dataTypes.h5";
     private Hdf5File file;
     
     // TODO File separator '/' everywhere (opp system) the same?
-    String dspath = "/String/";
+    static String dspath = "/String/";
     private Hdf5Group group;
     
-    String dsname = "withoutAttr";
+    static String dsname = "withoutAttr";
     private Hdf5DataType dataType;
     
     //stringLength = 7, +1 for the null terminator
@@ -50,14 +50,17 @@ public class HDF5ReaderNodeModel extends NodeModel {
     private boolean first = true;
 
     private Hdf5OverwritePolicy groupOP = Hdf5OverwritePolicy.ABORT;
-    private Hdf5OverwritePolicy dataSetOP = Hdf5OverwritePolicy.KEEP_BOTH;
+    private Hdf5OverwritePolicy dataSetOP = Hdf5OverwritePolicy.ABORT;
     
     
 	protected HDF5ReaderNodeModel() {
 		super(0, 1);
+		System.out.println("Constructor");
+		
 		file = Hdf5File.createFile(fname);
 		group = file.createGroup(dspath.substring(1, dspath.length() - 1), groupOP);
 		if (group.existsDataSet(dsname)) {
+			System.out.println("ConstructorIn");
 			dataType = group.findDataSetType(dsname);
 		} else {
 			if (dspath.contains("Integer")) {
@@ -75,13 +78,15 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	@SuppressWarnings("unchecked")
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		
+
+		System.out.println("execute()");
 		NodeLogger.getLogger("HDF5 Files").info("Complete path of the dataSet: " + fname + dspath + dsname);
 		
 		if (!first) {
 			file = Hdf5File.createFile(fname);
 			group = file.createGroup(dspath.substring(1, dspath.length() - 1), groupOP);
 			if (group.existsDataSet(dsname)) {
+				System.out.println("execute()In");
 				dataType = group.findDataSetType(dsname);
 			} else {
 				if (dspath.contains("Integer")) {
@@ -183,7 +188,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			
 		    String[] dataRead = new String[3*4];
 			for (int i = 0; i < 3*4; i++) {
-				dataRead[i] = String.copyValueOf(new char[]{(char) (byte) dread[4*i], (char) (byte) dread[4*i + 1], (char) (byte) dread[4*i + 2]});
+				dataRead[i] = String.copyValueOf(new char[]{(char) (byte) dread[4*i],
+						(char) (byte) dread[4*i + 1], (char) (byte) dread[4*i + 2]});
 				System.out.println("Read String " + i + ": " + dataRead[i]);
 			}
 			DataTableSpec outSpec = createOutSpec();
@@ -322,7 +328,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				if (dspath.equals(group.getPathFromFile()) && dsname.equals(name)) {
 					// TODO there could be an error if the actual dataset isn't with string values
 					@SuppressWarnings("unchecked")
-					Hdf5DataSet<Byte> ds = (Hdf5DataSet<Byte>) group.getDataSet(name, new long[2]);
+					Hdf5DataSet<Byte> ds = (Hdf5DataSet<Byte>) group.getDataSet(name);
 					Byte[] dataReadByte = ds.read(new Byte[(int) ds.numberOfValues()]);
 					
 					System.out.println();
