@@ -115,12 +115,12 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return group;
 	}
 
-	public Hdf5DataSet<?> createDataSet(final String name,
-			long[] dimensions, Hdf5DataType type, Hdf5OverwritePolicy policy) {
+	public Hdf5DataSet<?> createDataSet(final String name, long[] dimensions, 
+			long stringLength, Hdf5DataType type, Hdf5OverwritePolicy policy) {
 		Hdf5DataSet<?> dataSet = null;
 		
 		if (!this.existsDataSet(name)) {
-			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, type, true);
+			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, stringLength, type, true);
 		} else if (policy == Hdf5OverwritePolicy.OVERWRITE) {
 			
 		} else if (policy == Hdf5OverwritePolicy.ABORT) {
@@ -144,7 +144,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 			} while (dataSetNames.contains(newName));
 			
 			System.out.println("\nName of the new dataSet: " + newName);
-			dataSet = Hdf5DataSet.getInstance(this, newName, dimensions, type, true);
+			dataSet = Hdf5DataSet.getInstance(this, newName, dimensions, stringLength, type, true);
 		}
 		
 		return dataSet;
@@ -168,6 +168,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 			long dataSetId = -1;
 			long dataspaceId = -1;
 			long[] dimensions = null;
+			long stringLength = -1;
 			Hdf5DataType type = this.findDataSetType(name);
 			
 			try {
@@ -187,7 +188,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 				if (type.isString()) {
 					long filetypeId = -1;
 					long memtypeId = -1;
-					long stringLength = -1;
 					
 		    		// Get the datatype and its size.
 		    		if (this.isOpen()) {
@@ -195,8 +195,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 	    			}
 	    			if (filetypeId >= 0) {
 	    				stringLength = H5.H5Tget_size(filetypeId);
-	    				dims = Arrays.copyOf(dims, ndims + 1);
-	    		        dims[dims.length - 1] = stringLength + 1;
 	    				// (+1) for: Make room for null terminator
 	    			}
 		    		
@@ -227,7 +225,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				lnpe.printStackTrace();
 			}
 			
-			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, type, false);
+			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, stringLength, type, false);
 		}
 	
 		return dataSet;

@@ -96,6 +96,18 @@ abstract public class Hdf5TreeElement {
 		m_parent = parent;
 	}
 
+	public boolean existsAttribute(final String name) {
+		List<String> attrNames = this.loadAttributeNames();
+		if (attrNames != null) {
+			for (String n: attrNames) {
+				if (n.equals(name)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	
 	public Hdf5Attribute<?> getAttribute(final String name) {
 		Iterator<Hdf5Attribute<?>> iter = this.getAttributes().iterator();
 		Hdf5Attribute<?> attribute = null;
@@ -109,14 +121,17 @@ abstract public class Hdf5TreeElement {
 			}
 		}
 		
+		if (!found && this.existsAttribute(name)) {
+			attribute = Hdf5Attribute.getInstance(this, name);
+		}
+		
 		return attribute;
 	}
 
 	public void addAttribute(Hdf5Attribute<?> attribute) {
 		try {
             if (this.getElementId() >= 0) {
-            	attribute.setAttributeId(H5.H5Aopen_by_name(this.getElementId(), ".", attribute.getName(), 
-                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
+            	attribute.setAttributeId(H5.H5Aopen(this.getElementId(), attribute.getName(), HDF5Constants.H5P_DEFAULT));
                 NodeLogger.getLogger("HDF5 Files").info("Attribute " + attribute.getName() + " opened: " + attribute.getAttributeId());
         		this.getAttributes().add(attribute);
         		attribute.updateDimension();
@@ -170,18 +185,69 @@ abstract public class Hdf5TreeElement {
                     NodeLogger.getLogger("HDF5 Files").info("Attribute " + attribute.getName() + " created: " + attribute.getAttributeId());
                 	attribute.setOpen(true);
                     
-                    try {
-                        if (attribute.getAttributeId() >= 0 && attribute.getType().getConstants()[1] >= 0) {
-                            H5.H5Awrite(attribute.getAttributeId(), attribute.getType().getConstants()[1], attribute.getValue());
-                    		this.getAttributes().add(attribute);
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
+                    if (attribute.getAttributeId() >= 0 && attribute.getType().getConstants()[1] >= 0) {
+                        H5.H5Awrite(attribute.getAttributeId(), attribute.getType().getConstants()[1], attribute.getValue());
+                		this.getAttributes().add(attribute);
                     }
                 }
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+	}
+	
+	public List<String> loadAttributeNames() {
+		List<String> attrNames = new LinkedList<>();
+		long numAttrs = -1;
+		
+		try {
+			numAttrs = H5.H5Oget_info(this.getElementId()).num_attrs;
+			for (int i = 0; i < numAttrs; i++) {
+				// TODO if Hdf5File, not: getParent()
+				attrNames.add(H5.H5Aget_name_by_idx(this.getParent().getElementId(),
+						this.getName(),HDF5Constants.H5_INDEX_NAME,
+						HDF5Constants.H5_ITER_INC, i, HDF5Constants.H5P_DEFAULT));
+			}
+		} catch (HDF5LibraryException | NullPointerException lnpe) {
+			lnpe.printStackTrace();
+		}
+		
+		return attrNames;
+	}
+	
+	public Hdf5DataType findAttributeType(String name) {
+		if (this.loadAttributeNames().contains(name)) {
+			long attributeId = -1;
+			String dataType = "";
+			int size = 0;
+			try {
+				System.out.println("Find type of attr " + name + " (Tree)ElementId: " + this.getElementId() + ", open: " + this.isOpen());
+				attributeId = H5.H5Aopen(this.getElementId(), name, HDF5Constants.H5P_DEFAULT);
+				long filetypeId = H5.H5Aget_type(attributeId);
+				dataType = H5.H5Tget_class_name(H5.H5Tget_class(filetypeId));
+				size = (int) H5.H5Tget_size(filetypeId);
+				H5.H5Tclose(filetypeId);
+				H5.H5Aclose(attributeId);
+			} catch (HDF5LibraryException | NullPointerException lnpe) {
+				lnpe.printStackTrace();
+			}
+			System.out.println("Size: " + size);
+			if (dataType.equals("H5T_INTEGER") && size == 4) {
+				return Hdf5DataType.INTEGER;
+			} else if (dataType.equals("H5T_INTEGER") && size == 8) {
+				return Hdf5DataType.LONG;
+			} else if (dataType.equals("H5T_FLOAT") && size == 8) {
+				return Hdf5DataType.DOUBLE;
+			} else if (dataType.equals("H5T_STRING")) {
+				return Hdf5DataType.STRING;
+			} else {
+				NodeLogger.getLogger("HDF5 Files").error("Datatype is not supported", new IllegalArgumentException());
+				return Hdf5DataType.UNKNOWN;
+			}
+		} else {
+			NodeLogger.getLogger("HDF5 Files").error("There isn't a dataSet with this name in this group!",
+					new IllegalArgumentException());
+			return null;
+		}
 	}
 }

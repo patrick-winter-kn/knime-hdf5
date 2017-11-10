@@ -46,7 +46,7 @@ public enum Hdf5DataType {
 			// for Hdf5Attribute: m_constants will get values in Hdf5TreeElement.addAttribute() or updateDimension()
 			break;
 		default:
-			NodeLogger.getLogger("HDF5 Files").info("Datatype is not supported");
+			NodeLogger.getLogger("HDF5 Files").info("Other datatypes than Integer, Long, Double and String is not supported");
 		}
 	}
 	
@@ -64,7 +64,7 @@ public enum Hdf5DataType {
 			return 1;
 		} else if (type.equals(pack + "Double")) {
 			return 2;
-		} else if (type.equals(pack + "Byte")) {
+		} else if (type.equals(pack + "String")) {
 			return 3;
 		} else {
 			return -1;
