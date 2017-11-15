@@ -29,8 +29,6 @@ import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5DataType;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
-import org.knime.hdf5.lib.Hdf5OverwritePolicy;
-import org.knime.hdf5.lib.Hdf5TreeElement;
 
 public class HDF5ReaderNodeModel extends NodeModel {
 
@@ -41,93 +39,61 @@ public class HDF5ReaderNodeModel extends NodeModel {
     static String dspath = "/String/";
     private Hdf5Group group;
     
-    static String dsname = "withAttr2";
+    static String dsname = "withoutAttr";
     private Hdf5DataType dataType;
     
-    //stringLength = 7, +1 for the null terminator
-    //private static long[] dims2D = { 2, 2, 2, 7+1 };
-    private long[] dims2D = { 3, 4, 3+1 };
-    
-    private boolean first = true;
-
-    private Hdf5OverwritePolicy groupOP = Hdf5OverwritePolicy.ABORT;
-    private Hdf5OverwritePolicy dataSetOP = Hdf5OverwritePolicy.ABORT;
-    
+    private long[] dimensions = {4, 4};
     
 	protected HDF5ReaderNodeModel() {
 		super(0, 1);
-		System.out.println("Constructor");
-		
-		file = Hdf5File.createFile(fname);
-		group = file.createGroup(dspath.substring(1, dspath.length() - 1), groupOP);
-		if (group.existsDataSet(dsname)) {
-			System.out.println("ConstructorIn");
-			dataType = group.findDataSetType(dsname);
-		} else {
-			if (dspath.contains("Integer")) {
-				dataType = Hdf5DataType.INTEGER;
-			} else if (dspath.contains("Long")) {
-				dataType = Hdf5DataType.LONG;
-			} else if (dspath.contains("Double")) {
-				dataType = Hdf5DataType.DOUBLE;
-			} else {
-				dataType = Hdf5DataType.STRING;
-			}	
-		}
 	}
 
 	@SuppressWarnings("unchecked")
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
 
-		System.out.println("execute()");
 		NodeLogger.getLogger("HDF5 Files").info("Complete path of the dataSet: " + fname + dspath + dsname);
 		
-		if (!first) {
-			file = Hdf5File.createFile(fname);
-			group = file.createGroup(dspath.substring(1, dspath.length() - 1), groupOP);
-			if (group.existsDataSet(dsname)) {
-				System.out.println("execute()In");
-				dataType = group.findDataSetType(dsname);
-			} else {
-				if (dspath.contains("Integer")) {
-					dataType = Hdf5DataType.INTEGER;
-				} else if (dspath.contains("Long")) {
-					dataType = Hdf5DataType.LONG;
-				} else if (dspath.contains("Double")) {
-					dataType = Hdf5DataType.DOUBLE;
-				} else {
-					dataType = Hdf5DataType.STRING;
-				}	
+
+		file = Hdf5File.createFile(fname);
+		/* TODO also do it for deeper group structure using
+		 * 
+		 * 	String[] pathTokens = dspath.split("/");
+			Hdf5Group[] groups = new Hdf5Group[Math.max(pathTokens.length, 1)];
+			groups[0] = file;
+			for (int i = 1; i < groups.length; i++) {
+				System.out.println(pathTokens[i]);
+				groups[i] = groups[i-1].getGroup(pathTokens[i]);
 			}
-		} else {
-			first = false;
-		}
+		 */
+		group = file.getGroup(dspath.substring(1, dspath.length() - 1));
 		
-		//createIntFile();
-		//createStringFile();
-		//discoverFile();
+		DataTableSpec outSpec = createOutSpec();
+		BufferedDataContainer outContainer = exec.createDataContainer(outSpec);
 		
 		BufferedDataTable[] data = null;
 		if (dataType == Hdf5DataType.INTEGER) {
 			// TODO for 0 give a constant in Hdf5DataType
-			Hdf5DataSet<Integer> dataset = (Hdf5DataSet<Integer>) group.createDataSet(dsname,
-					new long[]{3, 4}, 0, dataType, dataSetOP);
-			Integer[] dataRead = dataset.read(new Integer[(int) dataset.numberOfValues()]);
+			Hdf5DataSet<Integer> dataSet = (Hdf5DataSet<Integer>) group.getDataSet(dsname);
+			dimensions = dataSet.getDimensions();
+			for (int i = 0; i < dimensions.length; i++) {
+				System.out.println("dimensions "+ i + ": " + dimensions[i]);
+			}
+			pushFlowVariables(dataSet);
+			
+			Integer[] dataRead = dataSet.read(new Integer[(int) dataSet.numberOfValues()]);
 			file.close();
 			
-			for (int i = 0; i < 3*4; i++) {
+			for (int i = 0; i < dataSet.numberOfValues(); i++) {
 				System.out.println("Read Integer " + i + ": " + dataRead[i]);
 			}
-			DataTableSpec outSpec = createOutSpec();
-			BufferedDataContainer outContainer = exec.createDataContainer(outSpec);
 	
-			for (int i = 0; i < dims2D[0]; i++) {
+			for (int i = 0; i < dimensions[0]; i++) {
 				DefaultRow row = null;
 				JoinedRow jrow = null;
-				row = new DefaultRow("Row " + i, new IntCell(dataRead[(int) (dims2D[1] * i)]));
-				for (int j = 1; j < dims2D[1]; j++) {
-					DefaultRow newRow = new DefaultRow("Row " + i, new IntCell(dataRead[(int) dims2D[1] * i + j]));
+				row = new DefaultRow("Row " + i, new IntCell(dataRead[(int) (dimensions[1] * i)]));
+				for (int j = 1; j < dimensions[1]; j++) {
+					DefaultRow newRow = new DefaultRow("Row " + i, new IntCell(dataRead[(int) dimensions[1] * i + j]));
 					jrow = (j == 1) ? new JoinedRow(row, newRow) : new JoinedRow(jrow, newRow);
 				}
 				outContainer.addRowToTable(jrow);
@@ -135,23 +101,23 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	        outContainer.close();
 	        data = new BufferedDataTable[]{outContainer.getTable()};
 		} else if (dataType == Hdf5DataType.LONG) {
-			Hdf5DataSet<Long> dataset = (Hdf5DataSet<Long>) group.createDataSet(dsname,
-					new long[]{3, 4}, 0, dataType, dataSetOP);
-			Long[] dataRead = dataset.read(new Long[(int) dataset.numberOfValues()]);
+			Hdf5DataSet<Long> dataSet = (Hdf5DataSet<Long>) group.getDataSet(dsname);
+			dimensions = dataSet.getDimensions();
+			pushFlowVariables(dataSet);
+			
+			Long[] dataRead = dataSet.read(new Long[(int) dataSet.numberOfValues()]);
 			file.close();
 			
-			for (int i = 0; i < 3*4; i++) {
+			for (int i = 0; i < dataSet.numberOfValues(); i++) {
 				System.out.println("Read Long " + i + ": " + dataRead[i]);
 			}
-			DataTableSpec outSpec = createOutSpec();
-			BufferedDataContainer outContainer = exec.createDataContainer(outSpec);
 	
-			for (int i = 0; i < dims2D[0]; i++) {
+			for (int i = 0; i < dimensions[0]; i++) {
 				DefaultRow row = null;
 				JoinedRow jrow = null;
-				row = new DefaultRow("Row " + i, new LongCell(dataRead[(int) (dims2D[1] * i)]));
-				for (int j = 1; j < dims2D[1]; j++) {
-					DefaultRow newRow = new DefaultRow("Row " + i, new LongCell(dataRead[(int) dims2D[1] * i + j]));
+				row = new DefaultRow("Row " + i, new LongCell(dataRead[(int) (dimensions[1] * i)]));
+				for (int j = 1; j < dimensions[1]; j++) {
+					DefaultRow newRow = new DefaultRow("Row " + i, new LongCell(dataRead[(int) dimensions[1] * i + j]));
 					jrow = (j == 1) ? new JoinedRow(row, newRow) : new JoinedRow(jrow, newRow);
 				}
 				outContainer.addRowToTable(jrow);
@@ -159,23 +125,23 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	        outContainer.close();
 	        data = new BufferedDataTable[]{outContainer.getTable()};
 		} else if (dataType == Hdf5DataType.DOUBLE) {
-			Hdf5DataSet<Double> dataset = (Hdf5DataSet<Double>) group.createDataSet(dsname,
-					new long[]{3, 4}, 0, dataType, dataSetOP);
-			Double[] dataRead = dataset.read(new Double[(int) dataset.numberOfValues()]);
+			Hdf5DataSet<Double> dataSet = (Hdf5DataSet<Double>) group.getDataSet(dsname);
+			dimensions = dataSet.getDimensions();
+			pushFlowVariables(dataSet);
+			
+			Double[] dataRead = dataSet.read(new Double[(int) dataSet.numberOfValues()]);
 			file.close();
 			
-			for (int i = 0; i < 3*4; i++) {
+			for (int i = 0; i < dataSet.numberOfValues(); i++) {
 				System.out.println("Read Double " + i + ": " + dataRead[i]);
 			}
-			DataTableSpec outSpec = createOutSpec();
-			BufferedDataContainer outContainer = exec.createDataContainer(outSpec);
 	
-			for (int i = 0; i < dims2D[0]; i++) {
+			for (int i = 0; i < dimensions[0]; i++) {
 				DefaultRow row = null;
 				JoinedRow jrow = null;
-				row = new DefaultRow("Row " + i, new DoubleCell(dataRead[(int) (dims2D[1] * i)]));
-				for (int j = 1; j < dims2D[1]; j++) {
-					DefaultRow newRow = new DefaultRow("Row " + i, new DoubleCell(dataRead[(int) dims2D[1] * i + j]));
+				row = new DefaultRow("Row " + i, new DoubleCell(dataRead[(int) (dimensions[1] * i)]));
+				for (int j = 1; j < dimensions[1]; j++) {
+					DefaultRow newRow = new DefaultRow("Row " + i, new DoubleCell(dataRead[(int) dimensions[1] * i + j]));
 					jrow = (j == 1) ? new JoinedRow(row, newRow) : new JoinedRow(jrow, newRow);
 				}
 				outContainer.addRowToTable(jrow);
@@ -183,31 +149,19 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	        outContainer.close();
 	        data = new BufferedDataTable[]{outContainer.getTable()};
 		} else if (dataType == Hdf5DataType.STRING) {
-			Hdf5DataSet<String> dataset = (Hdf5DataSet<String>) group.createDataSet(dsname,
-					new long[]{3, 4}, 3, dataType, dataSetOP);
-			List<String> attrs = dataset.loadAttributeNames();
-			Iterator<String> iter = attrs.iterator();
-			while (iter.hasNext()) {
-				String name = iter.next();
-				Hdf5Attribute<?> attr = dataset.getAttribute(name);
-				System.out.println("Attr " + attr.getName() + ":");
-				for (Object val: attr.getValue()) {
-					System.out.print(val + " ");
-				}
-				System.out.print("\n");
-			}
-			String[] dataRead = dataset.read(new String[3*4]);
+			Hdf5DataSet<String> dataSet = (Hdf5DataSet<String>) group.getDataSet(dsname);
+			dimensions = dataSet.getDimensions();
+			pushFlowVariables(dataSet);
+			
+			String[] dataRead = dataSet.read(new String[(int) dataSet.numberOfValues()]);
 			file.close();
 
-			DataTableSpec outSpec = createOutSpec();
-			BufferedDataContainer outContainer = exec.createDataContainer(outSpec);
-
-			for (int i = 0; i < dims2D[0]; i++) {
+			for (int i = 0; i < dimensions[0]; i++) {
 				DefaultRow row = null;
 				JoinedRow jrow = null;
-				row = new DefaultRow("Row " + i, new StringCell(dataRead[(int) (dims2D[1] * i)]));
-				for (int j = 1; j < dims2D[1]; j++) {
-					DefaultRow newRow = new DefaultRow("Row " + i, new StringCell(dataRead[(int) dims2D[1] * i + j]));
+				row = new DefaultRow("Row " + i, new StringCell(dataRead[(int) (dimensions[1] * i)]));
+				for (int j = 1; j < dimensions[1]; j++) {
+					DefaultRow newRow = new DefaultRow("Row " + i, new StringCell(dataRead[(int) dimensions[1] * i + j]));
 					jrow = (j == 1) ? new JoinedRow(row, newRow) : new JoinedRow(jrow, newRow);
 				}
 				outContainer.addRowToTable(jrow);
@@ -219,196 +173,34 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		return data;
 	}
 	
-	@SuppressWarnings("unchecked")
-	public void createIntFile() {
-		Hdf5File file = Hdf5File.createFile(fname);
-		Hdf5Group group = file.createGroup("group", Hdf5OverwritePolicy.ABORT);
-		Hdf5DataSet<Integer> dataSet = (Hdf5DataSet<Integer>) group.createDataSet(dsname, dims2D, 0,
-				Hdf5DataType.INTEGER, Hdf5OverwritePolicy.ABORT);
-		
-		Integer[] dataRead = new Integer[7 * 4];
-		for (int i = 0; i < dataRead.length; i++) {
-			dataRead[i] = 2 * i;
-		}		
-		dataSet.write(dataRead);
-		
-		file.close();
-		
-		//HDF5ReaderNodeModel.dataRead = dataRead;
-	}
-
-	@SuppressWarnings("unchecked")
-	private void createStringFile() {
-		StringBuffer[][][] str_data = { { {new StringBuffer("A"), new StringBuffer("BB")},
-				{new StringBuffer("CCC"), new StringBuffer("DDDD")} } , 
-				{ {new StringBuffer("EEEEE"), new StringBuffer("FFFFFF")},
-					{new StringBuffer("GGGGGGG"), new StringBuffer("HHHHHHHH")} } };
-
-		Hdf5File file = Hdf5File.createFile(fname);
-		String[] pathTokens = dspath.split("/");
-		Hdf5Group[] groups = new Hdf5Group[Math.max(pathTokens.length, 1)];
-		groups[0] = file;
-		for (int i = 1; i < groups.length; i++) {
-			System.out.println(pathTokens[i]);
-			groups[i] = groups[i-1].createGroup(pathTokens[i], Hdf5OverwritePolicy.ABORT);
-		}
-		Hdf5DataSet<Byte> dataSet = (Hdf5DataSet<Byte>) groups[groups.length-1].createDataSet(dsname, dims2D, 0,
-				Hdf5DataType.STRING, Hdf5OverwritePolicy.ABORT);
-		
-		long SDIM = dataSet.getStringLength() + 1;
-		Byte[] dstr = new Byte[(int) dataSet.numberOfValues()];
-
-		// Write the data to the dataset.
-		for (int i = 0; i < dataSet.numberOfValuesRange(0, dataSet.getDimensions().length - 1); i++) {
-			// TODO write it with dimensions from Hdf5DataSet
-			StringBuffer buf = str_data[(i / (int) dims2D[2]) / (int) dims2D[1]][(i / (int) dims2D[2]) % (int) dims2D[1]][i % (int) dims2D[2]];
-			for (int j = 0; j < SDIM; j++) {
-				if (j < buf.length()) {
-					dstr[i * (int) SDIM + j] = (Byte) (byte) buf.charAt(j);
-				} else {
-					dstr[i * (int) SDIM + j] = 0;
+	private void pushFlowVariables(Hdf5DataSet<?> dataSet) {
+		List<String> attrs = dataSet.loadAttributeNames();
+		Iterator<String> iter = attrs.iterator();
+		while (iter.hasNext()) {
+			String name = iter.next();
+			Hdf5Attribute<?> attr = dataSet.getAttribute(name);
+			System.out.println("Attr " + attr.getName() + ":");
+			for (Object val: attr.getValue()) {
+				System.out.print(val + " ");
+			}
+			System.out.print("\n");
+			if (attr.getType() == Hdf5DataType.INTEGER) {
+				for (int i = 0; i < attr.getValue().length; i++) {
+					pushFlowVariableInt(attr.getName() + i, (Integer) attr.getValue()[i]);
 				}
-			}
-		}
-		dataSet.write(dstr);
-
-		// Allocate space for data.
-		Byte[] dataReadByte = new Byte[(int) dataSet.numberOfValues()];
-
-		// Read data.
-		dataReadByte = dataSet.read(dataReadByte);
-		
-		// just for testing
-		for (int i = -1; i < Math.min(dataReadByte.length, 20); i++) {
-			System.out.println(i == -1 ? ("Length: " + dataReadByte.length) : (i + ": " + dataReadByte[i]));
-		}
-		
-		String[] dataRead = new String[(int) dataSet.numberOfValuesRange(0, dataSet.getDimensions().length - 1)];
-		char[] tempbuf = new char[(int) SDIM];
-		for (int i = 0; i < dataReadByte.length; i++) {
-			tempbuf[i % (int)SDIM] = (char) (byte) dataReadByte[i];
-			if ((i+1) % (int)SDIM == 0) {
-				dataRead[i / (int)SDIM] = String.copyValueOf(tempbuf);
-			}
-		}
-		
-		// Output the data to the screen.
-		for (int i = 0; i < (int) dataSet.numberOfValuesRange(0, dataSet.getDimensions().length - 1); i++) {
-			System.out.println(dsname + "[" + i + "]: " + dataRead[i]);
-		}
-        
-		addDoubleAttribute(file);
-		if (groups.length >= 2) {
-			addStringAttribute(groups[1]);
-		}
-		addStringAttribute(dataSet);
-		
-		file.close();
-		
-		//HDF5ReaderNodeModel.dataRead = dataRead;
-    }
-	
-	private void discoverFile() {
-		Hdf5File file = Hdf5File.createFile(fname);
-		discoverGroup(file, 0);
-		file.close();
-	}
-	
-	private void discoverGroup(Hdf5Group group, int depth) {
-		String space = "";
-		for (int i = 0; i < depth; i++) {
-			space = "\t" + space;
-		}
-		System.out.println(space + ((depth == 0) ? "File: " : "Group: ") + group.getName() + ", Path: " + group.getPathFromFile());
-		
-		List<String> groupNames = group.loadGroupNames();
-		if (groupNames != null) {
-			for (String name: groupNames) {
-				discoverGroup(group.createGroup(name, Hdf5OverwritePolicy.ABORT), depth + 1);
-			}
-		}
-		
-		List<String> dataSetNames = group.loadDataSetNames();
-		if (dataSetNames != null) {
-			for (String name: dataSetNames) {
-				System.out.println(space + "\tDataset: " + name + ", Path: " + group.getPathFromFile() + name);
-				if (dspath.equals(group.getPathFromFile()) && dsname.equals(name)) {
-					// TODO there could be an error if the actual dataset isn't with string values
-					@SuppressWarnings("unchecked")
-					Hdf5DataSet<String> ds = (Hdf5DataSet<String>) group.getDataSet(name);
-					String[] dataRead = ds.read(new String[(int) ds.numberOfValues()]);
-					
-					System.out.println();
-					
-					// Output the data to the screen.
-					for (int i = 0; i < (int) ds.numberOfValues(); i++) {
-						System.out.println(dsname + "[" + i + "]: " + dataRead[i]);
-					}
-					
-			        System.out.println("\n\nCell 0 1 1: " + ds.getCell(dataRead, 0, 1, 1));
-			        
-					//HDF5ReaderNodeModel.dataRead = dataRead;
+			} else if (attr.getType() == Hdf5DataType.DOUBLE) {
+				for (int i = 0; i < attr.getValue().length; i++) {
+					pushFlowVariableDouble(attr.getName() + i, (Double) attr.getValue()[i]);
 				}
+			} else if (attr.getType() == Hdf5DataType.STRING) {
+				pushFlowVariableString(attr.getName(), (String) attr.getValue()[0]);
 			}
 		}
 	}
 	
-	public static void addDoubleAttribute(Hdf5TreeElement treeElement) {
-
-        String attrname  = "double2";
-        Double[] attrValue = { 3.345, 23.243, 54.354 };
-
-        Hdf5Attribute<Double> attribute = new Hdf5Attribute<>(attrname, attrValue);
-        treeElement.addAttribute(attribute);
-        
-        long DIM0 = attribute.getDimension();
-        Double[] attrData = attribute.getValue();
-        
-        // print out attribute value
-        System.out.println("\n\n" + attrname);
-        System.out.println("SDIM Attribute: " + DIM0);
-        for (Double d: attrData) {
-            System.out.println("Zahl: " + d);
-        }
-
-        attribute.close();
-	}
-
-	public static void addStringAttribute(Hdf5TreeElement treeElement) {
-        String attrname  = "numbers3";
-        long stringLength = 8;
-		StringBuffer str_data = new StringBuffer("ABCDEFGHIJ");
-
-		Byte[] attrValue = new Byte[(int) stringLength];
-
-		// Write the data to the dataset.
-		for (int i = 0; i < stringLength; i++) {
-			if (i < str_data.length()) {
-				attrValue[i] = (Byte) (byte) str_data.charAt(i);
-			} else {
-				attrValue[i] = 0;
-			}
-		}
-		
-        Hdf5Attribute<Byte> attribute = new Hdf5Attribute<>(attrname, attrValue);
-        treeElement.addAttribute(attribute);
-
-		// Read data.
-		String dataRead;
-		Byte[] dataReadByte = attribute.getValue();		
-		char[] tempbuf = new char[(int) stringLength];
-		for (int i = 0; i < dataReadByte.length; i++) {
-			tempbuf[i] = (char) (byte) dataReadByte[i];
-		}
-		dataRead = String.copyValueOf(tempbuf);
-		
- 		System.out.println(attrname + ": " + dataRead + "\n");
-        
-        attribute.close();
-	}
-
 	private DataTableSpec createOutSpec() {
-		DataColumnSpec[] colSpecs = new DataColumnSpec[(int) dims2D[1]];
+		// TODO will result in a failure when once already called with 1 and later again with 4
+		DataColumnSpec[] colSpecs = new DataColumnSpec[(int) dimensions[1]];
 		for (int i = 0; i < colSpecs.length; i++) {
 			switch (dataType.getTypeId()) {
 			case 0:
@@ -425,13 +217,28 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				break;
 	        }
 		}
-        DataTableSpec spec = new DataTableSpec(colSpecs);
-        return spec;
+        return new DataTableSpec(colSpecs);
     }
 	
 	@Override
 	protected DataTableSpec[] configure(DataTableSpec[] inSpecs) throws InvalidSettingsException {
 		// TODO here for Exceptions you know before using execute()
+		file = Hdf5File.createFile(fname);
+		group = file.getGroup(dspath.substring(1, dspath.length() - 1));
+		if (group.existsDataSet(dsname)) {
+			dataType = group.findDataSetType(dsname);
+		} else {
+			if (dspath.contains("Int")) {
+				dataType = Hdf5DataType.INTEGER;
+			} else if (dspath.contains("Long")) {
+				dataType = Hdf5DataType.LONG;
+			} else if (dspath.contains("Double")) {
+				dataType = Hdf5DataType.DOUBLE;
+			} else {
+				dataType = Hdf5DataType.STRING;
+			}	
+		}
+		file.close();
 		return new DataTableSpec[]{createOutSpec()};
     }
 	

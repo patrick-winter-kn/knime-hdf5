@@ -45,7 +45,11 @@
 			<br />
 			<b>Abort</b>
 			<br />
-			Will abort if a file already exists.
+			Will abort if a file or component already exists and open this file.
+			<br />
+			<b>Keep both</b>
+			<br />
+			Will keep both and rename the new one if a file or component already exists.
 		</option>
 	</fullDescription>
 

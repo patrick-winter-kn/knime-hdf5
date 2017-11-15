@@ -97,7 +97,7 @@ abstract public class Hdf5TreeElement {
 	}
 
 	public boolean existsAttribute(final String name) {
-		List<String> attrNames = this.loadAttributeNames();
+		List<String> attrNames = loadAttributeNames();
 		if (attrNames != null) {
 			for (String n: attrNames) {
 				if (n.equals(name)) {
@@ -109,7 +109,7 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	public Hdf5Attribute<?> getAttribute(final String name) {
-		Iterator<Hdf5Attribute<?>> iter = this.getAttributes().iterator();
+		Iterator<Hdf5Attribute<?>> iter = getAttributes().iterator();
 		Hdf5Attribute<?> attribute = null;
 		boolean found = false;
 		
@@ -121,7 +121,7 @@ abstract public class Hdf5TreeElement {
 			}
 		}
 		
-		if (!found && this.existsAttribute(name)) {
+		if (!found && existsAttribute(name)) {
 			attribute = Hdf5Attribute.getInstance(this, name);
 		}
 		
@@ -130,10 +130,10 @@ abstract public class Hdf5TreeElement {
 
 	public void addAttribute(Hdf5Attribute<?> attribute) {
 		try {
-            if (this.getElementId() >= 0) {
-            	attribute.setAttributeId(H5.H5Aopen(this.getElementId(), attribute.getName(), HDF5Constants.H5P_DEFAULT));
+            if (getElementId() >= 0) {
+            	attribute.setAttributeId(H5.H5Aopen(getElementId(), attribute.getName(), HDF5Constants.H5P_DEFAULT));
                 NodeLogger.getLogger("HDF5 Files").info("Attribute " + attribute.getName() + " opened: " + attribute.getAttributeId());
-        		this.getAttributes().add(attribute);
+        		getAttributes().add(attribute);
         		attribute.updateDimension();
             	attribute.setOpen(true);
             }
@@ -178,8 +178,8 @@ abstract public class Hdf5TreeElement {
 
             // Create a dataset attribute.
             try {
-                if (this.getElementId() >= 0 && attribute.getDataspaceId() >= 0 && attribute.getType().getConstants()[0] >= 0) {
-                	attribute.setAttributeId(H5.H5Acreate(this.getElementId(), attribute.getName(),
+                if (getElementId() >= 0 && attribute.getDataspaceId() >= 0 && attribute.getType().getConstants()[0] >= 0) {
+                	attribute.setAttributeId(H5.H5Acreate(getElementId(), attribute.getName(),
                     		attribute.getType().getConstants()[0], attribute.getDataspaceId(),
                             HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
                     NodeLogger.getLogger("HDF5 Files").info("Attribute " + attribute.getName() + " created: " + attribute.getAttributeId());
@@ -187,7 +187,7 @@ abstract public class Hdf5TreeElement {
                     
                     if (attribute.getAttributeId() >= 0 && attribute.getType().getConstants()[1] >= 0) {
                         H5.H5Awrite(attribute.getAttributeId(), attribute.getType().getConstants()[1], attribute.getValue());
-                		this.getAttributes().add(attribute);
+                		getAttributes().add(attribute);
                     }
                 }
             } catch (Exception e) {
@@ -201,11 +201,11 @@ abstract public class Hdf5TreeElement {
 		long numAttrs = -1;
 		
 		try {
-			numAttrs = H5.H5Oget_info(this.getElementId()).num_attrs;
+			numAttrs = H5.H5Oget_info(getElementId()).num_attrs;
 			for (int i = 0; i < numAttrs; i++) {
 				// TODO if Hdf5File, not: getParent()
-				attrNames.add(H5.H5Aget_name_by_idx(this.getParent().getElementId(),
-						this.getName(),HDF5Constants.H5_INDEX_NAME,
+				attrNames.add(H5.H5Aget_name_by_idx(getParent().getElementId(),
+						getName(),HDF5Constants.H5_INDEX_NAME,
 						HDF5Constants.H5_ITER_INC, i, HDF5Constants.H5P_DEFAULT));
 			}
 		} catch (HDF5LibraryException | NullPointerException lnpe) {
@@ -216,13 +216,13 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	public Hdf5DataType findAttributeType(String name) {
-		if (this.loadAttributeNames().contains(name)) {
+		if (loadAttributeNames().contains(name)) {
 			long attributeId = -1;
 			String dataType = "";
 			int size = 0;
 			try {
-				System.out.println("Find type of attr " + name + " (Tree)ElementId: " + this.getElementId() + ", open: " + this.isOpen());
-				attributeId = H5.H5Aopen(this.getElementId(), name, HDF5Constants.H5P_DEFAULT);
+				System.out.println("Find type of attr " + name + " (Tree)ElementId: " + getElementId() + ", open: " + isOpen());
+				attributeId = H5.H5Aopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 				long filetypeId = H5.H5Aget_type(attributeId);
 				dataType = H5.H5Tget_class_name(H5.H5Tget_class(filetypeId));
 				size = (int) H5.H5Tget_size(filetypeId);

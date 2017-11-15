@@ -11,6 +11,7 @@ import hdf.hdf5lib.HDF5Constants;
 public enum Hdf5DataType {
 	UNKNOWN(-1),		// data type is unknown
 	INTEGER(0),			// data type is an Integer
+	// TODO look here again because FlowVariables cannot be a Long
 	LONG(1),			// data type is a Long
 	DOUBLE(2),			// data type is a Double
 	STRING(3);			// data type is a String (by using Byte)
@@ -67,6 +68,7 @@ public enum Hdf5DataType {
 		} else if (type.equals(pack + "String")) {
 			return 3;
 		} else {
+			// TODO Exception
 			return -1;
 		}
 	}

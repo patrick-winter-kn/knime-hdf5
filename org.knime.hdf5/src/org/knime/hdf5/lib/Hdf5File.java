@@ -15,13 +15,19 @@ import hdf.hdf5lib.exceptions.HDF5LibraryException;
 public class Hdf5File extends Hdf5Group {
 	
 	private static final List<Hdf5File> ALL_FILES = new LinkedList<>();
-	
+
+
+	/* TODO when opening the file: make a security copy of the file because sometimes there were some things wrong with datasets/groups in it
+	 * it happened when ...
+	 * - creating dataset/group with the same name directly after deleting it in HDFView (not always, only when there were (x is a name) x, x(1), x(2), x(3) and deleted and readded x(2))
+	 * - TODO has to be checked if or when it also happens with the method getDataSet() in Hdf5Group
+	 */
 	private Hdf5File(final String filePath) {
 		super(null, filePath, filePath.substring(filePath.lastIndexOf(File.separator) + 1), true);
 		
 		ALL_FILES.add(this);
-        this.setPathFromFile("/");
-		this.open();
+        setPathFromFile("/");
+		open();
 	}
 	
 	/**
@@ -46,17 +52,17 @@ public class Hdf5File extends Hdf5Group {
 	
 	public void open() {
 		try {
-			if (!this.isOpen()) {
-				this.setElementId(H5.H5Fopen(this.getFilePath(), HDF5Constants.H5F_ACC_RDWR,
+			if (!isOpen()) {
+				setElementId(H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDWR,
 						HDF5Constants.H5P_DEFAULT));
-				NodeLogger.getLogger("HDF5 Files").info("File " + this.getName() + " opened: " + this.getElementId());
-				this.setOpen(true);
+				NodeLogger.getLogger("HDF5 Files").info("File " + getName() + " opened: " + getElementId());
+				setOpen(true);
 			}
 		} catch (HDF5FileInterfaceException e) {
 	    	try {
-				this.setElementId(H5.H5Fcreate(this.getFilePath(), HDF5Constants.H5F_ACC_TRUNC, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
-				NodeLogger.getLogger("HDF5 Files").info("File " + this.getName() + " created: " + this.getElementId());
-                this.setOpen(true);
+				setElementId(H5.H5Fcreate(getFilePath(), HDF5Constants.H5F_ACC_TRUNC, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
+				NodeLogger.getLogger("HDF5 Files").info("File " + getName() + " created: " + getElementId());
+                setOpen(true);
             } catch (Exception e2) {
 				e2.printStackTrace();
 			}
@@ -88,10 +94,10 @@ public class Hdf5File extends Hdf5Group {
         String pathFromFile = "";
 		
         try {
-        	if (this.isOpen()) {
-        		count = H5.H5Fget_obj_count(this.getElementId(), HDF5Constants.H5F_OBJ_ALL);
+        	if (isOpen()) {
+        		count = H5.H5Fget_obj_count(getElementId(), HDF5Constants.H5F_OBJ_ALL);
 			} else {
-				NodeLogger.getLogger("HDF5 Files").error("File " + this.getName() + " is not opened!",
+				NodeLogger.getLogger("HDF5 Files").error("File " + getName() + " is not opened!",
 						new IllegalStateException());
 				return count;
 			}
@@ -108,7 +114,7 @@ public class Hdf5File extends Hdf5Group {
         objects = new long[(int) count];
 
         try {
-			openedObjects = H5.H5Fget_obj_ids(this.getElementId(), HDF5Constants.H5F_OBJ_ALL, count, objects);
+			openedObjects = H5.H5Fget_obj_ids(getElementId(), HDF5Constants.H5F_OBJ_ALL, count, objects);
 		} catch (HDF5LibraryException | NullPointerException e) {
 			e.printStackTrace();
 		}
@@ -139,26 +145,26 @@ public class Hdf5File extends Hdf5Group {
 	@Override
 	public void close() {
 		try {
-            if (this.isOpen()) {
-            	Iterator<Hdf5DataSet<?>> iterDss = this.getDataSets().iterator();
+            if (isOpen()) {
+            	Iterator<Hdf5DataSet<?>> iterDss = getDataSets().iterator();
 	    		while (iterDss.hasNext()) {
 	    			iterDss.next().close();
 	    		}
 
-	    		Iterator<Hdf5Attribute<?>> iterAttrs = this.getAttributes().iterator();
+	    		Iterator<Hdf5Attribute<?>> iterAttrs = getAttributes().iterator();
 	    		while (iterAttrs.hasNext()) {
 	    			iterAttrs.next().close();
 	    		}
 	    		
-	    		Iterator<Hdf5Group> iterGrps = this.getGroups().iterator();
+	    		Iterator<Hdf5Group> iterGrps = getGroups().iterator();
 	    		while (iterGrps.hasNext()) {
 	    			iterGrps.next().close();
 	    		}
 
-            	this.whatIsOpen();
-				NodeLogger.getLogger("HDF5 Files").info("File " + this.getName() + " closed: "
-						+ H5.H5Fclose(this.getElementId()));
-                this.setOpen(false);
+            	whatIsOpen();
+				NodeLogger.getLogger("HDF5 Files").info("File " + getName() + " closed: "
+						+ H5.H5Fclose(getElementId()));
+                setOpen(false);
             }
         } catch (Exception e) {
             e.printStackTrace();

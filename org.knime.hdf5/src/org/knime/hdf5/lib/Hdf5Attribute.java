@@ -40,11 +40,12 @@ public class Hdf5Attribute<Type> {
 		m_type = Hdf5DataType.get(Hdf5DataType.getTypeIdByArray(value));
 		
 		if (m_type.isString()) {
-			this.setDimension(((String) value[0]).length() + 1);
+			setDimension(((String) value[0]).length() + 1);
 		}
 	}
 	
 	// TODO look that's not possible to open the attr more than once
+	// TODO check for errors if you have an Hdf5File as treeElement
 	static Hdf5Attribute<?> getInstance(final Hdf5TreeElement treeElement, final String name) {
 		Hdf5Attribute<?> attribute = null;
 		Hdf5DataType dataType = treeElement.findAttributeType(name);
@@ -168,8 +169,8 @@ public class Hdf5Attribute<Type> {
 		return m_type;
 	}
 
-	public void setType(Hdf5DataType m_type) {
-		this.m_type = m_type;
+	public void setType(Hdf5DataType type) {
+		m_type = type;
 	}
 
 	/**
@@ -180,22 +181,22 @@ public class Hdf5Attribute<Type> {
 	void updateDimension() {
 		// Get dataspace and allocate memory for read buffer.
 		try {
-			if (this.getAttributeId() >= 0) {
-				this.setDataspaceId(H5.H5Aget_space(this.getAttributeId()));
+			if (getAttributeId() >= 0) {
+				setDataspaceId(H5.H5Aget_space(getAttributeId()));
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		
 		long[] dims = new long[1];
-		if (this.getType().isString()) {
+		if (getType().isString()) {
 			long filetypeId = -1;
 			long memtypeId = -1;
 			
 			// Get the datatype and its size.
 			try {
-				if (this.getAttributeId() >= 0) {
-					filetypeId = H5.H5Aget_type(this.getAttributeId());
+				if (getAttributeId() >= 0) {
+					filetypeId = H5.H5Aget_type(getAttributeId());
 				}
 				if (filetypeId >= 0) {
     				dims[0] = H5.H5Tget_size(filetypeId) + 1;
@@ -215,19 +216,19 @@ public class Hdf5Attribute<Type> {
 				e.printStackTrace();
 			}
 			
-			this.getType().getConstants()[0] = filetypeId;
-			this.getType().getConstants()[1] = memtypeId;
+			getType().getConstants()[0] = filetypeId;
+			getType().getConstants()[1] = memtypeId;
 		} else {
 			try {
-				if (this.getDataspaceId() >= 0) {
-					H5.H5Sget_simple_extent_dims(this.getDataspaceId(), dims, null);
+				if (getDataspaceId() >= 0) {
+					H5.H5Sget_simple_extent_dims(getDataspaceId(), dims, null);
 				}
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
 			}
 		}
 
-		this.setDimension(dims[0]);
+		setDimension(dims[0]);
 	}
 	
 	public void close() {
@@ -237,10 +238,10 @@ public class Hdf5Attribute<Type> {
 		 * 
 		 */
         try {
-            if (this.isOpen()) {
-                if (this.getType().isString()) {
+            if (isOpen()) {
+                if (getType().isString()) {
         	 		// Terminate access to the file and mem type.
-        			for (long datatype: this.getType().getConstants()) {
+        			for (long datatype: getType().getConstants()) {
         		 		if (datatype >= 0) {
     		 				H5.H5Tclose(datatype);
     		 				datatype = -1;
@@ -249,17 +250,17 @@ public class Hdf5Attribute<Type> {
          		}
 
                 // Close the dataspace.
-                if (this.getDataspaceId() >= 0) {
-                    H5.H5Sclose(this.getDataspaceId());
-                    this.setDataspaceId(-1);
+                if (getDataspaceId() >= 0) {
+                    H5.H5Sclose(getDataspaceId());
+                    setDataspaceId(-1);
                 }
 
                 // Close the attribute.
-                H5.H5Aclose(this.getAttributeId());
-                this.setOpen(false);
+                H5.H5Aclose(getAttributeId());
+                setOpen(false);
 
-                NodeLogger.getLogger("HDF5 Files").info("Attribute " + this.getName() + " closed.");
-                System.out.println("Attribute " + this.getName() + " closed.");
+                NodeLogger.getLogger("HDF5 Files").info("Attribute " + getName() + " closed.");
+                System.out.println("Attribute " + getName() + " closed.");
             }
         } catch (Exception e) {
             e.printStackTrace();
