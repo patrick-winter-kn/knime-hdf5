@@ -56,7 +56,7 @@ abstract public class Hdf5TreeElement {
 		return m_name;
 	}
 
-	protected String getFilePath() {
+	public String getFilePath() {
 		return m_filePath;
 	}
 
@@ -88,7 +88,7 @@ abstract public class Hdf5TreeElement {
 		m_pathFromFile = pathFromFile;
 	}
 
-	protected Hdf5Group getParent() {
+	public Hdf5Group getParent() {
 		return m_parent;
 	}
 

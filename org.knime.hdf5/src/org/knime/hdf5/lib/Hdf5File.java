@@ -17,7 +17,7 @@ public class Hdf5File extends Hdf5Group {
 	private static final List<Hdf5File> ALL_FILES = new LinkedList<>();
 
 
-	/* TODO when opening the file: make a security copy of the file because sometimes there were some things wrong with datasets/groups in it
+	/* TODO when opening the file: make a backup of the file because sometimes there were some things wrong with datasets/groups in it
 	 * it happened when ...
 	 * - creating dataset/group with the same name directly after deleting it in HDFView (not always, only when there were (x is a name) x, x(1), x(2), x(3) and deleted and readded x(2))
 	 * - TODO has to be checked if or when it also happens with the method getDataSet() in Hdf5Group
@@ -58,13 +58,13 @@ public class Hdf5File extends Hdf5Group {
 				NodeLogger.getLogger("HDF5 Files").info("File " + getName() + " opened: " + getElementId());
 				setOpen(true);
 			}
-		} catch (HDF5FileInterfaceException e) {
+		} catch (HDF5FileInterfaceException fie) {
 	    	try {
 				setElementId(H5.H5Fcreate(getFilePath(), HDF5Constants.H5F_ACC_TRUNC, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
 				NodeLogger.getLogger("HDF5 Files").info("File " + getName() + " created: " + getElementId());
                 setOpen(true);
-            } catch (Exception e2) {
-				e2.printStackTrace();
+            } catch (Exception e) {
+				e.printStackTrace();
 			}
         } catch (Exception e) {
             e.printStackTrace();

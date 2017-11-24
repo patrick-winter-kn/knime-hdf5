@@ -12,6 +12,9 @@ import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
+// TODO when creating a group, it should also check for dataSets with the same name!
+// TODO same vice versa
+
 public class Hdf5Group extends Hdf5TreeElement {
 	
 	private final List<Hdf5Group> m_groups = new LinkedList<>();
@@ -102,7 +105,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		
 		return group;
 	}
-
+	
 	public Hdf5DataSet<?> createDataSet(final String name, long[] dimensions, 
 			long stringLength, Hdf5DataType type, Hdf5OverwritePolicy policy) {
 		Hdf5DataSet<?> dataSet = null;
@@ -240,7 +243,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return dataSet;
 	}
 	
-	private boolean existsGroup(final String name) {
+	public boolean existsGroup(final String name) {
 		List<String> groupNames = loadGroupNames();
 		if (groupNames != null) {
 			for (String n: groupNames) {
@@ -372,6 +375,10 @@ public class Hdf5Group extends Hdf5TreeElement {
 	public void open() {
 		try {
 			if (!isOpen()) {
+				if (!getParent().isOpen()) {
+					getParent().open();
+				}
+				
 				setElementId(H5.H5Gopen(getParent().getElementId(), getName(),
 						HDF5Constants.H5P_DEFAULT));
 				NodeLogger.getLogger("HDF5 Files").info("Group " + getName() + " opened: " + getElementId());

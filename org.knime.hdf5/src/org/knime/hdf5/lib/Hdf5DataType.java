@@ -4,6 +4,11 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.knime.core.data.DataType;
+import org.knime.core.data.def.DoubleCell;
+import org.knime.core.data.def.IntCell;
+import org.knime.core.data.def.LongCell;
+import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
 
 import hdf.hdf5lib.HDF5Constants;
@@ -83,5 +88,19 @@ public enum Hdf5DataType {
 	
 	public boolean isString() {
 		return this == STRING;
+	}
+
+	public DataType getColumnType() {
+		switch (m_typeId) {
+		case 0: 
+			return IntCell.TYPE;
+		case 1: 
+			return LongCell.TYPE;
+		case 2: 
+			return DoubleCell.TYPE;
+		case 3:
+			return StringCell.TYPE;
+		}
+		return null;
 	}
 }

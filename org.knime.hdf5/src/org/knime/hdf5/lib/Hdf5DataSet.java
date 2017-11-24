@@ -10,6 +10,9 @@ import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5Exception;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
+//TODO when creating a dataSet, it should also check for groups with the same name!
+//TODO same vice versa
+
 public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 
 	private long m_dataspaceId = -1;
@@ -104,7 +107,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * @param parent group
 	 * @param name
 	 * @param dimensions
-	 * @param stringLength
+	 * @param stringLength only matters for String dataSets
 	 * @param type
 	 * @param create {@code true} if the dataSet should also be created physically in the .h5 file
 	 * @return dataSet
@@ -269,6 +272,10 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	public void open() {
 		try {
 			if (!isOpen()) {
+				if (!getParent().isOpen()) {
+					getParent().open();
+				}
+				
 				setElementId(H5.H5Dopen(getParent().getElementId(), getName(),
 						HDF5Constants.H5P_DEFAULT));
 				setOpen(true);
