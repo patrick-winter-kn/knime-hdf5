@@ -99,7 +99,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 				 System.out.print(newName + ", ");
 			} while (groupNames.contains(newName));
 
-			System.out.println("\nName of the new group: " + newName);
 			group = new Hdf5Group(this, getFilePath(), newName, true);
 		}
 		
@@ -134,7 +133,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 				 System.out.print(newName + ", ");
 			} while (dataSetNames.contains(newName));
 			
-			System.out.println("\nName of the new dataSet: " + newName);
 			dataSet = Hdf5DataSet.getInstance(this, newName, dimensions, stringLength, type, true);
 		}
 		
@@ -297,16 +295,13 @@ public class Hdf5Group extends Hdf5TreeElement {
 					H5.H5Gget_obj_info_all(group.getElementId(), path, oname, otype, new int[otype.length], orefs, HDF5Constants.H5_INDEX_NAME);
 					
 					// Get type of the object and add it to the array
-					System.out.println((object == Hdf5Object.GROUP) ? "Group: " : "DataSets: ");
 					names = new String[(int) count];
 					for (int i = 0; i < otype.length; i++) {
 						if (Hdf5Object.get(otype[i]) == object) {
 							names[index] = oname[i];
-							System.out.print(names[index] + ", ");
 							index++;
 						}
 					}
-					System.out.print("\nEND\n");
 				}
 			} else {
 				NodeLogger.getLogger("HDF5 Files").error("The parent "
@@ -344,7 +339,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 			String dataType = "";
 			int size = 0;
 			try {
-				System.out.println("GroupId: " + getElementId() + ", open: " + isOpen());
 				dataSetId = H5.H5Dopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 				dataType = H5.H5Tget_class_name(H5.H5Tget_class(H5.H5Dget_type(dataSetId)));
 				size = (int) H5.H5Tget_size(H5.H5Dget_type(dataSetId));
@@ -352,7 +346,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
 			}
-			System.out.println("Size: " + size);
 			if (dataType.equals("H5T_INTEGER") && size == 4) {
 				return Hdf5DataType.INTEGER;
 			} else if (dataType.equals("H5T_INTEGER") && size == 8) {

@@ -3,6 +3,11 @@ package org.knime.hdf5.lib;
 import java.util.Arrays;
 import java.util.Iterator;
 
+import org.knime.core.data.DataCell;
+import org.knime.core.data.def.DoubleCell;
+import org.knime.core.data.def.IntCell;
+import org.knime.core.data.def.LongCell;
+import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
 
 import hdf.hdf5lib.H5;
@@ -267,6 +272,21 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		NodeLogger.getLogger("HDF5 Files").error("Not the correct amount (" + getDimensions().length
 				+ ") of indices!: " + indices.length, new IllegalArgumentException());
 		return null;
+	}
+	
+	public DataCell getDataCell(Type value) {
+		switch (getType()) {
+		case INTEGER:
+			return new IntCell((int) value);
+		case LONG:
+			return new LongCell((long) value);
+		case DOUBLE:
+			return new DoubleCell((double) value);
+		case STRING:
+			return new StringCell((String) value);
+		default:
+			return null;
+		}
 	}
 	
 	public void open() {

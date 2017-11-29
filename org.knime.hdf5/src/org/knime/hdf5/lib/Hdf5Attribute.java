@@ -46,6 +46,8 @@ public class Hdf5Attribute<Type> {
 	
 	// TODO look that's not possible to open the attr more than once
 	// TODO check for errors if you have an Hdf5File as treeElement
+	// TODO disallow Longs here
+	// TODO two flowVariables with same name?
 	static Hdf5Attribute<?> getInstance(final Hdf5TreeElement treeElement, final String name) {
 		Hdf5Attribute<?> attribute = null;
 		Hdf5DataType dataType = treeElement.findAttributeType(name);
