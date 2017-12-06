@@ -12,9 +12,6 @@ import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
-// TODO when creating a group, it should also check for dataSets with the same name!
-// TODO same vice versa
-
 public class Hdf5Group extends Hdf5TreeElement {
 	
 	private final List<Hdf5Group> m_groups = new LinkedList<>();
@@ -51,14 +48,14 @@ public class Hdf5Group extends Hdf5TreeElement {
 	/**
 	 * @return a list of all children groups of this group
 	 */
-	public List<Hdf5Group> getGroups() {
+	protected List<Hdf5Group> getGroups() {
 		return m_groups;
 	}
 	
 	/**
 	 * @return a list of all dataSets of this group
 	 */
-	public List<Hdf5DataSet<?>> getDataSets() {
+	protected List<Hdf5DataSet<?>> getDataSets() {
 		return m_dataSets;
 	}
 	
@@ -72,34 +69,37 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * 
 	 * @return the new group 
 	 */
-	// TODO add another argument for the mode (overwrite, abort, nameChange)
 	public Hdf5Group createGroup(final String name, Hdf5OverwritePolicy policy) {
 		Hdf5Group group = null;
 		
-		if (!existsGroup(name) || policy == Hdf5OverwritePolicy.OVERWRITE) {
-			group = new Hdf5Group(this, getFilePath(), name, true);
-			
-		} else if (policy == Hdf5OverwritePolicy.ABORT) {
-			group = getGroup(name);
-			
-		} else if (policy == Hdf5OverwritePolicy.KEEP_BOTH) {
-			String oldName = name;
-			int i = 1;
-			
-			if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
-				oldName = oldName.substring(0, oldName.lastIndexOf("("));
-				i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
+		if (!existsDataSet(name)) {
+			if (!existsGroup(name) || policy == Hdf5OverwritePolicy.OVERWRITE) {
+				group = new Hdf5Group(this, getFilePath(), name, true);
+				
+			} else if (policy == Hdf5OverwritePolicy.ABORT) {
+				group = getGroup(name);
+				
+			} else if (policy == Hdf5OverwritePolicy.KEEP_BOTH) {
+				String oldName = name;
+				int i = 1;
+				
+				if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
+					oldName = oldName.substring(0, oldName.lastIndexOf("("));
+					i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
+				}
+				
+				String newName;
+				List<String> groupNames = loadGroupNames();
+				do {
+					 newName = oldName + "(" + i + ")";
+					 i++;
+					 System.out.print(newName + ", ");
+				} while (groupNames.contains(newName));
+	
+				group = new Hdf5Group(this, getFilePath(), newName, true);
 			}
-			
-			String newName;
-			List<String> groupNames = loadGroupNames();
-			do {
-				 newName = oldName + "(" + i + ")";
-				 i++;
-				 System.out.print(newName + ", ");
-			} while (groupNames.contains(newName));
-
-			group = new Hdf5Group(this, getFilePath(), newName, true);
+		} else {
+			NodeLogger.getLogger("HDF5 Files").error("There is already a dataSet with the same name", new IllegalArgumentException());
 		}
 		
 		return group;
@@ -109,31 +109,36 @@ public class Hdf5Group extends Hdf5TreeElement {
 			long stringLength, Hdf5DataType type, Hdf5OverwritePolicy policy) {
 		Hdf5DataSet<?> dataSet = null;
 		
-		if (!existsDataSet(name)) {
-			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, stringLength, type, true);
-		} else if (policy == Hdf5OverwritePolicy.OVERWRITE) {
-			// TODO Exception
-		} else if (policy == Hdf5OverwritePolicy.ABORT) {
-			dataSet = getDataSet(name);
-			
-		} else if (policy == Hdf5OverwritePolicy.KEEP_BOTH) {
-			String oldName = name;
-			int i = 1;
-			
-			if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
-				oldName = oldName.substring(0, oldName.lastIndexOf("("));
-				i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
+		if (!existsGroup(name)) {
+			if (!existsDataSet(name)) {
+				dataSet = Hdf5DataSet.getInstance(this, name, dimensions, stringLength, type, true);
+			} else if (policy == Hdf5OverwritePolicy.OVERWRITE) {
+				NodeLogger.getLogger("HDF5 Files").error("A dataSet cannot be overwritten", new IllegalArgumentException());
+				
+			} else if (policy == Hdf5OverwritePolicy.ABORT) {
+				dataSet = getDataSet(name);
+				
+			} else if (policy == Hdf5OverwritePolicy.KEEP_BOTH) {
+				String oldName = name;
+				int i = 1;
+				
+				if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
+					oldName = oldName.substring(0, oldName.lastIndexOf("("));
+					i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
+				}
+				
+				String newName;
+				List<String> dataSetNames = loadDataSetNames();
+				do {
+					 newName = oldName + "(" + i + ")";
+					 i++;
+					 System.out.print(newName + ", ");
+				} while (dataSetNames.contains(newName));
+				
+				dataSet = Hdf5DataSet.getInstance(this, newName, dimensions, stringLength, type, true);
 			}
-			
-			String newName;
-			List<String> dataSetNames = loadDataSetNames();
-			do {
-				 newName = oldName + "(" + i + ")";
-				 i++;
-				 System.out.print(newName + ", ");
-			} while (dataSetNames.contains(newName));
-			
-			dataSet = Hdf5DataSet.getInstance(this, newName, dimensions, stringLength, type, true);
+		} else {
+			NodeLogger.getLogger("HDF5 Files").error("There is already a group with the same name", new IllegalArgumentException());
 		}
 		
 		return dataSet;
@@ -243,6 +248,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	
 	public boolean existsGroup(final String name) {
 		List<String> groupNames = loadGroupNames();
+		
 		if (groupNames != null) {
 			for (String n: groupNames) {
 				if (n.equals(name)) {
@@ -250,11 +256,13 @@ public class Hdf5Group extends Hdf5TreeElement {
 				}
 			}
 		}
+		
 		return false;
 	}
 	
 	public boolean existsDataSet(final String name) {
 		List<String> dataSetNames = loadDataSetNames();
+		
 		if (dataSetNames != null) {
 			for (String n: dataSetNames) {
 				if (n.equals(name)) {
@@ -262,6 +270,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				}
 			}
 		}
+		
 		return false;
 	}
 	
@@ -333,7 +342,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return names;
 	}
 	
-	public Hdf5DataType findDataSetType(String name) {
+	Hdf5DataType findDataSetType(String name) {
 		if (loadDataSetNames().contains(name)) {
 			long dataSetId = -1;
 			String dataType = "";

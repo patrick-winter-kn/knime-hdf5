@@ -1,8 +1,11 @@
 package org.knime.hdf5.nodes.reader;
 
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -11,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 
 import javax.swing.Box;
-import javax.swing.CellRendererPane;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JList;
@@ -28,7 +30,6 @@ import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
 import org.knime.core.node.defaultnodesettings.DialogComponentButton;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
-import org.knime.core.node.util.DataColumnSpecListCellRenderer;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterPanel;
 import org.knime.hdf5.lib.Hdf5DataSet;
@@ -39,7 +40,8 @@ import org.knime.hdf5.lib.Hdf5Group;
 
 class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 
-	static Map<Hdf5DataSet<?>, List<String>> dsMap = new LinkedHashMap<>();
+	// TODO try to avoid static here
+	static List<Hdf5DataSet<?>> dsList = new LinkedList<>();
 	
 	private final DataColumnSpecFilterPanel m_filterPanel;
 	
@@ -75,109 +77,13 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     	addDialogComponent(source);
     	
         m_filterPanel = new DataColumnSpecFilterPanel();
-        super.addTab("Column Filter", m_filterPanel);
-        JScrollPane jsp = (JScrollPane) m_filterPanel.getComponent(0);
-        JViewport vp = (JViewport) jsp.getComponent(0);
-        JPanel panel = (JPanel) vp.getComponent(0);
-        JPanel filterPanel = (JPanel) panel.getComponent(1);
-        JPanel center = (JPanel) filterPanel.getComponent(0);
+        super.addTab("Column Selector", m_filterPanel);
         
-        JPanel excludePanel = (JPanel) center.getComponent(0);
-        JScrollPane exclJSP = (JScrollPane) excludePanel.getComponent(1);
-        JViewport exclVP = (JViewport) exclJSP.getComponent(0);
         @SuppressWarnings("rawtypes")
-		JList exclList = (JList) exclVP.getComponent(0);
-        
-        JPanel buttonPan2 = (JPanel) center.getComponent(1);
-        JPanel buttonPan = (JPanel) buttonPan2.getComponent(0);
-        
-        JPanel includePanel = (JPanel) center.getComponent(2);
-        JScrollPane inclJSP = (JScrollPane) includePanel.getComponent(1);
-        JViewport inclVP = (JViewport) inclJSP.getComponent(0);
+		JList exclList = (JList) getComponentOfCenter("exclList");
+        JPanel buttonPan = (JPanel) getComponentOfCenter("buttonPan");
         @SuppressWarnings("rawtypes")
-		JList inclList = (JList) inclVP.getComponent(0);
-        System.out.println("inclList: " + Arrays.toString(inclList.getComponents()));
-        CellRendererPane crp = (CellRendererPane) inclList.getComponent(0);
-        System.out.println("crp: " + Arrays.toString(crp.getComponents()));
-        
-        
-        JButton m_openButton = new JButton("open");
-        m_openButton.setMaximumSize(new Dimension(125, 25));
-        buttonPan.add(m_openButton);
-        m_openButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(final ActionEvent ae) {
-                @SuppressWarnings("unchecked")
-				List<Object> selected = exclList.getSelectedValuesList();
-                if (selected.size() == 1) {
-                	Object dcs = selected.get(0);
-                    String oname = dcs.toString();
-                    System.out.println("oname: " + oname);
-                    String name = oname.substring(0, oname.lastIndexOf("(") - 1);
-                    System.out.println("name: " + name);
-                    
-                    group.open();
-                    if (group.existsDataSet(name) && !existsInDsList(name)) {
-                		Hdf5DataSet<?> dataSet = group.getDataSet(name);
-                		updateIncludeList(dataSet);
-                		dataSet.close();
-                		
-                	} else if (group.existsGroup(name)) {
-                		group = group.getGroup(name);
-                		updateExcludeList(group);
-                	}
-                }
-                System.out.println("crp2: " + Arrays.toString(crp.getComponents()));
-            }
-        });
-        buttonPan.add(Box.createVerticalStrut(25));
-        m_openButton.setEnabled(true);
-
-        JButton m_closeButton = new JButton("close");
-        m_closeButton.setMaximumSize(new Dimension(125, 25));
-        buttonPan.add(m_closeButton);
-        m_closeButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(final ActionEvent ae) {
-            	if (!(group instanceof Hdf5File)) {
-        			group.close();
-        			System.out.println("Group: " + group.getName());
-	        		group = group.getParent();
-	        		group.open();
-	            	updateExcludeList(group);
-            	}
-            }
-        });
-        buttonPan.add(Box.createVerticalStrut(25));
-        m_closeButton.setEnabled(true);
-        
-        JButton m_removeButton = new JButton("remove");
-        m_removeButton.setMaximumSize(new Dimension(125, 25));
-        buttonPan.add(m_removeButton);
-        m_removeButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(final ActionEvent ae) {
-                System.out.println("crp3: " + Arrays.toString(crp.getComponents()));
-            	List<String> names = new LinkedList<>();
-            	
-            	@SuppressWarnings("unchecked")
-				List<Object> n = inclList.getSelectedValuesList();
-                System.out.println(n.size());
-                
-				@SuppressWarnings("unchecked")
-				Iterator<Object> selected = inclList.getSelectedValuesList().iterator();
-                while (selected.hasNext()) {
-                    String oname = remLastParBlock(selected.next().toString());
-                    System.out.println("\"" + oname + "\"");
-                    names.add(oname.substring(0, oname.length() - 1));
-                }
-                
-                removeFromIncludeList(names);
-            }
-        });
-        buttonPan.add(Box.createVerticalStrut(25));
-        m_removeButton.setEnabled(true);
-        
+		JList inclList = (JList) getComponentOfCenter("inclList");
         
     	// "Browse File"-Button
         DialogComponentButton fileButton = new DialogComponentButton("Browse File");
@@ -192,14 +98,84 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		        	file = Hdf5File.createFile(newValue);
 		        	group = file;
 		        	updateExcludeList(group);
+		        	selectTab("Column Selector");
 		        }
 			}
         });
         addDialogComponent(fileButton);
+        
+        
+        JButton openButton = new JButton("open");
+        openButton.setMaximumSize(new Dimension(125, 25));
+        buttonPan.add(openButton);
+        openButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(final ActionEvent ae) {
+                openElement(exclList);
+            }
+        });
+        buttonPan.add(Box.createVerticalStrut(25));
+        openButton.setEnabled(true);
+
+        exclList.removeMouseListener(exclList.getMouseListeners()[1]);
+        exclList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(final MouseEvent me) {
+                if (me.getClickCount() == 2) {
+                	openElement(exclList);
+                }
+            }
+        });
+        
+        JButton closeButton = new JButton("close");
+        closeButton.setMaximumSize(new Dimension(125, 25));
+        buttonPan.add(closeButton);
+        closeButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(final ActionEvent ae) {
+            	closeElement();
+            }
+        });
+        buttonPan.add(Box.createVerticalStrut(25));
+        closeButton.setEnabled(true);
+        
+        JButton removeButton = new JButton("remove");
+        removeButton.setMaximumSize(new Dimension(125, 25));
+        buttonPan.add(removeButton);
+        removeButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(final ActionEvent ae) {
+            	removeElement(inclList);
+            }
+        });
+        buttonPan.add(Box.createVerticalStrut(25));
+        removeButton.setEnabled(true);
+        
+        inclList.removeMouseListener(inclList.getMouseListeners()[1]);
+        inclList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(final MouseEvent me) {
+                if (me.getClickCount() == 2) {
+                	removeElement(inclList);
+                }
+            }
+        });
+        
     }
     
-    static private boolean existsInDsList(String name) {
-    	Iterator<Hdf5DataSet<?>> iter = dsMap.keySet().iterator();
+    private static boolean existsInDsList(Hdf5DataSet<?> dataSet) {
+    	Iterator<Hdf5DataSet<?>> iter = dsList.iterator();
+    	while (iter.hasNext()) {
+    		if (iter.next().equals(dataSet)) {
+    			return true;
+    		}
+    	}
+    	
+    	return false;
+    }
+    
+    private static boolean existsNameInDsList(String name) {
+    	Iterator<Hdf5DataSet<?>> iter = dsList.iterator();
     	while (iter.hasNext()) {
     		if (iter.next().getName().equals(name)) {
     			return true;
@@ -209,7 +185,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     	return false;
     }
     
-    static private String remLastParBlock(String in) {
+    private static String remLastParBlock(String in) {
     	int end = in.lastIndexOf(")");
     	int start = end;
     	int par = end >= 0 ? 1 : 0;
@@ -221,14 +197,91 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     	return in.substring(0, start) + in.substring(Math.min(end + 1, in.length()));
     }
     
-    static private String remLastNumBlock(String in) {
-    	int start = in.length() - 1;
+    private static String remLastNumBlock(String in) {
+    	int start = in.length();
     	char[] toks = in.toCharArray();
-    	while (Character.isDigit(toks[start])) {
+    	while (start > 0 && Character.isDigit(toks[start-1])) {
     		start--;
     	}
     	return in.substring(0, start);
     }
+    
+    private Component getComponentOfCenter(String comp) {
+    	JScrollPane jsp = (JScrollPane) m_filterPanel.getComponent(0);
+        JViewport vp = (JViewport) jsp.getComponent(0);
+        JPanel panel = (JPanel) vp.getComponent(0);
+        JPanel filterPanel = (JPanel) panel.getComponent(1);
+        JPanel center = (JPanel) filterPanel.getComponent(0);
+        
+        if (comp.equals("exclList")) {
+		    JPanel excludePanel = (JPanel) center.getComponent(0);
+		    JScrollPane exclJSP = (JScrollPane) excludePanel.getComponent(1);
+		    JViewport exclVP = (JViewport) exclJSP.getComponent(0);
+		    @SuppressWarnings("rawtypes")
+			JList exclList = (JList) exclVP.getComponent(0);
+		    return exclList;
+		    
+        } else if (comp.equals("buttonPan")) {
+            JPanel buttonPan2 = (JPanel) center.getComponent(1);
+            JPanel buttonPan = (JPanel) buttonPan2.getComponent(0);
+            return buttonPan;
+        	
+        } else if (comp.equals("inclList")) {
+	        JPanel includePanel = (JPanel) center.getComponent(2);
+	        JScrollPane inclJSP = (JScrollPane) includePanel.getComponent(1);
+	        JViewport inclVP = (JViewport) inclJSP.getComponent(0);
+	        @SuppressWarnings("rawtypes")
+			JList inclList = (JList) inclVP.getComponent(0);
+	        return inclList;
+        }
+        
+        return null;
+    }
+    
+    @SuppressWarnings("rawtypes")
+	private void openElement(JList exclList) {
+    	@SuppressWarnings("unchecked")
+		List<Object> selected = exclList.getSelectedValuesList();
+        if (selected.size() == 1) {
+        	Object dcs = selected.get(0);
+            String oname = dcs.toString();
+            String name = oname.substring(0, oname.lastIndexOf("(") - 1);
+            
+            group.open();
+            if (group.existsDataSet(name)) {
+        		Hdf5DataSet<?> dataSet = group.getDataSet(name);
+        		updateIncludeList(dataSet);
+        		dataSet.close();
+        		
+        	} else if (group.existsGroup(name)) {
+        		group = group.getGroup(name);
+        		updateExcludeList(group);
+        	}
+        }
+    }
+    
+	private void closeElement() {
+		if (!(group instanceof Hdf5File)) {
+			group.close();
+    		group = group.getParent();
+    		group.open();
+        	updateExcludeList(group);
+    	}
+	}
+	
+	@SuppressWarnings("rawtypes")
+	private void removeElement(JList inclList) {
+		List<String> names = new LinkedList<>();
+        
+		@SuppressWarnings("unchecked")
+		Iterator<Object> selected = inclList.getSelectedValuesList().iterator();
+        while (selected.hasNext()) {
+            String oname = remLastParBlock(selected.next().toString());
+            names.add(oname.substring(0, oname.length() - 1));
+        }
+        
+        removeFromIncludeList(names);
+	}
     
     private void updateExcludeList(Hdf5Group group) {
 		// subGroups in Group
@@ -245,24 +298,25 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     }
     
     private void updateIncludeList(Hdf5DataSet<?> dataSet) {
-		long cols = dataSet.numberOfValuesRange(1, dataSet.getDimensions().length);
-		
-		String[] names = new String[(int) cols];
-		for (int i = 0; i < cols; i++) {
-			names[i] = dataSet.getName() + i;
+    	boolean inDsList = existsInDsList(dataSet);
+    	
+    	if (inDsList || !existsNameInDsList(dataSet.getName())) {
+	    	if (inDsList) {
+	    		incl.removeAll(dataSet.getActiveCols());
+	    	} else {
+	    		dsList.add(dataSet);
+	    	}
+	    	
+	    	dataSet.activateAllCols();
+			incl.addAll(dataSet.getActiveCols());
+			
+			updatePanel();
 		}
-		List<String> nameList = new LinkedList<>();
-		nameList.addAll(Arrays.asList(names));
-		incl.addAll(nameList);
-		dsMap.put(dataSet, nameList);
-		
-		updatePanel();
     }
     
     private void removeFromIncludeList(List<String> names) {
     	Map<String, List<String>> remCols = new LinkedHashMap<>();
     	
-    	// TODO check here for faults again
     	Iterator<String> iter = names.iterator();
     	while (iter.hasNext()) {
     		String colName = iter.next();
@@ -274,17 +328,15 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     		}
     	}
     	
-    	Hdf5DataSet<?>[] dataSets = dsMap.keySet().toArray(new Hdf5DataSet<?>[] {});
-    	for (Hdf5DataSet<?> dataSet: dataSets) {
+    	Iterator<Hdf5DataSet<?>> iterDS = dsList.iterator();
+    	while (iterDS.hasNext()) {
+    		Hdf5DataSet<?> dataSet = iterDS.next();
+    		
     		if (remCols.containsKey(dataSet.getName())) {
-    			List<String> dsMapList = dsMap.get(dataSet);
-    			List<String> remColList = remCols.get(dataSet.getName());
+    			dataSet.getActiveCols().removeAll(remCols.get(dataSet.getName()));
     			
-    			if (dsMapList.equals(remColList)) {
-    				dsMap.remove(dataSet);
-    			} else {
-    				dsMap.get(dataSet).removeAll(remColList);
-    				System.out.println(remColList.toString());
+    			if (dataSet.getActiveCols().isEmpty()) {
+    				dsList.remove(dataSet);
     			}
     		}
     	}

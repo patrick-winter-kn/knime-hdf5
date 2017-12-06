@@ -2,6 +2,8 @@ package org.knime.hdf5.lib;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 
 import org.knime.core.data.DataCell;
 import org.knime.core.data.def.DoubleCell;
@@ -15,19 +17,17 @@ import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5Exception;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
-//TODO when creating a dataSet, it should also check for groups with the same name!
-//TODO same vice versa
-
 public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 
 	private long m_dataspaceId = -1;
 	
-	// TODO the dimensions array shouldn't contain the stringLength
 	private long[] m_dimensions;
+	
+	private List<String> m_activeCols = new LinkedList<>();
 	
 	private long m_stringLength;
 	
-	private Hdf5DataType m_type;
+	private final Hdf5DataType m_type;
 	
 	/**
 	 * Creates a dataSet of the type of {@code type}. <br>
@@ -42,50 +42,12 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * @param type
 	 */
 	private Hdf5DataSet(final Hdf5Group parent, final String name, long[] dimensions,
-			long stringLength, Hdf5DataType type, boolean create) {
+			long stringLength, final Hdf5DataType type, boolean create) {
 		super(name, parent.getFilePath());
 		m_type = type;
 
 		if (create) {
-			setDimensions(dimensions);
-
-			if (getType().isString()) {
-				setStringLength(stringLength);
-				long filetypeId = -1;
-				long memtypeId = -1;
-				
-				// Create file and memory datatypes. For this example we will save
-				// the strings as FORTRAN strings, therefore they do not need space
-				// for the null terminator in the file.
-				try {
-					filetypeId = H5.H5Tcopy(HDF5Constants.H5T_FORTRAN_S1);
-					if (filetypeId >= 0) {
-						H5.H5Tset_size(filetypeId, getStringLength());
-					}
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-				
-				try {
-					memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-					if (memtypeId >= 0) {
-						H5.H5Tset_size(memtypeId, getStringLength() + 1);
-					}
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-				
-				getType().getConstants()[0] = filetypeId;
-				getType().getConstants()[1] = memtypeId;
-        	}
-			
-        	// Create the data space for the dataset.
-	        try {
-	            setDataspaceId(H5.H5Screate_simple(getDimensions().length,
-	            		getDimensions(), null));
-	        } catch (Exception e) {
-	            e.printStackTrace();
-	        }
+			createDimensions(dimensions, stringLength);
 	        
 	        // Create the dataset.
 	        try {
@@ -97,13 +59,15 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	        		parent.addDataSet(this);
 	                setOpen(true);
 		        }
-	        } catch (Exception e2) {
-	            e2.printStackTrace();
+	        } catch (Exception e) {
+	            e.printStackTrace();
 	        }
 		} else {
 			parent.addDataSet(this);
 			open();
 		}
+		
+		activateAllCols();
 	}
 	
 	/**
@@ -140,6 +104,15 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			return null;
 		}
 	}
+	
+	private static String getLastNumBlock(String in) {
+    	int start = in.length();
+    	char[] toks = in.toCharArray();
+    	while (start > 0 && Character.isDigit(toks[start-1])) {
+    		start--;
+    	}
+    	return in.substring(start);
+    }
 
 	private long getDataspaceId() {
 		return m_dataspaceId;
@@ -149,13 +122,20 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		m_dataspaceId = dataspaceId;
 	}
 
-	// it is needed long[] because of the method H5.H5Screate_simple[int, long[], long[]]
 	public long[] getDimensions() {
 		return m_dimensions;
 	}
 	
 	private void setDimensions(long[] dimensions) {
 		m_dimensions = dimensions;
+	}
+
+	public List<String> getActiveCols() {
+		return m_activeCols;
+	}
+
+	private void setActiveCols(List<String> m_activeCols) {
+		this.m_activeCols = m_activeCols;
 	}
 
 	public long getStringLength() {
@@ -170,10 +150,48 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return m_type;
 	}
 
-	public void setType(Hdf5DataType type) {
-		m_type = type;
+	private void createDimensions(long[] dimensions, long stringLength) {
+		setDimensions(dimensions);
+		
+		if (getType().isString()) {
+			setStringLength(stringLength);
+			long filetypeId = -1;
+			long memtypeId = -1;
+			
+			// Create file and memory datatypes. For this example we will save
+			// the strings as FORTRAN strings, therefore they do not need space
+			// for the null terminator in the file.
+			try {
+				filetypeId = H5.H5Tcopy(HDF5Constants.H5T_FORTRAN_S1);
+				if (filetypeId >= 0) {
+					H5.H5Tset_size(filetypeId, getStringLength());
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			
+			try {
+				memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+				if (memtypeId >= 0) {
+					H5.H5Tset_size(memtypeId, getStringLength() + 1);
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			
+			getType().getConstants()[0] = filetypeId;
+			getType().getConstants()[1] = memtypeId;
+    	}
+		
+    	// Create the data space for the dataset.
+        try {
+            setDataspaceId(H5.H5Screate_simple(getDimensions().length,
+            		getDimensions(), null));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 	}
-
+	
 	public long numberOfValues() {
 		return numberOfValuesRange(0, getDimensions().length);
 	}
@@ -200,13 +218,37 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return 0;
 	}
 	
+	public void activateAllCols() {
+		List<String> colList = new LinkedList<>();
+		
+		int colNum = (int) numberOfValuesRange(1, getDimensions().length);
+		for (int i = 0; i < colNum; i++) {
+			colList.add(getName() + i);
+		}
+		setActiveCols(colList);
+	}
+	
+	public int[] getActiveColIds() {
+		int[] colIds = new int[getActiveCols().size()];
+		Iterator<String> iter = getActiveCols().iterator();
+		int i = 0;
+		
+		while (iter.hasNext()) {
+			String colName = iter.next();
+			colIds[i] = Integer.parseInt(getLastNumBlock(colName));
+			i++;
+		}
+
+		return colIds;
+	}
+	
 	/**
 	 * 
 	 * @param dataIn
 	 * @return {@code true} if the dataSet was written otherwise {@code false}
 	 */
 	public boolean write(Type[] dataIn) {
-		// Write the data to the dataset.
+		// Write the data to the dataSet.
         try {
 			if (getType().isString()) {
 	        	if (isOpen() && (getType().getConstants()[1] >= 0)) {
@@ -311,7 +353,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * Updates the dimensions array after opening a dataset to ensure that the
 	 * dimensions array is correct.
 	 */
-	public void updateDimensions() {
+	private void updateDimensions() {
 		// Get dataspace and allocate memory for read buffer.
 		try {
 			if (isOpen()) {

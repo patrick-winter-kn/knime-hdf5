@@ -16,7 +16,6 @@ public class Hdf5File extends Hdf5Group {
 	
 	private static final List<Hdf5File> ALL_FILES = new LinkedList<>();
 
-
 	/* TODO when opening the file: make a backup of the file because sometimes there were some things wrong with datasets/groups in it
 	 * it happened when ...
 	 * - creating dataset/group with the same name directly after deleting it in HDFView (not always, only when there were (x is a name) x, x(1), x(2), x(3) and deleted and readded x(2))

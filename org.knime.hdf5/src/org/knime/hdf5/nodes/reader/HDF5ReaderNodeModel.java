@@ -2,7 +2,6 @@ package org.knime.hdf5.nodes.reader;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -31,8 +30,6 @@ import org.knime.hdf5.lib.Hdf5DataType;
 import org.knime.hdf5.lib.Hdf5File;
 
 public class HDF5ReaderNodeModel extends NodeModel {
-
-    private Hdf5DataSet<?>[] m_dataSets;
     
 	protected HDF5ReaderNodeModel() {
 		super(0, 1);
@@ -41,108 +38,92 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	@SuppressWarnings("unchecked")
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		if (m_dataSets.length == 0) {
+		Hdf5DataSet<?>[] dataSets = HDF5ReaderNodeDialog.dsList.toArray(new Hdf5DataSet<?>[] {});
+		
+		if (dataSets.length == 0) {
 			NodeLogger.getLogger("HDF5 Files").error("No dataSet to use", new NullPointerException());
 			throw new NullPointerException();
 		}
-
-		Hdf5File file = Hdf5File.createFile(m_dataSets[0].getFilePath());
+		
+		Hdf5File file = Hdf5File.createFile(dataSets[0].getFilePath());
 		BufferedDataContainer outContainer = exec.createDataContainer(createOutSpec());
 		
 		int maxRows = 0;
-		for (Hdf5DataSet<?> dataSet: m_dataSets) {
+		for (Hdf5DataSet<?> dataSet: dataSets) {
 			dataSet.open();
-			System.out.println(dataSet.getPathFromFile() + "/" + dataSet.getName());
+			NodeLogger.getLogger("HDF5 Files").info("Read dataSet " + dataSet.getPathFromFile() + "/" + dataSet.getName());
 			
 			int rowNum = (int) dataSet.getDimensions()[0];
 			maxRows = rowNum > maxRows ? rowNum : maxRows;
 		}
 		DataRow[] rows = new DataRow[maxRows];
 		
-		System.out.println("Length: "+ m_dataSets.length + ", " + Arrays.toString(m_dataSets));
-		
-		for (int i = 0; i < m_dataSets.length; i++) {
-			if (m_dataSets[i].getType() == Hdf5DataType.INTEGER) {
-				Hdf5DataSet<Integer> dataSet = (Hdf5DataSet<Integer>) m_dataSets[i];
-				
-				long[] dimensions = dataSet.getDimensions();
+		for (int i = 0; i < dataSets.length; i++) {
+			if (dataSets[i].getType() == Hdf5DataType.INTEGER) {
+				Hdf5DataSet<Integer> dataSet = (Hdf5DataSet<Integer>) dataSets[i];
 				pushFlowVariables(dataSet);
-				
 				Integer[] dataRead = dataSet.read(new Integer[(int) dataSet.numberOfValues()]);
 
+				long[] dimensions = dataSet.getDimensions();
 				int rowNum = (int) dimensions[0];
 				int colNum = (int) dataSet.numberOfValuesRange(1, dimensions.length);
-				
-				for (int rc = 0; rc < rowNum * colNum; rc++) {
-					System.out.println("Read Value " + i + "|" + rc + ": " + dataRead[rc]);
-				}
+				int[] colIds = dataSet.getActiveColIds();
 
-				for (int c = 0; c < colNum; c++) {
+				for (int c = 0; c < colIds.length; c++) {
 					for (int r = 0; r < maxRows; r++) {
-						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + c] : 0));
+						//System.out.println("Read Integer in " + dataSet.getName() + ": (" + colIds[c] + ", " + r + ") = " + (r < rowNum ? dataRead[r * colNum + colIds[c]] : 0));
+						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + colIds[c]] : 0));
 						rows[r] = (i == 0 && c == 0) ? row : new JoinedRow(rows[r], row);
 					}
 				}
-			} else if (m_dataSets[i].getType() == Hdf5DataType.LONG) {
-				Hdf5DataSet<Long> dataSet = (Hdf5DataSet<Long>) m_dataSets[i];
-			
-				long[] dimensions = dataSet.getDimensions();
+			} else if (dataSets[i].getType() == Hdf5DataType.LONG) {
+				Hdf5DataSet<Long> dataSet = (Hdf5DataSet<Long>) dataSets[i];
 				pushFlowVariables(dataSet);
-				
 				Long[] dataRead = dataSet.read(new Long[(int) dataSet.numberOfValues()]);
-	
+
+				long[] dimensions = dataSet.getDimensions();
 				int rowNum = (int) dimensions[0];
 				int colNum = (int) dataSet.numberOfValuesRange(1, dimensions.length);
-				
-				for (int rc = 0; rc < rowNum * colNum; rc++) {
-					System.out.println("Read Value " + i + "|" + rc + ": " + dataRead[rc]);
-				}
-	
-				for (int c = 0; c < colNum; c++) {
+				int[] colIds = dataSet.getActiveColIds();
+
+				for (int c = 0; c < colIds.length; c++) {
 					for (int r = 0; r < maxRows; r++) {
-						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + c] : 0L));
+						//System.out.println("Read Long in " + dataSet.getName() + ": (" + colIds[c] + ", " + r + ") = " + (r < rowNum ? dataRead[r * colNum + colIds[c]] : 0L));
+						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + colIds[c]] : 0L));
 						rows[r] = (i == 0 && c == 0) ? row : new JoinedRow(rows[r], row);
 					}
 				}
-			} else if (m_dataSets[i].getType() == Hdf5DataType.DOUBLE) {
-				Hdf5DataSet<Double> dataSet = (Hdf5DataSet<Double>) m_dataSets[i];
-			
-				long[] dimensions = dataSet.getDimensions();
+			} else if (dataSets[i].getType() == Hdf5DataType.DOUBLE) {
+				Hdf5DataSet<Double> dataSet = (Hdf5DataSet<Double>) dataSets[i];
 				pushFlowVariables(dataSet);
-				
 				Double[] dataRead = dataSet.read(new Double[(int) dataSet.numberOfValues()]);
-	
+
+				long[] dimensions = dataSet.getDimensions();
 				int rowNum = (int) dimensions[0];
 				int colNum = (int) dataSet.numberOfValuesRange(1, dimensions.length);
+				int[] colIds = dataSet.getActiveColIds();
 				
-				for (int rc = 0; rc < rowNum * colNum; rc++) {
-					System.out.println("Read Value " + i + "|" + rc + ": " + dataRead[rc]);
-				}
-	
-				for (int c = 0; c < colNum; c++) {
+				for (int c = 0; c < colIds.length; c++) {
 					for (int r = 0; r < maxRows; r++) {
-						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + c] : 0.0));
+						//System.out.println("Read Double in " + dataSet.getName() + ": (" + colIds[c] + ", " + r + ") = " + (r < rowNum ? dataRead[r * colNum + colIds[c]] : 0.0));
+						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + colIds[c]] : 0.0));
 						rows[r] = (i == 0 && c == 0) ? row : new JoinedRow(rows[r], row);
 					}
 				}
-			} else if (m_dataSets[i].getType() == Hdf5DataType.STRING) {
-				Hdf5DataSet<String> dataSet = (Hdf5DataSet<String>) m_dataSets[i];
-			
-				long[] dimensions = dataSet.getDimensions();
+			} else if (dataSets[i].getType() == Hdf5DataType.STRING) {
+				Hdf5DataSet<String> dataSet = (Hdf5DataSet<String>) dataSets[i];
 				pushFlowVariables(dataSet);
-				
 				String[] dataRead = dataSet.read(new String[(int) dataSet.numberOfValues()]);
-	
+
+				long[] dimensions = dataSet.getDimensions();
 				int rowNum = (int) dimensions[0];
 				int colNum = (int) dataSet.numberOfValuesRange(1, dimensions.length);
-				
-				for (int rc = 0; rc < rowNum * colNum; rc++) {
-					System.out.println("Read Value " + i + "|" + rc + ": " + dataRead[rc]);
-				}
-	
-				for (int c = 0; c < colNum; c++) {
+				int[] colIds = dataSet.getActiveColIds();
+
+				for (int c = 0; c < colIds.length; c++) {
 					for (int r = 0; r < maxRows; r++) {
-						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + c] : ""));
+						//System.out.println("Read String in " + dataSet.getName() + ": (" + colIds[c] + ", " + r + ") = " + (r < rowNum ? dataRead[r * colNum + colIds[c]] : ""));
+						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + colIds[c]] : ""));
 						rows[r] = (i == 0 && c == 0) ? row : new JoinedRow(rows[r], row);
 					}
 				}
@@ -163,20 +144,28 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	
 	private void pushFlowVariables(Hdf5DataSet<?> dataSet) {
 		List<String> attrs = dataSet.loadAttributeNames();
+		
 		Iterator<String> iter = attrs.iterator();
 		while (iter.hasNext()) {
 			String name = iter.next();
 			Hdf5Attribute<?> attr = dataSet.getAttribute(name);
-			if (attr.getType() == Hdf5DataType.INTEGER) {
-				for (int i = 0; i < attr.getValue().length; i++) {
-					pushFlowVariableInt(attr.getName() + i, (Integer) attr.getValue()[i]);
+			if (attr != null) {
+				int attrNum = attr.getValue().length;
+				
+				if (attr.getType() == Hdf5DataType.INTEGER) {
+					for (int i = attrNum - 1; i >= 0; i--) {
+						// TODO maybe only add dataSet name to attr name if the attr name would exist more than once
+						pushFlowVariableInt(dataSet.getName() + "/" + attr.getName() + (attrNum == 1 ? "" : i), (Integer) attr.getValue()[i]);
+					}
+					
+				} else if (attr.getType() == Hdf5DataType.DOUBLE) {
+					for (int i = attrNum - 1; i >= 0; i--) {
+						pushFlowVariableDouble(dataSet.getName() + "/" + attr.getName() + (attrNum == 1 ? "" : i), (Double) attr.getValue()[i]);
+					}
+					
+				} else if (attr.getType() == Hdf5DataType.STRING) {
+					pushFlowVariableString(dataSet.getName() + "/" + attr.getName(), (String) attr.getValue()[0]);
 				}
-			} else if (attr.getType() == Hdf5DataType.DOUBLE) {
-				for (int i = 0; i < attr.getValue().length; i++) {
-					pushFlowVariableDouble(attr.getName() + i, (Double) attr.getValue()[i]);
-				}
-			} else if (attr.getType() == Hdf5DataType.STRING) {
-				pushFlowVariableString(attr.getName(), (String) attr.getValue()[0]);
 			}
 		}
 	}
@@ -184,22 +173,20 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	private DataTableSpec createOutSpec() {
 		List<DataColumnSpec> colSpecList = new LinkedList<>();
 
-		m_dataSets = HDF5ReaderNodeDialog.dsMap.keySet().toArray(new Hdf5DataSet<?>[] {});
+		Iterator<Hdf5DataSet<?>> iterDS = HDF5ReaderNodeDialog.dsList.iterator();
 		
-		System.out.println("Datasets: " + Arrays.toString(m_dataSets));
-		
-		for (Hdf5DataSet<?> dataSet: m_dataSets) {
+		while (iterDS.hasNext()) {
+			Hdf5DataSet<?> dataSet = iterDS.next();
 			Hdf5DataType dataType = dataSet.getType();
 			DataType type = dataType.getColumnType();
 			
-			Iterator<String> iterIncl = HDF5ReaderNodeDialog.dsMap.get(dataSet).iterator();
+			Iterator<String> iterIncl = dataSet.getActiveCols().iterator();
 			while (iterIncl.hasNext()) {
 				colSpecList.add(new DataColumnSpecCreator(iterIncl.next(), type).createSpec());
 			}
 		}
 		
 		DataColumnSpec[] colSpecs = colSpecList.toArray(new DataColumnSpec[] {});
-		System.out.println("Columns: " + Arrays.toString(colSpecs));
         return new DataTableSpec(colSpecs);
     }
 	

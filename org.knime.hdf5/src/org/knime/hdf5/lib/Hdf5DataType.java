@@ -4,6 +4,8 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.activation.UnsupportedDataTypeException;
+
 import org.knime.core.data.DataType;
 import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
@@ -16,7 +18,6 @@ import hdf.hdf5lib.HDF5Constants;
 public enum Hdf5DataType {
 	UNKNOWN(-1),		// data type is unknown
 	INTEGER(0),			// data type is an Integer
-	// TODO look here again because FlowVariables cannot be a Long
 	LONG(1),			// data type is a Long
 	DOUBLE(2),			// data type is a Double
 	STRING(3);			// data type is a String (by using Byte)
@@ -29,6 +30,7 @@ public enum Hdf5DataType {
 	}
 
 	private final int m_typeId;
+	
 	private final long[] m_constants = new long[2];
 
 	Hdf5DataType(final int typeId) {
@@ -52,7 +54,7 @@ public enum Hdf5DataType {
 			// for Hdf5Attribute: m_constants will get values in Hdf5TreeElement.addAttribute() or updateDimension()
 			break;
 		default:
-			NodeLogger.getLogger("HDF5 Files").info("Other datatypes than Integer, Long, Double and String is not supported");
+			NodeLogger.getLogger("HDF5 Files").info("Other datatypes than Integer, Long, Double and String are not supported");
 		}
 	}
 	
@@ -63,7 +65,6 @@ public enum Hdf5DataType {
 	public static int getTypeIdByArray(Object[] objects) {
 		String type = objects.getClass().getComponentType().toString();
 		String pack = "class java.lang.";
-		System.out.println("Type: " + type);
 		if (type.equals(pack + "Integer")) {
 			return 0;
 		} else if (type.equals(pack + "Long")) {
@@ -73,7 +74,7 @@ public enum Hdf5DataType {
 		} else if (type.equals(pack + "String")) {
 			return 3;
 		} else {
-			// TODO Exception
+			NodeLogger.getLogger("HDF5 Files").error("Datatype is not supported", new UnsupportedDataTypeException());
 			return -1;
 		}
 	}
