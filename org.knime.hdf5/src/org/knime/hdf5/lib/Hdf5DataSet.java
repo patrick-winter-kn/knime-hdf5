@@ -2,8 +2,6 @@ package org.knime.hdf5.lib;
 
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
 
 import org.knime.core.data.DataCell;
 import org.knime.core.data.def.DoubleCell;
@@ -22,8 +20,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	private long m_dataspaceId = -1;
 	
 	private long[] m_dimensions;
-	
-	private List<String> m_activeCols = new LinkedList<>();
 	
 	private long m_stringLength;
 	
@@ -66,8 +62,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			parent.addDataSet(this);
 			open();
 		}
-		
-		activateAllCols();
 	}
 	
 	/**
@@ -104,15 +98,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			return null;
 		}
 	}
-	
-	private static String getLastNumBlock(String in) {
-    	int start = in.length();
-    	char[] toks = in.toCharArray();
-    	while (start > 0 && Character.isDigit(toks[start-1])) {
-    		start--;
-    	}
-    	return in.substring(start);
-    }
 
 	private long getDataspaceId() {
 		return m_dataspaceId;
@@ -128,14 +113,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	private void setDimensions(long[] dimensions) {
 		m_dimensions = dimensions;
-	}
-
-	public List<String> getActiveCols() {
-		return m_activeCols;
-	}
-
-	private void setActiveCols(List<String> m_activeCols) {
-		this.m_activeCols = m_activeCols;
 	}
 
 	public long getStringLength() {
@@ -216,30 +193,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		NodeLogger.getLogger("HDF5 Files").error("Hdf5DataSet.numberOfValuesRange(" + fromIndex + ", " + toIndex
 				+ "): is out of range (0, " + getDimensions().length + ")", new IllegalArgumentException());
 		return 0;
-	}
-	
-	public void activateAllCols() {
-		List<String> colList = new LinkedList<>();
-		
-		int colNum = (int) numberOfValuesRange(1, getDimensions().length);
-		for (int i = 0; i < colNum; i++) {
-			colList.add(getName() + i);
-		}
-		setActiveCols(colList);
-	}
-	
-	public int[] getActiveColIds() {
-		int[] colIds = new int[getActiveCols().size()];
-		Iterator<String> iter = getActiveCols().iterator();
-		int i = 0;
-		
-		while (iter.hasNext()) {
-			String colName = iter.next();
-			colIds[i] = Integer.parseInt(getLastNumBlock(colName));
-			i++;
-		}
-
-		return colIds;
 	}
 	
 	/**

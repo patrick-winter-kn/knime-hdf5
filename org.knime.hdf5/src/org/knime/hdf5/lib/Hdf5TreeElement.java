@@ -97,6 +97,17 @@ abstract public class Hdf5TreeElement {
 	protected void setParent(Hdf5Group parent) {
 		m_parent = parent;
 	}
+	
+	public String getPathWithoutFileName() {
+		final String ext = ".h5/";
+		String path = getPathFromFile() + (this instanceof Hdf5DataSet<?> ? "/" : "") + getName();
+		
+		if (path.contains(ext)) {
+			path = path.substring(path.indexOf(ext) + ext.length());
+		}
+		
+		return path;
+	}
 
 	public Hdf5Attribute<?> getAttribute(final String name) {
 		Iterator<Hdf5Attribute<?>> iter = getAttributes().iterator();

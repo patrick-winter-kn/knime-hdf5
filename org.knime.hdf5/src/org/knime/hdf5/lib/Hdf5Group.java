@@ -246,6 +246,21 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return dataSet;
 	}
 	
+	public Hdf5DataSet<?> getDataSetByPath(String path) {
+		Hdf5DataSet<?> dataSet = null;
+		
+		if (path.contains("/")) {
+			Hdf5Group group = getGroup(path.substring(0, path.indexOf("/")));
+			if (group != null) {
+				dataSet = group.getDataSetByPath(path.substring(path.indexOf("/") + 1));
+			}
+		} else {
+			dataSet = getDataSet(path);
+		}
+		
+		return dataSet;
+	}
+	
 	public boolean existsGroup(final String name) {
 		List<String> groupNames = loadGroupNames();
 		
@@ -340,6 +355,25 @@ public class Hdf5Group extends Hdf5TreeElement {
 			Collections.addAll(names, dataSetNames);
 		}
 		return names;
+	}
+	
+	public List<String> getAllDataSetPaths() {
+		List<String> paths = new LinkedList<>();
+		String path = getPathWithoutFileName();
+		
+		Iterator<String> iterDS = loadDataSetNames().iterator();
+		while (iterDS.hasNext()) {
+			paths.add(path + "/" + iterDS.next());
+		}
+		
+		Iterator<String> iterG = loadGroupNames().iterator();
+		while (iterG.hasNext()) {
+			Hdf5Group group = getGroup(iterG.next());
+			paths.addAll(group.getAllDataSetPaths());
+			group.close();
+		}
+		
+		return paths;
 	}
 	
 	Hdf5DataType findDataSetType(String name) {
