@@ -73,8 +73,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 				for (int c = 0; c < colNum; c++) {
 					for (int r = 0; r < maxRows; r++) {
-						//System.out.println("Read Integer in " + dataSet.getName() + ": (" + colIds[c] + ", " + r + ") = " + (r < rowNum ? dataRead[r * colNum + colIds[c]] : 0));
-						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + c] : 0));
+						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum, r < rowNum ? dataRead[r * colNum + c] : 0));
 						rows[r] = (i == 0 && c == 0) ? row : new JoinedRow(rows[r], row);
 					}
 				}
@@ -89,8 +88,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 				for (int c = 0; c < colNum; c++) {
 					for (int r = 0; r < maxRows; r++) {
-						//System.out.println("Read Long in " + dataSet.getName() + ": (" + colIds[c] + ", " + r + ") = " + (r < rowNum ? dataRead[r * colNum + colIds[c]] : 0L));
-						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + c] : 0L));
+						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum, r < rowNum ? dataRead[r * colNum + c] : 0L));
 						rows[r] = (i == 0 && c == 0) ? row : new JoinedRow(rows[r], row);
 					}
 				}
@@ -105,8 +103,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				
 				for (int c = 0; c < colNum; c++) {
 					for (int r = 0; r < maxRows; r++) {
-						//System.out.println("Read Double in " + dataSet.getName() + ": (" + colIds[c] + ", " + r + ") = " + (r < rowNum ? dataRead[r * colNum + colIds[c]] : 0.0));
-						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + c] : 0.0));
+						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum, r < rowNum ? dataRead[r * colNum + c] : 0.0));
 						rows[r] = (i == 0 && c == 0) ? row : new JoinedRow(rows[r], row);
 					}
 				}
@@ -121,8 +118,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				
 				for (int c = 0; c < colNum; c++) {
 					for (int r = 0; r < maxRows; r++) {
-						//System.out.println("Read String in " + dataSet.getName() + ": (" + colIds[c] + ", " + r + ") = " + (r < rowNum ? dataRead[r * colNum + colIds[c]] : ""));
-						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum ? dataRead[r * colNum + c] : ""));
+						DefaultRow row = new DefaultRow("Row" + r, dataSet.getDataCell(r < rowNum, r < rowNum ? dataRead[r * colNum + c] : ""));
 						rows[r] = (i == 0 && c == 0) ? row : new JoinedRow(rows[r], row);
 					}
 				}
@@ -152,19 +148,19 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				int attrNum = attr.getValue().length;
 				String path = dataSet.getPathWithoutFileName() + "/" + attr.getName();
 				
-				if (attr.getType() == Hdf5DataType.INTEGER) {
-					for (int i = attrNum - 1; i >= 0; i--) {
+				if (attrNum == 1) {
+					if (attr.getType() == Hdf5DataType.INTEGER) {
 						// TODO maybe only add dataSet name to attr name if the attr name would exist more than once
-						pushFlowVariableInt(path + (attrNum == 1 ? "" : i), (Integer) attr.getValue()[i]);
+						pushFlowVariableInt(path, (Integer) attr.getValue()[0]);
+						
+					} else if (attr.getType() == Hdf5DataType.DOUBLE) {
+						pushFlowVariableDouble(path, (Double) attr.getValue()[0]);
+						
+					} else if (attr.getType() == Hdf5DataType.STRING) {
+						pushFlowVariableString(path, "" + attr.getValue()[0]);
 					}
-					
-				} else if (attr.getType() == Hdf5DataType.DOUBLE) {
-					for (int i = attrNum - 1; i >= 0; i--) {
-						pushFlowVariableDouble(path + (attrNum == 1 ? "" : i), (Double) attr.getValue()[i]);
-					}
-					
-				} else if (attr.getType() == Hdf5DataType.STRING) {
-					pushFlowVariableString(path, (String) attr.getValue()[0]);
+				} else {
+					pushFlowVariableString(path, Arrays.toString(attr.getValue()));
 				}
 			}
 		}

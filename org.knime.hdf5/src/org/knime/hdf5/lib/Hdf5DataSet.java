@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 
 import org.knime.core.data.DataCell;
+import org.knime.core.data.MissingCell;
 import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
 import org.knime.core.data.def.LongCell;
@@ -269,7 +270,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return null;
 	}
 	
-	public DataCell getDataCell(Type value) {
+	public DataCell getDataCell(boolean valid, Type value) {
+		if (!valid) {
+			return new MissingCell("(null) on joining dataSets");
+		}
+		
 		switch (getType()) {
 		case INTEGER:
 			return new IntCell((int) value);

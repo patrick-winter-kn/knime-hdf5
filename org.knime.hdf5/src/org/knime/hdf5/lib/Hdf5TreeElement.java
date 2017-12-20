@@ -4,8 +4,6 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
-import javax.activation.UnsupportedDataTypeException;
-
 import org.knime.core.node.NodeLogger;
 
 import hdf.hdf5lib.H5;
@@ -99,8 +97,12 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	public String getPathWithoutFileName() {
+		if (this instanceof Hdf5File) {
+			return "";
+		}
+		
 		final String ext = ".h5/";
-		String path = getPathFromFile() + (this instanceof Hdf5DataSet<?> ? "/" : "") + getName();
+		String path = getPathFromFile() + (this instanceof Hdf5DataSet<?> ? "/" : "") + getName() + (this instanceof Hdf5Group ? "/" : "");
 		
 		if (path.contains(ext)) {
 			path = path.substring(path.indexOf(ext) + ext.length());
@@ -166,6 +168,7 @@ abstract public class Hdf5TreeElement {
 			long attributeId = -1;
 			String dataType = "";
 			int size = 0;
+			
 			try {
 				attributeId = H5.H5Aopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 				long filetypeId = H5.H5Aget_type(attributeId);
@@ -176,19 +179,8 @@ abstract public class Hdf5TreeElement {
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
 			}
-			if (dataType.equals("H5T_INTEGER") && size == 4) {
-				return Hdf5DataType.INTEGER;
-			} else if (dataType.equals("H5T_INTEGER") && size == 8) {
-				NodeLogger.getLogger("HDF5 Files").error("Datatype Long is not supported for Flow Variables", new UnsupportedDataTypeException());
-				return Hdf5DataType.LONG;
-			} else if (dataType.equals("H5T_FLOAT") && size == 8) {
-				return Hdf5DataType.DOUBLE;
-			} else if (dataType.equals("H5T_STRING")) {
-				return Hdf5DataType.STRING;
-			} else {
-				NodeLogger.getLogger("HDF5 Files").error("Datatype is not supported", new UnsupportedDataTypeException());
-				return Hdf5DataType.UNKNOWN;
-			}
+			
+			return Hdf5DataType.getInstance(dataType, size, false);
 		} else {
 			NodeLogger.getLogger("HDF5 Files").error("There isn't an attribute with this name in this treeElement!",
 					new IllegalArgumentException());

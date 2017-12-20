@@ -35,27 +35,56 @@ public enum Hdf5DataType {
 
 	Hdf5DataType(final int typeId) {
 		m_typeId = typeId;
+	}
 
-		switch (m_typeId) {
-		case 0: 
-			m_constants[0] = HDF5Constants.H5T_STD_I32LE;
-			m_constants[1] = HDF5Constants.H5T_NATIVE_INT32;
-			break;
-		case 1: 
-			m_constants[0] = HDF5Constants.H5T_STD_I64LE;
-			m_constants[1] = HDF5Constants.H5T_NATIVE_INT64;
-			break;
-		case 2: 
-			m_constants[0] = HDF5Constants.H5T_IEEE_F64LE;
-			m_constants[1] = HDF5Constants.H5T_NATIVE_DOUBLE;
-			break;
-		case 3:
-			// for Hdf5DataSet: m_constants will get values in constructor or updateDimensions()
-			// for Hdf5Attribute: m_constants will get values in Hdf5TreeElement.addAttribute() or updateDimension()
-			break;
-		default:
-			NodeLogger.getLogger("HDF5 Files").info("Other datatypes than Integer, Long, Double and String are not supported");
+	/**
+	 * 
+	 * @param type dataType class name (H5T_<<DATATYPE>>)
+	 * @param size size in byte
+	 */
+	public static Hdf5DataType getInstance(String type, int size, boolean fromDS) {
+		Hdf5DataType dataType = Hdf5DataType.UNKNOWN;
+		
+		if (type.equals("H5T_INTEGER") && size <= 4) {
+			dataType = Hdf5DataType.INTEGER;
+		} else if (fromDS && type.equals("H5T_INTEGER") && size <= 8) {
+			dataType = Hdf5DataType.LONG;
+		} else if (type.equals("H5T_INTEGER") && size > 4 || type.equals("H5T_FLOAT")) {
+			dataType = Hdf5DataType.DOUBLE;
+		} else {
+			dataType = Hdf5DataType.STRING;
 		}
+		
+		if (type.equals("H5T_INTEGER")) {
+			if (size == 1) {
+				dataType.m_constants[0] = HDF5Constants.H5T_STD_I8LE;
+				dataType.m_constants[1] = HDF5Constants.H5T_NATIVE_INT8;
+			} else if (size == 2) {
+				dataType.m_constants[0] = HDF5Constants.H5T_STD_I16LE;
+				dataType.m_constants[1] = HDF5Constants.H5T_NATIVE_INT16;
+			} else if (size == 4) {
+				dataType.m_constants[0] = HDF5Constants.H5T_STD_I32LE;
+				dataType.m_constants[1] = HDF5Constants.H5T_NATIVE_INT32;
+			} else if (size == 8) {
+				dataType.m_constants[0] = HDF5Constants.H5T_STD_I64LE;
+				dataType.m_constants[1] = HDF5Constants.H5T_NATIVE_INT64;
+			}
+		} else if (type.equals("H5T_FLOAT")) {
+			if (size == 4) {
+				dataType.m_constants[0] = HDF5Constants.H5T_IEEE_F32LE;
+				dataType.m_constants[1] = HDF5Constants.H5T_NATIVE_FLOAT;
+			} else if (size == 8) {
+				dataType.m_constants[0] = HDF5Constants.H5T_IEEE_F64LE;
+				dataType.m_constants[1] = HDF5Constants.H5T_NATIVE_DOUBLE;
+			}
+		} else if (type.equals("H5T_CHAR")) {
+			if (size == 4) {
+				dataType.m_constants[0] = HDF5Constants.H5T_C_S1;
+				dataType.m_constants[1] = HDF5Constants.H5T_NATIVE_CHAR;
+			}
+		}
+		
+		return dataType;
 	}
 	
 	public static Hdf5DataType get(int typeId) {

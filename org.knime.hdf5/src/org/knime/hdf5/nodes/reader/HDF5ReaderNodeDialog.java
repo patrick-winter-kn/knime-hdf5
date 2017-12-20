@@ -2,17 +2,12 @@ package org.knime.hdf5.nodes.reader;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.Arrays;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
 import javax.swing.JFileChooser;
 
-import org.knime.core.data.DataColumnSpec;
-import org.knime.core.data.DataColumnSpecCreator;
 import org.knime.core.data.DataTableSpec;
-import org.knime.core.data.DataType;
 import org.knime.core.node.FlowVariableModel;
 import org.knime.core.node.NodeDialogPane;
 import org.knime.core.node.NodeSettingsRO;
@@ -24,8 +19,6 @@ import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterPanel;
-import org.knime.hdf5.lib.Hdf5DataSet;
-import org.knime.hdf5.lib.Hdf5DataType;
 import org.knime.hdf5.lib.Hdf5File;
 
 // TODO it should close all Files before ending KNIME
@@ -100,7 +93,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
         m_filterPanel.update(incl, excl, names);
         
         
-        
+        /*
         List<DataColumnSpec> colSpecList = new LinkedList<>();
 		List<Hdf5DataSet<?>> dsList = new LinkedList<>();
 		
@@ -130,7 +123,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		//m_filterPanel.loadConfiguration(config, spec);
 
 		System.out.println("-> " + Arrays.toString(m_filterPanel.getExcludedNamesAsSet().toArray(new String[] {})));
-		System.out.println("-> " + Arrays.toString(m_filterPanel.getExcludeList().toArray()));
+		System.out.println("-> " + Arrays.toString(m_filterPanel.getExcludeList().toArray()));*/
     }
     
     /**

@@ -1,5 +1,7 @@
 package org.knime.hdf5.lib;
 
+import java.util.Arrays;
+
 import org.knime.core.node.NodeLogger;
 
 import hdf.hdf5lib.H5;
@@ -48,9 +50,6 @@ public class Hdf5Attribute<Type> {
 		Hdf5Attribute<?> attribute = null;
 		
 		Hdf5DataType dataType = treeElement.findAttributeType(name);
-		if (dataType == Hdf5DataType.UNKNOWN || dataType == Hdf5DataType.LONG) {
-			return null;
-		}
 		
 		long attributeId = -1;
 		try {
@@ -91,20 +90,50 @@ public class Hdf5Attribute<Type> {
 				}
 			}
 			
+			// TODO do it more simple 
 			if (dataType == Hdf5DataType.INTEGER) {
-				Integer[] data = new Integer[(int) dims[0]]; 
-				H5.H5Aread(attributeId, dataType.getConstants()[1], data);
-				attribute = new Hdf5Attribute<Integer>(name, data);
+				Integer[] dataInt = new Integer[(int) dims[0]];
+				if (dataType.getConstants()[1] == HDF5Constants.H5T_NATIVE_INT8) {
+					Byte[] data = new Byte[(int) dims[0]];
+					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
+					for (int i = 0; i < data.length; i++) {
+						dataInt[i] = (Integer) (int) (byte) data[i];
+					}
+				} else if (dataType.getConstants()[1] == HDF5Constants.H5T_NATIVE_INT16) {
+					Short[] data = new Short[(int) dims[0]];
+					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
+					for (int i = 0; i < data.length; i++) {
+						dataInt[i] = (Integer) (int) (short) data[i];
+					}
+				} else {
+					Integer[] data = new Integer[(int) dims[0]];
+					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
+					dataInt = Arrays.copyOf(data, data.length);
+				}
 				
-			} else if (dataType == Hdf5DataType.LONG) {
-				Long[] data = new Long[(int) dims[0]]; 
-				H5.H5Aread(attributeId, dataType.getConstants()[1], data);
-				attribute = new Hdf5Attribute<Long>(name, data);
+				attribute = new Hdf5Attribute<Integer>(name, dataInt);
 				
 			} else if (dataType == Hdf5DataType.DOUBLE) {
-				Double[] data = new Double[(int) dims[0]]; 
-				H5.H5Aread(attributeId, dataType.getConstants()[1], data);
-				attribute = new Hdf5Attribute<Double>(name, data);
+				Double[] dataDouble = new Double[(int) dims[0]];
+				if (dataType.getConstants()[1] == HDF5Constants.H5T_NATIVE_INT64) {
+					Long[] data = new Long[(int) dims[0]];
+					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
+					for (int i = 0; i < data.length; i++) {
+						dataDouble[i] = (Double) (double) (long) data[i];
+					}
+				} else if (dataType.getConstants()[1] == HDF5Constants.H5T_NATIVE_FLOAT) {
+					Float[] data = new Float[(int) dims[0]];
+					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
+					for (int i = 0; i < data.length; i++) {
+						dataDouble[i] = (Double) (double) (float) data[i];
+					}
+				} else {
+					Double[] data = new Double[(int) dims[0]];
+					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
+					dataDouble = Arrays.copyOf(data, data.length);
+				}
+				
+				attribute = new Hdf5Attribute<Double>(name, dataDouble);
 				
 			} else if (dataType == Hdf5DataType.STRING) {
 				byte[] dataByte = new byte[(int) dims[0]];

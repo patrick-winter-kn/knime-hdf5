@@ -363,7 +363,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		
 		Iterator<String> iterDS = loadDataSetNames().iterator();
 		while (iterDS.hasNext()) {
-			paths.add(path + "/" + iterDS.next());
+			paths.add(path + iterDS.next());
 		}
 		
 		Iterator<String> iterG = loadGroupNames().iterator();
@@ -389,18 +389,8 @@ public class Hdf5Group extends Hdf5TreeElement {
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
 			}
-			if (dataType.equals("H5T_INTEGER") && size == 4) {
-				return Hdf5DataType.INTEGER;
-			} else if (dataType.equals("H5T_INTEGER") && size == 8) {
-				return Hdf5DataType.LONG;
-			} else if (dataType.equals("H5T_FLOAT") && size == 8) {
-				return Hdf5DataType.DOUBLE;
-			} else if (dataType.equals("H5T_STRING")) {
-				return Hdf5DataType.STRING;
-			} else {
-				NodeLogger.getLogger("HDF5 Files").error("Datatype is not supported", new IllegalArgumentException());
-				return Hdf5DataType.UNKNOWN;
-			}
+			
+			return Hdf5DataType.getInstance(dataType, size, true);
 		} else {
 			NodeLogger.getLogger("HDF5 Files").error("There isn't a dataSet with this name in this group!",
 					new IllegalArgumentException());
