@@ -2,12 +2,16 @@ package org.knime.hdf5.nodes.reader;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
 import javax.swing.JFileChooser;
 
+import org.knime.core.data.DataColumnSpec;
+import org.knime.core.data.DataColumnSpecCreator;
 import org.knime.core.data.DataTableSpec;
+import org.knime.core.data.DataType;
 import org.knime.core.node.FlowVariableModel;
 import org.knime.core.node.NodeDialogPane;
 import org.knime.core.node.NodeSettingsRO;
@@ -19,6 +23,8 @@ import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterPanel;
+import org.knime.hdf5.lib.Hdf5DataSet;
+import org.knime.hdf5.lib.Hdf5DataType;
 import org.knime.hdf5.lib.Hdf5File;
 
 // TODO it should close all Files before ending KNIME
@@ -26,16 +32,12 @@ import org.knime.hdf5.lib.Hdf5File;
 class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 	
 	private final DataColumnSpecFilterPanel m_filterPanel;
-	
+
+    private DataColumnSpecFilterConfiguration m_conf;
+    
     private SettingsModelString m_source;
 
-    private FlowVariableModel m_sourceFvm;
-	
-	private List<String> excl = new LinkedList<>();
-	
-	private List<String> incl = new LinkedList<>();
-    
-	private String[] names = excl.toArray(new String[] {});
+    private FlowVariableModel m_sourceFvm;	
     
 	private Hdf5File file;
 	
@@ -55,7 +57,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     	addDialogComponent(source);
     	
         m_filterPanel = new DataColumnSpecFilterPanel();
-        super.addTab("Column Selector", m_filterPanel);
+        super.addTab("DataSet Selector", m_filterPanel);
         
     	// "Browse File"-Button
         DialogComponentButton fileButton = new DialogComponentButton("Browse File");
@@ -68,41 +70,25 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		        
 		        if (!newValue.equals("")) {
 		        	file = Hdf5File.createFile(newValue);
-		        	createExcludeList(file);
-		        	selectTab("Column Selector");
+		        	updateLists(file);
+		        	selectTab("DataSet Selector");
 		        }
 			}
         });
         addDialogComponent(fileButton);
     }
     
-    private void createExcludeList(Hdf5File file) {
-		excl.clear();
-    	excl.addAll(file.getAllDataSetPaths());
+    private void updateLists(Hdf5File file) {
+    	List<String> dsPaths = file.getAllDataSetPaths();
+    	List<Hdf5DataSet<?>> dsList = new LinkedList<>();
     	
-    	updatePanel();
-    }
-    
-    private void updatePanel() {
-    	names = new String[excl.size() + incl.size()];
-    	List<String> exclIncl = new LinkedList<>();
-    	exclIncl.addAll(excl);
-    	exclIncl.addAll(incl);
-    	names = exclIncl.toArray(names);
-    	
-        m_filterPanel.update(incl, excl, names);
-        
-        
-        /*
-        List<DataColumnSpec> colSpecList = new LinkedList<>();
-		List<Hdf5DataSet<?>> dsList = new LinkedList<>();
-		
-		Iterator<String> dsPaths = file.getAllDataSetPaths().iterator();
-		while (dsPaths.hasNext()) {
-			dsList.add(file.getDataSetByPath(dsPaths.next()));
+    	for (String path: dsPaths) {
+			dsList.add(file.getDataSetByPath(path));
 		}
-		
+    	
+    	List<DataColumnSpec> colSpecList = new LinkedList<>();
 		Iterator<Hdf5DataSet<?>> iterDS = dsList.iterator();
+		
 		while (iterDS.hasNext()) {
 			Hdf5DataSet<?> dataSet = iterDS.next();
 			Hdf5DataType dataType = dataSet.getType();
@@ -110,20 +96,26 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 			String path = dataSet.getPathWithoutFileName();
 			
 			colSpecList.add(new DataColumnSpecCreator(path, type).createSpec());
-
-			System.out.println("-> ");
 		}
 		
 		DataColumnSpec[] colSpecs = colSpecList.toArray(new DataColumnSpec[] {});
-		DataTableSpec spec = new DataTableSpec(colSpecs);
-
-        DataColumnSpecFilterConfiguration config = HDF5ReaderNodeModel.createDCSFilterConfiguration();
-		System.out.println(m_filterPanel.getExcludeList().addAll(colSpecList));
-        //config.loadConfigurationInDialog(settings, spec);
-		//m_filterPanel.loadConfiguration(config, spec);
-
-		System.out.println("-> " + Arrays.toString(m_filterPanel.getExcludedNamesAsSet().toArray(new String[] {})));
-		System.out.println("-> " + Arrays.toString(m_filterPanel.getExcludeList().toArray()));*/
+		updateConfigurations(new DataTableSpec(colSpecs));
+    }
+    
+    void updateConfigurations(final DataTableSpec spec) {
+        if (m_conf == null) {
+            m_conf = createDCSFilterConfiguration();
+        }
+        // auto-configure
+        m_conf.loadDefaults(spec, false);
+        m_filterPanel.loadConfiguration(m_conf, spec);
+    }
+	
+    /** A new configuration to store the settings. Also enables the type filter.
+     * @return ...
+     */
+    static final DataColumnSpecFilterConfiguration createDCSFilterConfiguration() {
+        return new DataColumnSpecFilterConfiguration("column-filter");
     }
     
     /**
@@ -143,9 +135,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
                     + "selection.");
         }
 
-        DataColumnSpecFilterConfiguration config = HDF5ReaderNodeModel.createDCSFilterConfiguration();
-        config.loadConfigurationInDialog(settings, specs[0]);
-        m_filterPanel.loadConfiguration(config, specs[0]);
+        updateConfigurations(spec);
     }
     
     @Override
@@ -153,30 +143,5 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     	settings.addString("filePath", file.getFilePath());
     	String[] dsPaths = m_filterPanel.getIncludedNamesAsSet().toArray(new String[] {});
 		settings.addStringArray("dataSets", dsPaths);
-		/*
-		List<DataColumnSpec> colSpecList = new LinkedList<>();
-		List<Hdf5DataSet<?>> dsList = new LinkedList<>();
-		
-		for (String path: dsPaths) {
-			dsList.add(file.getDataSetByPath(path));
-		}
-		
-		Iterator<Hdf5DataSet<?>> iterDS = dsList.iterator();
-		while (iterDS.hasNext()) {
-			Hdf5DataSet<?> dataSet = iterDS.next();
-			Hdf5DataType dataType = dataSet.getType();
-			DataType type = dataType.getColumnType();
-			String path = dataSet.getPathWithoutFileName();
-			
-			colSpecList.add(new DataColumnSpecCreator(path, type).createSpec());
-		}
-		
-		DataColumnSpec[] colSpecs = colSpecList.toArray(new DataColumnSpec[] {});
-		DataTableSpec spec = new DataTableSpec(colSpecs);
-		
-		DataColumnSpecFilterConfiguration config = HDF5ReaderNodeModel.createDCSFilterConfiguration();
-        config.loadConfigurationInDialog((NodeSettingsRO) settings, spec);
-        m_filterPanel.loadConfiguration(config, spec);
-		m_filterPanel.saveConfiguration(config);*/
 	}
 }

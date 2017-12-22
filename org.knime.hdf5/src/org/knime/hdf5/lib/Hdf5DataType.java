@@ -39,20 +39,21 @@ public enum Hdf5DataType {
 
 	/**
 	 * 
-	 * @param type dataType class name (H5T_<<DATATYPE>>)
+	 * @param type dataType class name ( starts with H5T_ )
 	 * @param size size in byte
+	 * @param fromDS true if the DataType is from a dataSet
 	 */
 	public static Hdf5DataType getInstance(String type, int size, boolean fromDS) {
-		Hdf5DataType dataType = Hdf5DataType.UNKNOWN;
+		Hdf5DataType dataType = UNKNOWN;
 		
 		if (type.equals("H5T_INTEGER") && size <= 4) {
-			dataType = Hdf5DataType.INTEGER;
+			dataType = INTEGER;
 		} else if (fromDS && type.equals("H5T_INTEGER") && size <= 8) {
-			dataType = Hdf5DataType.LONG;
+			dataType = LONG;
 		} else if (type.equals("H5T_INTEGER") && size > 4 || type.equals("H5T_FLOAT")) {
-			dataType = Hdf5DataType.DOUBLE;
+			dataType = DOUBLE;
 		} else {
-			dataType = Hdf5DataType.STRING;
+			dataType = STRING;
 		}
 		
 		if (type.equals("H5T_INTEGER")) {

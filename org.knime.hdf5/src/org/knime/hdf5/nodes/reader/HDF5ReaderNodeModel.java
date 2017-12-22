@@ -24,7 +24,6 @@ import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeModel;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
-import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5DataType;
@@ -32,7 +31,7 @@ import org.knime.hdf5.lib.Hdf5File;
 
 public class HDF5ReaderNodeModel extends NodeModel {
     
-	private List<Hdf5DataSet<?>> dsList = new LinkedList<>();
+	private List<Hdf5DataSet<?>> m_dsList = new LinkedList<>();
 	
 	protected HDF5ReaderNodeModel() {
 		super(0, 1);
@@ -41,7 +40,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	@SuppressWarnings("unchecked")
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		Hdf5DataSet<?>[] dataSets = dsList.toArray(new Hdf5DataSet<?>[dsList.size()]);
+		Hdf5DataSet<?>[] dataSets = m_dsList.toArray(new Hdf5DataSet<?>[m_dsList.size()]);
 		
 		if (dataSets.length == 0) {
 			NodeLogger.getLogger("HDF5 Files").error("No dataSet to use", new NullPointerException());
@@ -138,12 +137,12 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	}
 	
 	private void pushFlowVariables(Hdf5DataSet<?> dataSet) {
-		List<String> attrs = dataSet.loadAttributeNames();
+		Iterator<String> iter = dataSet.loadAttributeNames().iterator();
 		
-		Iterator<String> iter = attrs.iterator();
 		while (iter.hasNext()) {
 			String name = iter.next();
 			Hdf5Attribute<?> attr = dataSet.getAttribute(name);
+			
 			if (attr != null) {
 				int attrNum = attr.getValue().length;
 				String path = dataSet.getPathWithoutFileName() + "/" + attr.getName();
@@ -169,7 +168,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	private DataTableSpec createOutSpec() {
 		List<DataColumnSpec> colSpecList = new LinkedList<>();
 
-		Iterator<Hdf5DataSet<?>> iterDS = dsList.iterator();
+		Iterator<Hdf5DataSet<?>> iterDS = m_dsList.iterator();
 		
 		while (iterDS.hasNext()) {
 			Hdf5DataSet<?> dataSet = iterDS.next();
@@ -185,20 +184,14 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		}
 		
 		DataColumnSpec[] colSpecs = colSpecList.toArray(new DataColumnSpec[] {});
-        return new DataTableSpec(colSpecs);
+		DataTableSpec tableSpec = new DataTableSpec(colSpecs);
+        return tableSpec;
     }
 	
 	@Override
 	protected DataTableSpec[] configure(DataTableSpec[] inSpecs) throws InvalidSettingsException {
 		// TODO here for Exceptions you know before using execute()
 		return new DataTableSpec[]{createOutSpec()};
-    }
-	
-    /** A new configuration to store the settings. Also enables the type filter.
-     * @return ...
-     */
-    static final DataColumnSpecFilterConfiguration createDCSFilterConfiguration() {
-        return new DataColumnSpecFilterConfiguration("column-filter");
     }
 
 	@Override
@@ -217,7 +210,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 	@Override
 	protected void loadValidatedSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
-		dsList.clear();
+		m_dsList.clear();
 		if (settings.containsKey("filePath") && settings.containsKey("dataSets")) {
 			String filePath = settings.getString("filePath");
 			String[] dsPaths = settings.getStringArray("dataSets");
@@ -226,7 +219,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		
 			Hdf5File file = Hdf5File.createFile(filePath);
 			for (String path: dsPaths) {
-				dsList.add(file.getDataSetByPath(path));
+				m_dsList.add(file.getDataSetByPath(path));
 			}
 		}
 	}

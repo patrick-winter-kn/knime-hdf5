@@ -183,7 +183,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * @return product of the numbers in the dimensions array in this range 
 	 */
 	public long numberOfValuesRange(int fromIndex, int toIndex) {
-		if (fromIndex >= 0 && toIndex <= getDimensions().length) {
+		if (0 <= fromIndex && fromIndex <= toIndex && toIndex <= getDimensions().length) {
 			long values = 1;
 			long[] dims = Arrays.copyOfRange(getDimensions(), fromIndex, toIndex);
 			for (long l: dims) {
@@ -225,6 +225,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return false;
 	}
 	
+	@SuppressWarnings("unchecked")
 	public Type[] read(Type[] dataRead) {
 		if (getType().isString()) {
 			if (isOpen() && (getType().getConstants()[1] >= 0)) {
@@ -239,9 +240,21 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		} else {
 			try {
 		        if (isOpen()) {
-		            H5.H5Dread(getElementId(), getType().getConstants()[1],
-		                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-		                    HDF5Constants.H5P_DEFAULT, dataRead);
+		        	if (getType() == Hdf5DataType.DOUBLE && getType().getConstants()[1] == HDF5Constants.H5T_NATIVE_FLOAT) {
+		        		Float[] data = new Float[(int) numberOfValues()];
+			            H5.H5Dread(getElementId(), getType().getConstants()[1],
+			                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+			                    HDF5Constants.H5P_DEFAULT, data);
+			            Double[] dataDouble = new Double[(int) numberOfValues()];
+						for (int i = 0; i < data.length; i++) {
+							dataDouble[i] = (Double) (double) (float) data[i];
+						}
+						dataRead = (Type[]) Arrays.copyOf(dataDouble, dataDouble.length);
+					} else {
+			            H5.H5Dread(getElementId(), getType().getConstants()[1],
+			                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+			                    HDF5Constants.H5P_DEFAULT, dataRead);
+					}
 		        }
 		    } catch (Exception e) {
 		        e.printStackTrace();

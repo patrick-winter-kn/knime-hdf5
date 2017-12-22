@@ -6,6 +6,7 @@ import org.knime.core.node.NodeLogger;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
+import hdf.hdf5lib.exceptions.HDF5DatatypeInterfaceException;
 import hdf.hdf5lib.exceptions.HDF5Exception;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
@@ -150,8 +151,17 @@ public class Hdf5Attribute<Type> {
     		treeElement.getAttributes().add(attribute);
         	attribute.setOpen(true);
         	
-		} catch (NullPointerException | HDF5Exception lnpe) {
-			lnpe.printStackTrace();
+		} catch (HDF5DatatypeInterfaceException hdtie) {
+			try {
+				// TODO ckeck if other things also have to be closed
+				H5.H5Aclose(attributeId);
+				// TODO error of info?
+				NodeLogger.getLogger("HDF5 Files").error("DataType of \"" + name + "\" is not supported");
+			} catch (HDF5LibraryException hle) {
+				hle.printStackTrace();
+			}
+		} catch (NullPointerException | HDF5Exception lnphe) {
+			lnphe.printStackTrace();
 		}
 		
 		return attribute;
