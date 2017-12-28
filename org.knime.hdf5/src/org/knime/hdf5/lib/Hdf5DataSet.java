@@ -10,6 +10,9 @@ import org.knime.core.data.def.IntCell;
 import org.knime.core.data.def.LongCell;
 import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
+import org.knime.hdf5.lib.types.Hdf5DataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType;
+import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -86,14 +89,14 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			NodeLogger.getLogger("HDF5 Files").error("parent group " + parent.getName() + " is not open!",
 					new IllegalStateException());
 			return null;
-		} else switch (type.getTypeId()) {
-		case 0:
+		} else switch (type.getKnimeType()) {
+		case INTEGER:
 			return new Hdf5DataSet<Integer>(parent, name, dimensions, 0, type, create);
-		case 1:
+		case LONG:
 			return new Hdf5DataSet<Long>(parent, name, dimensions, 0, type, create);
-		case 2:
+		case DOUBLE:
 			return new Hdf5DataSet<Double>(parent, name, dimensions, 0, type, create);
-		case 3:
+		case STRING:
 			return new Hdf5DataSet<String>(parent, name, dimensions, stringLength, type, create);
 		default:
 			return null;
@@ -131,7 +134,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	private void createDimensions(long[] dimensions, long stringLength) {
 		setDimensions(dimensions);
 		
-		if (getType().isString()) {
+		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
 			setStringLength(stringLength);
 			long filetypeId = -1;
 			long memtypeId = -1;
@@ -204,7 +207,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	public boolean write(Type[] dataIn) {
 		// Write the data to the dataSet.
         try {
-			if (getType().isString()) {
+			if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
 	        	if (isOpen() && (getType().getConstants()[1] >= 0)) {
 					H5.H5Dwrite_string(getElementId(), getType().getConstants()[1],
 							HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
@@ -227,7 +230,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	@SuppressWarnings("unchecked")
 	public Type[] read(Type[] dataRead) {
-		if (getType().isString()) {
+		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
 			if (isOpen() && (getType().getConstants()[1] >= 0)) {
 				try {
 					H5.H5Dread_string(getElementId(), getType().getConstants()[1],
@@ -240,20 +243,53 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		} else {
 			try {
 		        if (isOpen()) {
-		        	if (getType() == Hdf5DataType.DOUBLE && getType().getConstants()[1] == HDF5Constants.H5T_NATIVE_FLOAT) {
-		        		Float[] data = new Float[(int) numberOfValues()];
-			            H5.H5Dread(getElementId(), getType().getConstants()[1],
-			                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-			                    HDF5Constants.H5P_DEFAULT, data);
-			            Double[] dataDouble = new Double[(int) numberOfValues()];
-						for (int i = 0; i < data.length; i++) {
-							dataDouble[i] = (Double) (double) (float) data[i];
+		        	if (getType().isKnimeType(Hdf5KnimeDataType.INTEGER)) {
+						Integer[] dataInt = new Integer[(int) numberOfValues()];
+						if (getType().isHdfType(Hdf5HdfDataType.BYTE)) {
+							Byte[] data = new Byte[(int) numberOfValues()];
+				            H5.H5Dread(getElementId(), getType().getConstants()[1],
+				                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+				                    HDF5Constants.H5P_DEFAULT, data);
+							for (int i = 0; i < data.length; i++) {
+								dataInt[i] = (Integer) (int) (byte) data[i];
+							}
+							dataRead = (Type[]) Arrays.copyOf(dataInt, dataInt.length);
+						} else if (getType().isHdfType(Hdf5HdfDataType.SHORT)) {
+							Short[] data = new Short[(int) numberOfValues()];
+				            H5.H5Dread(getElementId(), getType().getConstants()[1],
+				                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+				                    HDF5Constants.H5P_DEFAULT, data);
+							for (int i = 0; i < data.length; i++) {
+								dataInt[i] = (Integer) (int) (short) data[i];
+							}
+							dataRead = (Type[]) Arrays.copyOf(dataInt, dataInt.length);
+						} else if (getType().isHdfType(Hdf5HdfDataType.INTEGER)) {
+				            H5.H5Dread(getElementId(), getType().getConstants()[1],
+				                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+				                    HDF5Constants.H5P_DEFAULT, dataRead);
 						}
-						dataRead = (Type[]) Arrays.copyOf(dataDouble, dataDouble.length);
-					} else {
+						
+					} else if (getType().isKnimeType(Hdf5KnimeDataType.LONG)) {
 			            H5.H5Dread(getElementId(), getType().getConstants()[1],
 			                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
 			                    HDF5Constants.H5P_DEFAULT, dataRead);
+						
+					} else if (getType().isKnimeType(Hdf5KnimeDataType.DOUBLE)) {
+						Double[] dataDouble = new Double[(int) numberOfValues()];
+						if (getType().isHdfType(Hdf5HdfDataType.FLOAT)) {
+							Float[] data = new Float[(int) numberOfValues()];
+				            H5.H5Dread(getElementId(), getType().getConstants()[1],
+				                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+				                    HDF5Constants.H5P_DEFAULT, data);
+							for (int i = 0; i < data.length; i++) {
+								dataDouble[i] = (Double) (double) (float) data[i];
+							}
+							dataRead = (Type[]) Arrays.copyOf(dataDouble, dataDouble.length);
+						} else if (getType().isHdfType(Hdf5HdfDataType.DOUBLE)) {
+				            H5.H5Dread(getElementId(), getType().getConstants()[1],
+				                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+				                    HDF5Constants.H5P_DEFAULT, dataRead);
+						}
 					}
 		        }
 		    } catch (Exception e) {
@@ -288,7 +324,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			return new MissingCell("(null) on joining dataSets");
 		}
 		
-		switch (getType()) {
+		switch (getType().getKnimeType()) {
 		case INTEGER:
 			return new IntCell((int) value);
 		case LONG:
@@ -354,7 +390,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			lnpe.printStackTrace();
 		}
         
-		if (getType().isString()) {
+		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
 			long filetypeId = -1;
 			long memtypeId = -1;
 			
@@ -395,7 +431,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         			iter.next().close();
         		}
 
-                if (getType().isString()) {
+                if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
         			// Terminate access to the file and mem type.
 					H5.H5Tclose(H5.H5Dget_type(getElementId()));
 					H5.H5Tclose(H5.H5Tcopy(HDF5Constants.H5T_C_S1));

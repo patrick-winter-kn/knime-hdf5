@@ -5,6 +5,8 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.knime.core.node.NodeLogger;
+import org.knime.hdf5.lib.types.Hdf5DataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -95,21 +97,6 @@ abstract public class Hdf5TreeElement {
 	protected void setParent(Hdf5Group parent) {
 		m_parent = parent;
 	}
-	
-	public String getPathWithoutFileName() {
-		if (this instanceof Hdf5File) {
-			return "";
-		}
-		
-		final String ext = ".h5/";
-		String path = getPathFromFile() + (this instanceof Hdf5DataSet<?> ? "/" : "") + getName() + (this instanceof Hdf5Group ? "/" : "");
-		
-		if (path.contains(ext)) {
-			path = path.substring(path.indexOf(ext) + ext.length());
-		}
-		
-		return path;
-	}
 
 	public Hdf5Attribute<?> getAttribute(final String name) {
 		Iterator<Hdf5Attribute<?>> iter = getAttributes().iterator();
@@ -168,19 +155,21 @@ abstract public class Hdf5TreeElement {
 			long attributeId = -1;
 			String dataType = "";
 			int size = 0;
+			boolean unsigned = false;
 			
 			try {
 				attributeId = H5.H5Aopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 				long filetypeId = H5.H5Aget_type(attributeId);
 				dataType = H5.H5Tget_class_name(H5.H5Tget_class(filetypeId));
 				size = (int) H5.H5Tget_size(filetypeId);
+				// TODO unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(filetypeId);
 				H5.H5Tclose(filetypeId);
 				H5.H5Aclose(attributeId);
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
 			}
 			
-			return Hdf5DataType.getInstance(dataType, size, false);
+			return new Hdf5DataType(dataType, size, unsigned, false);
 		} else {
 			NodeLogger.getLogger("HDF5 Files").error("There isn't an attribute with this name in this treeElement!",
 					new IllegalArgumentException());
@@ -198,7 +187,7 @@ abstract public class Hdf5TreeElement {
             	attribute.setOpen(true);
             }
         } catch (HDF5LibraryException le) {
-        	if (attribute.getType().isString()) {
+        	if (attribute.getType().isHdfType(Hdf5HdfDataType.STRING)) {
 				long filetypeId = -1;
 				long memtypeId = -1;
 				
@@ -229,7 +218,7 @@ abstract public class Hdf5TreeElement {
         	
         	// Create the data space for the attribute.
         	// the array length can only be 1 for Strings
-        	long[] dims = { attribute.getType().isString() ? 1 : attribute.getDimension() };
+        	long[] dims = { attribute.getType().isHdfType(Hdf5HdfDataType.STRING) ? 1 : attribute.getDimension() };
             try {
             	attribute.setDataspaceId(H5.H5Screate_simple(1, dims, null));
             } catch (Exception e) {

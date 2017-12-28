@@ -1,8 +1,9 @@
 package org.knime.hdf5.lib;
 
-import java.util.Arrays;
-
 import org.knime.core.node.NodeLogger;
+import org.knime.hdf5.lib.types.Hdf5DataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType;
+import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -40,16 +41,15 @@ public class Hdf5Attribute<Type> {
 		m_name = name;
 		m_value = value;
 		m_dimension = value.length;
-		m_type = Hdf5DataType.get(Hdf5DataType.getTypeIdByArray(value));
+		m_type = Hdf5DataType.getTypeByArray(value);
 		
-		if (m_type.isString()) {
+		if (m_type.isHdfType(Hdf5HdfDataType.STRING)) {
 			setDimension(((String) value[0]).length() + 1);
 		}
 	}
 	
 	static Hdf5Attribute<?> getInstance(final Hdf5TreeElement treeElement, final String name) {
 		Hdf5Attribute<?> attribute = null;
-		
 		Hdf5DataType dataType = treeElement.findAttributeType(name);
 		
 		long attributeId = -1;
@@ -58,7 +58,7 @@ public class Hdf5Attribute<Type> {
 			long dataspaceId = -1;
 
 			long[] dims = new long[1];
-			if (dataType.isString()) {
+			if (dataType.isHdfType(Hdf5HdfDataType.STRING)) {
 				long filetypeId = -1;
 				long memtypeId = -1;
 				
@@ -91,52 +91,47 @@ public class Hdf5Attribute<Type> {
 				}
 			}
 			
-			// TODO do it more simple 
-			if (dataType == Hdf5DataType.INTEGER) {
+			if (dataType.isKnimeType(Hdf5KnimeDataType.INTEGER)) {
 				Integer[] dataInt = new Integer[(int) dims[0]];
-				if (dataType.getConstants()[1] == HDF5Constants.H5T_NATIVE_INT8) {
+				if (dataType.isHdfType(Hdf5HdfDataType.BYTE)) {
 					Byte[] data = new Byte[(int) dims[0]];
 					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
 					for (int i = 0; i < data.length; i++) {
 						dataInt[i] = (Integer) (int) (byte) data[i];
 					}
-				} else if (dataType.getConstants()[1] == HDF5Constants.H5T_NATIVE_INT16) {
+				} else if (dataType.isHdfType(Hdf5HdfDataType.SHORT)) {
 					Short[] data = new Short[(int) dims[0]];
 					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
 					for (int i = 0; i < data.length; i++) {
 						dataInt[i] = (Integer) (int) (short) data[i];
 					}
-				} else {
-					Integer[] data = new Integer[(int) dims[0]];
-					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
-					dataInt = Arrays.copyOf(data, data.length);
+				} else if (dataType.isHdfType(Hdf5HdfDataType.INTEGER)) {
+					H5.H5Aread(attributeId, dataType.getConstants()[1], dataInt);
 				}
 				
 				attribute = new Hdf5Attribute<Integer>(name, dataInt);
 				
-			} else if (dataType == Hdf5DataType.DOUBLE) {
+			} else if (dataType.isKnimeType(Hdf5KnimeDataType.DOUBLE)) {
 				Double[] dataDouble = new Double[(int) dims[0]];
-				if (dataType.getConstants()[1] == HDF5Constants.H5T_NATIVE_INT64) {
+				if (dataType.isHdfType(Hdf5HdfDataType.LONG)) {
 					Long[] data = new Long[(int) dims[0]];
 					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
 					for (int i = 0; i < data.length; i++) {
 						dataDouble[i] = (Double) (double) (long) data[i];
 					}
-				} else if (dataType.getConstants()[1] == HDF5Constants.H5T_NATIVE_FLOAT) {
+				} else if (dataType.isHdfType(Hdf5HdfDataType.FLOAT)) {
 					Float[] data = new Float[(int) dims[0]];
 					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
 					for (int i = 0; i < data.length; i++) {
 						dataDouble[i] = (Double) (double) (float) data[i];
 					}
-				} else {
-					Double[] data = new Double[(int) dims[0]];
-					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
-					dataDouble = Arrays.copyOf(data, data.length);
+				} else if (dataType.isHdfType(Hdf5HdfDataType.DOUBLE)) {
+					H5.H5Aread(attributeId, dataType.getConstants()[1], dataDouble);
 				}
 				
 				attribute = new Hdf5Attribute<Double>(name, dataDouble);
 				
-			} else if (dataType == Hdf5DataType.STRING) {
+			} else if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
 				byte[] dataByte = new byte[(int) dims[0]];
 				H5.H5Aread(attributeId, dataType.getConstants()[1], dataByte);
 				char[] dataChar = new char[dataByte.length];
@@ -153,7 +148,7 @@ public class Hdf5Attribute<Type> {
         	
 		} catch (HDF5DatatypeInterfaceException hdtie) {
 			try {
-				// TODO ckeck if other things also have to be closed
+				// TODO check if other things also have to be closed
 				H5.H5Aclose(attributeId);
 				// TODO error of info?
 				NodeLogger.getLogger("HDF5 Files").error("DataType of \"" + name + "\" is not supported");
@@ -227,7 +222,7 @@ public class Hdf5Attribute<Type> {
 		}
 		
 		long[] dims = new long[1];
-		if (getType().isString()) {
+		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
 			long filetypeId = -1;
 			long memtypeId = -1;
 			
@@ -277,7 +272,7 @@ public class Hdf5Attribute<Type> {
 		 */
         try {
             if (isOpen()) {
-                if (getType().isString()) {
+                if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
         	 		// Terminate access to the file and mem type.
         			for (long datatype: getType().getConstants()) {
         		 		if (datatype >= 0) {

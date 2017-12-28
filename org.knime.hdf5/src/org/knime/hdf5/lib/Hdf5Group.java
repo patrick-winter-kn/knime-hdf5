@@ -7,6 +7,8 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.knime.core.node.NodeLogger;
+import org.knime.hdf5.lib.types.Hdf5DataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -200,7 +202,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
 				}
 		        
-				if (type.isString()) {
+				if (type.isHdfType(Hdf5HdfDataType.STRING)) {
 					long filetypeId = -1;
 					long memtypeId = -1;
 					
@@ -248,14 +250,16 @@ public class Hdf5Group extends Hdf5TreeElement {
 	
 	public Hdf5DataSet<?> getDataSetByPath(String path) {
 		Hdf5DataSet<?> dataSet = null;
+		String name = path.split("/")[0];
 		
 		if (path.contains("/")) {
-			Hdf5Group group = getGroup(path.substring(0, path.indexOf("/")));
+			Hdf5Group group = getGroup(name);
+			
 			if (group != null) {
-				dataSet = group.getDataSetByPath(path.substring(path.indexOf("/") + 1));
+				dataSet = group.getDataSetByPath(path.substring(name.length() + 1));
 			}
 		} else {
-			dataSet = getDataSet(path);
+			dataSet = getDataSet(name);
 		}
 		
 		return dataSet;
@@ -291,13 +295,13 @@ public class Hdf5Group extends Hdf5TreeElement {
 	
 	private void addGroup(Hdf5Group group) {
 		getGroups().add(group);
-		group.setPathFromFile(getPathFromFile() + getName() + "/");
+		group.setPathFromFile(getPathFromFile() + (this instanceof Hdf5File ? "" : getName() + "/"));
 		group.setParent(this);
 	}
 
 	void addDataSet(Hdf5DataSet<?> dataSet) {
 		getDataSets().add(dataSet);
-		dataSet.setPathFromFile(getPathFromFile() + getName());
+		dataSet.setPathFromFile(getPathFromFile() + (this instanceof Hdf5File ? "" : getName() + "/"));
 		dataSet.setParent(this);
 	}
 	
@@ -359,7 +363,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	
 	public List<String> getAllDataSetPaths() {
 		List<String> paths = new LinkedList<>();
-		String path = getPathWithoutFileName();
+		String path = getPathFromFile() + (this instanceof Hdf5File ? "" : getName() + "/");
 		
 		Iterator<String> iterDS = loadDataSetNames().iterator();
 		while (iterDS.hasNext()) {
@@ -381,16 +385,21 @@ public class Hdf5Group extends Hdf5TreeElement {
 			long dataSetId = -1;
 			String dataType = "";
 			int size = 0;
+			boolean unsigned = false;
+			
 			try {
 				dataSetId = H5.H5Dopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
-				dataType = H5.H5Tget_class_name(H5.H5Tget_class(H5.H5Dget_type(dataSetId)));
-				size = (int) H5.H5Tget_size(H5.H5Dget_type(dataSetId));
+				long filetypeId = H5.H5Dget_type(dataSetId);
+				dataType = H5.H5Tget_class_name(H5.H5Tget_class(filetypeId));
+				size = (int) H5.H5Tget_size(filetypeId);
+				// TODO unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(filetypeId);
+				H5.H5Tclose(filetypeId);
 				H5.H5Dclose(dataSetId);
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
 			}
 			
-			return Hdf5DataType.getInstance(dataType, size, true);
+			return new Hdf5DataType(dataType, size, unsigned, true);
 		} else {
 			NodeLogger.getLogger("HDF5 Files").error("There isn't a dataSet with this name in this group!",
 					new IllegalArgumentException());

@@ -26,8 +26,8 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
-import org.knime.hdf5.lib.Hdf5DataType;
 import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 public class HDF5ReaderNodeModel extends NodeModel {
     
@@ -61,7 +61,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		DataRow[] rows = new DataRow[maxRows];
 		
 		for (int i = 0; i < dataSets.length; i++) {
-			if (dataSets[i].getType() == Hdf5DataType.INTEGER) {
+			if (dataSets[i].getType().isKnimeType(Hdf5KnimeDataType.INTEGER)) {
 				Hdf5DataSet<Integer> dataSet = (Hdf5DataSet<Integer>) dataSets[i];
 				pushFlowVariables(dataSet);
 				Integer[] dataRead = dataSet.read(new Integer[(int) dataSet.numberOfValues()]);
@@ -76,7 +76,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 						rows[r] = (i == 0 && c == 0) ? row : new JoinedRow(rows[r], row);
 					}
 				}
-			} else if (dataSets[i].getType() == Hdf5DataType.LONG) {
+			} else if (dataSets[i].getType().isKnimeType(Hdf5KnimeDataType.LONG)) {
 				Hdf5DataSet<Long> dataSet = (Hdf5DataSet<Long>) dataSets[i];
 				pushFlowVariables(dataSet);
 				Long[] dataRead = dataSet.read(new Long[(int) dataSet.numberOfValues()]);
@@ -91,7 +91,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 						rows[r] = (i == 0 && c == 0) ? row : new JoinedRow(rows[r], row);
 					}
 				}
-			} else if (dataSets[i].getType() == Hdf5DataType.DOUBLE) {
+			} else if (dataSets[i].getType().isKnimeType(Hdf5KnimeDataType.DOUBLE)) {
 				Hdf5DataSet<Double> dataSet = (Hdf5DataSet<Double>) dataSets[i];
 				pushFlowVariables(dataSet);
 				Double[] dataRead = dataSet.read(new Double[(int) dataSet.numberOfValues()]);
@@ -106,7 +106,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 						rows[r] = (i == 0 && c == 0) ? row : new JoinedRow(rows[r], row);
 					}
 				}
-			} else if (dataSets[i].getType() == Hdf5DataType.STRING) {
+			} else if (dataSets[i].getType().isKnimeType(Hdf5KnimeDataType.STRING)) {
 				Hdf5DataSet<String> dataSet = (Hdf5DataSet<String>) dataSets[i];
 				pushFlowVariables(dataSet);
 				String[] dataRead = dataSet.read(new String[(int) dataSet.numberOfValues()]);
@@ -145,17 +145,17 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			
 			if (attr != null) {
 				int attrNum = attr.getValue().length;
-				String path = dataSet.getPathWithoutFileName() + "/" + attr.getName();
+				String path = dataSet.getPathFromFile() + dataSet.getName() + "/" + attr.getName();
 				
 				if (attrNum == 1) {
-					if (attr.getType() == Hdf5DataType.INTEGER) {
+					if (attr.getType().isKnimeType(Hdf5KnimeDataType.INTEGER)) {
 						// TODO maybe only add dataSet name to attr name if the attr name would exist more than once
 						pushFlowVariableInt(path, (Integer) attr.getValue()[0]);
 						
-					} else if (attr.getType() == Hdf5DataType.DOUBLE) {
+					} else if (attr.getType().isKnimeType(Hdf5KnimeDataType.DOUBLE)) {
 						pushFlowVariableDouble(path, (Double) attr.getValue()[0]);
 						
-					} else if (attr.getType() == Hdf5DataType.STRING) {
+					} else if (attr.getType().isKnimeType(Hdf5KnimeDataType.STRING)) {
 						pushFlowVariableString(path, "" + attr.getValue()[0]);
 					}
 				} else {
@@ -172,14 +172,14 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		
 		while (iterDS.hasNext()) {
 			Hdf5DataSet<?> dataSet = iterDS.next();
-			Hdf5DataType dataType = dataSet.getType();
+			Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
 			DataType type = dataType.getColumnType();
-			String path = dataSet.getPathWithoutFileName();
+			String pathWithName = dataSet.getPathFromFile() + dataSet.getName();
 			// TODO later only for 2-dimensional dataSets
 			int colNum = (int) dataSet.numberOfValuesRange(1, dataSet.getDimensions().length);
 			
 			for (int i = 0; i < colNum; i++) {
-				colSpecList.add(new DataColumnSpecCreator(path + i, type).createSpec());
+				colSpecList.add(new DataColumnSpecCreator(pathWithName + i, type).createSpec());
 			}
 		}
 		

@@ -25,7 +25,7 @@ public class Hdf5File extends Hdf5Group {
 		super(null, filePath, filePath.substring(filePath.lastIndexOf(File.separator) + 1), true);
 		
 		ALL_FILES.add(this);
-        setPathFromFile("/");
+        setPathFromFile("");
 		open();
 	}
 	

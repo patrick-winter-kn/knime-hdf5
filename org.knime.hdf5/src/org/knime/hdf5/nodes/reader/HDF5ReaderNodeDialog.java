@@ -24,8 +24,8 @@ import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterPanel;
 import org.knime.hdf5.lib.Hdf5DataSet;
-import org.knime.hdf5.lib.Hdf5DataType;
 import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 // TODO it should close all Files before ending KNIME
 
@@ -91,11 +91,11 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		
 		while (iterDS.hasNext()) {
 			Hdf5DataSet<?> dataSet = iterDS.next();
-			Hdf5DataType dataType = dataSet.getType();
+			Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
 			DataType type = dataType.getColumnType();
-			String path = dataSet.getPathWithoutFileName();
+			String pathWithName = dataSet.getPathFromFile() + dataSet.getName();
 			
-			colSpecList.add(new DataColumnSpecCreator(path, type).createSpec());
+			colSpecList.add(new DataColumnSpecCreator(pathWithName, type).createSpec());
 		}
 		
 		DataColumnSpec[] colSpecs = colSpecList.toArray(new DataColumnSpec[] {});
