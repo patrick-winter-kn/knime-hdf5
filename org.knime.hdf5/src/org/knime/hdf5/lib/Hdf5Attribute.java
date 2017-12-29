@@ -90,57 +90,31 @@ public class Hdf5Attribute<Type> {
 					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
 				}
 			}
+
 			
-			if (dataType.isKnimeType(Hdf5KnimeDataType.INTEGER)) {
-				Integer[] dataInt = new Integer[(int) dims[0]];
-				if (dataType.isHdfType(Hdf5HdfDataType.BYTE)) {
-					Byte[] data = new Byte[(int) dims[0]];
-					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
-					for (int i = 0; i < data.length; i++) {
-						dataInt[i] = (Integer) (int) (byte) data[i];
-					}
-				} else if (dataType.isHdfType(Hdf5HdfDataType.SHORT)) {
-					Short[] data = new Short[(int) dims[0]];
-					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
-					for (int i = 0; i < data.length; i++) {
-						dataInt[i] = (Integer) (int) (short) data[i];
-					}
-				} else if (dataType.isHdfType(Hdf5HdfDataType.INTEGER)) {
-					H5.H5Aread(attributeId, dataType.getConstants()[1], dataInt);
-				}
-				
-				attribute = new Hdf5Attribute<Integer>(name, dataInt);
-				
-			} else if (dataType.isKnimeType(Hdf5KnimeDataType.DOUBLE)) {
-				Double[] dataDouble = new Double[(int) dims[0]];
-				if (dataType.isHdfType(Hdf5HdfDataType.LONG)) {
-					Long[] data = new Long[(int) dims[0]];
-					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
-					for (int i = 0; i < data.length; i++) {
-						dataDouble[i] = (Double) (double) (long) data[i];
-					}
-				} else if (dataType.isHdfType(Hdf5HdfDataType.FLOAT)) {
-					Float[] data = new Float[(int) dims[0]];
-					H5.H5Aread(attributeId, dataType.getConstants()[1], data);
-					for (int i = 0; i < data.length; i++) {
-						dataDouble[i] = (Double) (double) (float) data[i];
-					}
-				} else if (dataType.isHdfType(Hdf5HdfDataType.DOUBLE)) {
-					H5.H5Aread(attributeId, dataType.getConstants()[1], dataDouble);
-				}
-				
-				attribute = new Hdf5Attribute<Double>(name, dataDouble);
-				
-			} else if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
-				byte[] dataByte = new byte[(int) dims[0]];
-				H5.H5Aread(attributeId, dataType.getConstants()[1], dataByte);
-				char[] dataChar = new char[dataByte.length];
+			Object[] dataOut = (Object[]) dataType.getKnimeType().createArray((int) dims[0]);
+			
+			if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
+				byte[] dataRead = new byte[(int) dims[0]];
+				H5.H5Aread(attributeId, dataType.getConstants()[1], dataRead);
+				char[] dataChar = new char[dataRead.length];
 				for (int i = 0; i < dataChar.length; i++) {
-					dataChar[i] = (char) dataByte[i];
+					dataChar[i] = (char) dataRead[i];
 				}
-				String[] data = new String[]{String.copyValueOf(dataChar)};
-				attribute = new Hdf5Attribute<String>(name, data);
+				dataOut = new String[]{String.copyValueOf(dataChar)};
+			} else if (dataType.equalTypes()) {
+				H5.H5Aread(attributeId, dataType.getConstants()[1], dataOut);
+				
+			} else {
+				Object[] dataRead = (Object[]) dataType.getHdfType().createArray((int) dims[0]);
+				H5.H5Aread(attributeId, dataType.getConstants()[1], dataRead);
+				for (int i = 0; i < dataRead.length; i++) {
+					dataOut[i] = dataType.hdfToKnime(dataRead[i]);
+				}
 			}
+			
+			attribute = dataType.getKnimeType().createAttribute(name, dataOut);
+			
 			attribute.setDataspaceId(dataspaceId);
 			attribute.setAttributeId(attributeId);
     		treeElement.getAttributes().add(attribute);

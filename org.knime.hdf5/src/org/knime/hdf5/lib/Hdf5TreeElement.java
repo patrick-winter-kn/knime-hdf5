@@ -162,7 +162,9 @@ abstract public class Hdf5TreeElement {
 				long filetypeId = H5.H5Aget_type(attributeId);
 				dataType = H5.H5Tget_class_name(H5.H5Tget_class(filetypeId));
 				size = (int) H5.H5Tget_size(filetypeId);
-				// TODO unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(filetypeId);
+				if (dataType.equals("H5T_INTEGER") || dataType.equals("H5T_CHAR")) {
+					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(filetypeId);
+				}
 				H5.H5Tclose(filetypeId);
 				H5.H5Aclose(attributeId);
 			} catch (HDF5LibraryException | NullPointerException lnpe) {

@@ -16,7 +16,6 @@ import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
-import hdf.hdf5lib.exceptions.HDF5Exception;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5DataSet<Type> extends Hdf5TreeElement {
@@ -230,72 +229,34 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	@SuppressWarnings("unchecked")
 	public Type[] read(Type[] dataRead) {
-		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
-			if (isOpen() && (getType().getConstants()[1] >= 0)) {
-				try {
-					H5.H5Dread_string(getElementId(), getType().getConstants()[1],
+		try {
+	        if (isOpen()) {
+	        	Hdf5DataType dataType = getType();
+				
+				if (dataType.isKnimeType(Hdf5KnimeDataType.STRING) && dataType.getConstants()[1] >= 0) {
+					H5.H5Dread_string(getElementId(), dataType.getConstants()[1],
 							HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
 							HDF5Constants.H5P_DEFAULT, (String[]) dataRead);
-				} catch (NullPointerException | HDF5Exception nphe) {
-					nphe.printStackTrace();
+					
+				} else if (dataType.equalTypes()) {
+		            H5.H5Dread(getElementId(), dataType.getConstants()[1],
+		                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+		                    HDF5Constants.H5P_DEFAULT, dataRead);
+					
+				} else {
+					Object[] data = (Object[]) dataType.getHdfType().createArray((int) numberOfValues());
+		            H5.H5Dread(getElementId(), dataType.getConstants()[1],
+		                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+		                    HDF5Constants.H5P_DEFAULT, data);
+					for (int i = 0; i < data.length; i++) {
+						dataRead[i] = (Type) dataType.hdfToKnime(data[i]);
+					}
 				}
 			}
-		} else {
-			try {
-		        if (isOpen()) {
-		        	if (getType().isKnimeType(Hdf5KnimeDataType.INTEGER)) {
-						Integer[] dataInt = new Integer[(int) numberOfValues()];
-						if (getType().isHdfType(Hdf5HdfDataType.BYTE)) {
-							Byte[] data = new Byte[(int) numberOfValues()];
-				            H5.H5Dread(getElementId(), getType().getConstants()[1],
-				                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-				                    HDF5Constants.H5P_DEFAULT, data);
-							for (int i = 0; i < data.length; i++) {
-								dataInt[i] = (Integer) (int) (byte) data[i];
-							}
-							dataRead = (Type[]) Arrays.copyOf(dataInt, dataInt.length);
-						} else if (getType().isHdfType(Hdf5HdfDataType.SHORT)) {
-							Short[] data = new Short[(int) numberOfValues()];
-				            H5.H5Dread(getElementId(), getType().getConstants()[1],
-				                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-				                    HDF5Constants.H5P_DEFAULT, data);
-							for (int i = 0; i < data.length; i++) {
-								dataInt[i] = (Integer) (int) (short) data[i];
-							}
-							dataRead = (Type[]) Arrays.copyOf(dataInt, dataInt.length);
-						} else if (getType().isHdfType(Hdf5HdfDataType.INTEGER)) {
-				            H5.H5Dread(getElementId(), getType().getConstants()[1],
-				                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-				                    HDF5Constants.H5P_DEFAULT, dataRead);
-						}
-						
-					} else if (getType().isKnimeType(Hdf5KnimeDataType.LONG)) {
-			            H5.H5Dread(getElementId(), getType().getConstants()[1],
-			                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-			                    HDF5Constants.H5P_DEFAULT, dataRead);
-						
-					} else if (getType().isKnimeType(Hdf5KnimeDataType.DOUBLE)) {
-						Double[] dataDouble = new Double[(int) numberOfValues()];
-						if (getType().isHdfType(Hdf5HdfDataType.FLOAT)) {
-							Float[] data = new Float[(int) numberOfValues()];
-				            H5.H5Dread(getElementId(), getType().getConstants()[1],
-				                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-				                    HDF5Constants.H5P_DEFAULT, data);
-							for (int i = 0; i < data.length; i++) {
-								dataDouble[i] = (Double) (double) (float) data[i];
-							}
-							dataRead = (Type[]) Arrays.copyOf(dataDouble, dataDouble.length);
-						} else if (getType().isHdfType(Hdf5HdfDataType.DOUBLE)) {
-				            H5.H5Dread(getElementId(), getType().getConstants()[1],
-				                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-				                    HDF5Constants.H5P_DEFAULT, dataRead);
-						}
-					}
-		        }
-		    } catch (Exception e) {
-		        e.printStackTrace();
-		    }
-		}
+	    } catch (Exception e) {
+	        e.printStackTrace();
+	    }
+		
 		return dataRead;
 	}
 	

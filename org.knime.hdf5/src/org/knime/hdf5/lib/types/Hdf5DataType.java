@@ -6,33 +6,37 @@ import org.knime.core.node.NodeLogger;
 
 public class Hdf5DataType {
 	
-	public static final int DEFAULT = 0;
+	public static final int DEFAULT_STRING_SIZE = 0;
 	
 	private final Hdf5HdfDataType m_hdfType;
 
 	private final Hdf5KnimeDataType m_knimeType;
 	
+	private final boolean m_fromDS;
+	
 	/**
 	 * 
 	 * @param type dataType class name ( starts with H5T_ )
 	 * @param size size in byte
+	 * @param unsigned true if the dataType is unsigned
 	 * @param fromDS true if the DataType is from a dataSet
 	 */
 	public Hdf5DataType(String type, int size, boolean unsigned, boolean fromDS) {
-		int typeCode = 400;
+		m_fromDS = fromDS;
+		int typeCode = 0;
 		
 		switch(type) {
 		case "H5T_INTEGER":
-			typeCode = 100;
+			typeCode = 10 + (unsigned ? 1 : 0);
 			break;
 		case "H5T_FLOAT":
-			typeCode = 200;
+			typeCode = 20;
 			break;
 		case "H5T_CHAR":
-			typeCode = 300;
+			typeCode = 30 + (unsigned ? 1 : 0);
 		}
 		
-		typeCode += 10 * size + (unsigned ? 1 : 0);
+		typeCode += 100 * size;
 		
 		switch (typeCode) {
 		case 110:
@@ -41,34 +45,34 @@ public class Hdf5DataType {
 		case 111:
 			m_hdfType = Hdf5HdfDataType.UBYTE;
 			break;
-		case 120:
+		case 210:
 			m_hdfType = Hdf5HdfDataType.SHORT;
 			break;
-		case 121:
+		case 211:
 			m_hdfType = Hdf5HdfDataType.USHORT;
 			break;
-		case 140:
+		case 410:
 			m_hdfType = Hdf5HdfDataType.INTEGER;
 			break;
-		case 141:
+		case 411:
 			m_hdfType = Hdf5HdfDataType.UINTEGER;
 			break;
-		case 180:
+		case 810:
 			m_hdfType = Hdf5HdfDataType.LONG;
 			break;
-		case 181:
+		case 811:
 			m_hdfType = Hdf5HdfDataType.ULONG;
 			break;
-		case 240:
+		case 420:
 			m_hdfType = Hdf5HdfDataType.FLOAT;
 			break;
-		case 280:
+		case 820:
 			m_hdfType = Hdf5HdfDataType.DOUBLE;
 			break;
-		case 340:
+		case 430:
 			m_hdfType = Hdf5HdfDataType.CHAR;
 			break;
-		case 341:
+		case 431:
 			m_hdfType = Hdf5HdfDataType.UCHAR;
 			break;
 		default:
@@ -116,7 +120,7 @@ public class Hdf5DataType {
 		} else if (type.equals(pack + "Double")) {
 			return new Hdf5DataType("H5T_FLOAT", 8, false, false);
 		} else if (type.equals(pack + "String")) {
-			return new Hdf5DataType("H5T_STRING", 0, false, false);
+			return new Hdf5DataType("H5T_STRING", DEFAULT_STRING_SIZE, false, false);
 		} else {
 			NodeLogger.getLogger("HDF5 Files").error("Datatype is not supported", new UnsupportedDataTypeException());
 			return null;
@@ -130,7 +134,7 @@ public class Hdf5DataType {
 	public Hdf5KnimeDataType getKnimeType() {
 		return m_knimeType;
 	}
-	
+
 	public long[] getConstants() {
 		return m_hdfType.getConstants();
 	}
@@ -141,5 +145,62 @@ public class Hdf5DataType {
 
 	public boolean isKnimeType(Hdf5KnimeDataType knimeType) {
 		return m_knimeType == knimeType;
+	}
+	
+	public boolean equalTypes() {
+		switch (m_knimeType) {
+		case INTEGER:
+			return isHdfType(Hdf5HdfDataType.INTEGER);
+		case LONG:
+			return isHdfType(Hdf5HdfDataType.LONG);
+		case DOUBLE:
+			return isHdfType(Hdf5HdfDataType.DOUBLE);
+		case STRING:
+			return isHdfType(Hdf5HdfDataType.STRING);
+		default:
+			return false;
+		}
+	}
+	
+	// TODO preconditions for argument in
+	public Object hdfToKnime(Object in) {
+		switch (m_hdfType) {
+		case BYTE:
+			return (Integer) (int) (byte) in;
+		case UBYTE:
+			return (Integer) ((int) (byte) in + ((int) (byte) in < 0 ? (int) Math.pow(2, 8) : 0));
+		case SHORT:
+			return (Integer) (int) (short) in;
+		case USHORT:
+			return (Integer) ((int) in + ((int) (short) in < 0 ? (int) Math.pow(2, 16) : 0));
+		case INTEGER:
+			return in;
+		case UINTEGER:
+			if (m_fromDS) {
+				return (Long) ((long) (int) in + ((long) (int) in < 0 ? (long) Math.pow(2, 32) : 0));
+			} else {
+				return (Double) (double) ((long) (int) in + ((long) (int) in < 0 ? (long) Math.pow(2, 32) : 0));
+			}
+		case LONG:
+			if (m_fromDS) {
+				return in;
+			} else {
+				return (Double) (double) (long) in;
+			}
+		case ULONG:
+			return (Double) ((double) (long) in + ((double) (long) in < 0 ? Math.pow(2, 64) : 0));
+		case FLOAT:
+			return (Double) (double) (float) in;
+		case DOUBLE:
+			return in;
+		case CHAR:
+			return in;
+		case UCHAR:
+			return in;
+		case STRING:
+			return in;
+		default:
+			return null;
+		}
 	}
 }

@@ -392,7 +392,9 @@ public class Hdf5Group extends Hdf5TreeElement {
 				long filetypeId = H5.H5Dget_type(dataSetId);
 				dataType = H5.H5Tget_class_name(H5.H5Tget_class(filetypeId));
 				size = (int) H5.H5Tget_size(filetypeId);
-				// TODO unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(filetypeId);
+				if (dataType.equals("H5T_INTEGER") || dataType.equals("H5T_CHAR")) {
+					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(filetypeId);
+				}
 				H5.H5Tclose(filetypeId);
 				H5.H5Dclose(dataSetId);
 			} catch (HDF5LibraryException | NullPointerException lnpe) {

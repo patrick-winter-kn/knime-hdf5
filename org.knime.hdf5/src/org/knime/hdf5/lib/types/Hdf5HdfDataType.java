@@ -31,17 +31,33 @@ public enum Hdf5HdfDataType {
 			m_constants[0] = HDF5Constants.H5T_STD_I8LE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT8;
 			break;
+		case 1:
+			m_constants[0] = HDF5Constants.H5T_STD_U8LE;
+			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT8;
+			break;
 		case 2:
 			m_constants[0] = HDF5Constants.H5T_STD_I16LE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT16;
+			break;
+		case 3:
+			m_constants[0] = HDF5Constants.H5T_STD_U16LE;
+			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT16;
 			break;
 		case 4:
 			m_constants[0] = HDF5Constants.H5T_STD_I32LE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT32;
 			break;
+		case 5:
+			m_constants[0] = HDF5Constants.H5T_STD_U32LE;
+			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT32;
+			break;
 		case 6:
 			m_constants[0] = HDF5Constants.H5T_STD_I64LE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT64;
+			break;
+		case 7:
+			m_constants[0] = HDF5Constants.H5T_STD_U64LE;
+			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT64;
 			break;
 		case 8:
 			m_constants[0] = HDF5Constants.H5T_IEEE_F32LE;
@@ -55,6 +71,10 @@ public enum Hdf5HdfDataType {
 			m_constants[0] = HDF5Constants.H5T_C_S1;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_CHAR;
 			break;
+		case 11:
+			m_constants[0] = HDF5Constants.H5T_C_S1;
+			m_constants[1] = HDF5Constants.H5T_NATIVE_UCHAR;
+			break;
 		case 12:
 			// constants will be initialized later in this case
 		}
@@ -64,7 +84,31 @@ public enum Hdf5HdfDataType {
 		return m_constants;
 	}
 	
-	boolean isString() {
-		return this == STRING;
+	public Object createArray(int length) {
+		switch (this) {
+		case BYTE:
+		case UBYTE:
+			return new Byte[length];
+		case SHORT:
+		case USHORT:
+			return new Short[length];
+		case INTEGER:
+		case UINTEGER:
+			return new Integer[length];
+		case LONG:
+		case ULONG:
+			return new Long[length];
+		case FLOAT:
+			return new Float[length];
+		case DOUBLE:
+			return new Double[length];
+		case CHAR:
+		case UCHAR:
+			return new Character[length];
+		case STRING:
+			return new String[length];
+		default:
+			return null;
+		}
 	}
 }
