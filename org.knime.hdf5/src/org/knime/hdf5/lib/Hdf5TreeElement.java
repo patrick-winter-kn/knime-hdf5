@@ -118,6 +118,29 @@ abstract public class Hdf5TreeElement {
 		return attribute;
 	}
 	
+	public Hdf5Attribute<?> getAttributeByPath(final String path) {
+		Hdf5Attribute<?> attribute = null;
+		
+		if (path.contains("/")) {
+			String name = path.substring(path.lastIndexOf("/") + 1);
+			if (this instanceof Hdf5Group) {
+				assert (this instanceof Hdf5Group);
+				String pathWithoutName = path.substring(0, path.length() - name.length() - 1);
+				Hdf5DataSet<?> dataSet = ((Hdf5Group) this).getDataSetByPath(pathWithoutName);
+				if (dataSet != null) {
+					attribute = dataSet.getAttribute(name);
+				} else {
+					Hdf5Group group = ((Hdf5Group) this).getGroupByPath(pathWithoutName);
+					attribute = group.getAttribute(name);
+				}
+			}
+		} else {
+			attribute = getAttribute(path);
+		}
+		
+		return attribute;
+	}
+	
 	public boolean existsAttribute(final String name) {
 		List<String> attrNames = loadAttributeNames();
 		if (attrNames != null) {
@@ -135,19 +158,38 @@ abstract public class Hdf5TreeElement {
 	public List<String> loadAttributeNames() {
 		List<String> attrNames = new LinkedList<>();
 		long numAttrs = -1;
+		Hdf5TreeElement treeElement = this instanceof Hdf5File ? this : getParent();
+		String path = this instanceof Hdf5File ? "/" : getName();
 		
 		try {
-			numAttrs = H5.H5Oget_info(getElementId()).num_attrs;
-			for (int i = 0; i < numAttrs; i++) {
-				attrNames.add(H5.H5Aget_name_by_idx((this instanceof Hdf5File ? this : getParent()).getElementId(),
-						getName(),HDF5Constants.H5_INDEX_NAME,
-						HDF5Constants.H5_ITER_INC, i, HDF5Constants.H5P_DEFAULT));
+			if (treeElement.isOpen()) {
+				numAttrs = H5.H5Oget_info(getElementId()).num_attrs;
+				for (int i = 0; i < numAttrs; i++) {
+					attrNames.add(H5.H5Aget_name_by_idx(treeElement.getElementId(), path,
+							HDF5Constants.H5_INDEX_NAME, HDF5Constants.H5_ITER_INC, i,
+							HDF5Constants.H5P_DEFAULT));
+				}
+			} else {
+				NodeLogger.getLogger("HDF5 Files").error("The parent "
+						+ treeElement.getName() + " of " + path + " is not open!", new IllegalStateException());
 			}
 		} catch (HDF5LibraryException | NullPointerException lnpe) {
 			lnpe.printStackTrace();
 		}
 		
 		return attrNames;
+	}
+	
+	List<String> getDirectAttributePaths() {
+		List<String> paths = new LinkedList<>();
+		String path = getPathFromFile() + (this instanceof Hdf5File ? "" : getName() + "/");
+		
+		Iterator<String> iterAttr = loadAttributeNames().iterator();
+		while (iterAttr.hasNext()) {
+			paths.add(path + iterAttr.next());
+		}
+		
+		return paths;
 	}
 	
 	Hdf5DataType findAttributeType(String name) {

@@ -59,8 +59,7 @@ public enum Hdf5KnimeDataType {
 		}
 	}
 	
-	@Override
-	public String toString() {
+	public String getArrayType() {
 		switch (this) {
 		case INTEGER:
 			return "Number (integer)";

@@ -23,6 +23,7 @@ import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterPanel;
+import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
@@ -30,16 +31,21 @@ import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 // TODO it should close all Files before ending KNIME
 
 class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
-	
-	private final DataColumnSpecFilterPanel m_filterPanel;
 
-    private DataColumnSpecFilterConfiguration m_conf;
-    
     private SettingsModelString m_source;
 
     private FlowVariableModel m_sourceFvm;	
     
-	private Hdf5File file;
+	private String m_filePath;
+
+	private final DataColumnSpecFilterPanel m_dataSetPanel;
+
+    private DataColumnSpecFilterConfiguration m_dsConf;
+    
+	private final DataColumnSpecFilterPanel m_attributePanel;
+
+    private DataColumnSpecFilterConfiguration m_attrConf;
+    
 	
 
     /**
@@ -55,60 +61,102 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     			"sourceHistory", JFileChooser.OPEN_DIALOG, false, m_sourceFvm);
     	source.setBorderTitle("Input file:");
     	addDialogComponent(source);
-    	
-        m_filterPanel = new DataColumnSpecFilterPanel();
-        super.addTab("DataSet Selector", m_filterPanel);
-        
+
     	// "Browse File"-Button
         DialogComponentButton fileButton = new DialogComponentButton("Browse File");
         fileButton.addActionListener(new ActionListener(){
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				// update the instance of the File which has been used
 		        final SettingsModelString model = (SettingsModelString) source.getModel();
 		        final String newValue = model.getStringValue();
 		        
 		        if (!newValue.equals("")) {
-		        	file = Hdf5File.createFile(newValue);
-		        	updateLists(file);
-		        	selectTab("DataSet Selector");
+		        	Hdf5File file = null;
+		        	
+		        	try {
+		        		// TODO there's a NullPointerException if the user quits before the file has been initialized
+			        	file = Hdf5File.createFile(newValue);
+			        	m_filePath = file.getFilePath();
+			        	updateLists(file);
+			        	selectTab("DataSet Selector");
+			        	// TODO more concrete Exception name
+		        	} catch (Exception ex) {
+		        	} finally {
+		        		file.close();
+		        	}
 		        }
 			}
         });
         addDialogComponent(fileButton);
+        
+        m_dataSetPanel = new DataColumnSpecFilterPanel();
+        super.addTab("DataSet Selector", m_dataSetPanel);
+        
+        m_attributePanel = new DataColumnSpecFilterPanel();
+        super.addTab("Attribute Selector", m_attributePanel);
+        
     }
     
-    private void updateLists(Hdf5File file) {
+    // TODO make discovery of dataSets and attributes more efficient
+    private void updateLists(Hdf5File file) throws Exception {
     	List<String> dsPaths = file.getAllDataSetPaths();
     	List<Hdf5DataSet<?>> dsList = new LinkedList<>();
     	
     	for (String path: dsPaths) {
-			dsList.add(file.getDataSetByPath(path));
+    		Hdf5DataSet<?> dataSet = file.getDataSetByPath(path);
+    		if (dataSet != null) {
+    			dsList.add(dataSet);
+    		}
 		}
+
+    	List<DataColumnSpec> dsColSpecList = new LinkedList<>();
+    	List<DataColumnSpec> attrColSpecList = new LinkedList<>();
     	
-    	List<DataColumnSpec> colSpecList = new LinkedList<>();
 		Iterator<Hdf5DataSet<?>> iterDS = dsList.iterator();
-		
 		while (iterDS.hasNext()) {
 			Hdf5DataSet<?> dataSet = iterDS.next();
 			Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
 			DataType type = dataType.getColumnType();
 			String pathWithName = dataSet.getPathFromFile() + dataSet.getName();
 			
-			colSpecList.add(new DataColumnSpecCreator(pathWithName, type).createSpec());
+			dsColSpecList.add(new DataColumnSpecCreator(pathWithName, type).createSpec());	
 		}
 		
-		DataColumnSpec[] colSpecs = colSpecList.toArray(new DataColumnSpec[] {});
-		updateConfigurations(new DataTableSpec(colSpecs));
+		Iterator<String> iterAttr = file.getAllAttributePaths().iterator();
+		while (iterAttr.hasNext()) {
+			String attrPath = iterAttr.next();
+			Hdf5Attribute<?> attribute = file.getAttributeByPath(attrPath);
+			if (attribute != null) {
+				Hdf5KnimeDataType attrDataType = attribute.getType().getKnimeType();
+				DataType attrType = attrDataType.getColumnType();
+				
+				attrColSpecList.add(new DataColumnSpecCreator(attrPath, attrType).createSpec());
+			}
+		}
+		
+		DataColumnSpec[] dsColSpecs = dsColSpecList.toArray(new DataColumnSpec[] {});
+		updateDataSetConfig(new DataTableSpec(dsColSpecs));
+		
+		DataColumnSpec[] attrColSpecs = attrColSpecList.toArray(new DataColumnSpec[] {});
+		updateAttributeConfig(new DataTableSpec(attrColSpecs));
     }
     
-    void updateConfigurations(final DataTableSpec spec) {
-        if (m_conf == null) {
-            m_conf = createDCSFilterConfiguration();
+    private void updateDataSetConfig(final DataTableSpec dsSpec) {
+        if (m_dsConf == null) {
+            m_dsConf = createDCSFilterConfiguration();
         }
-        // auto-configure
-        m_conf.loadDefaults(spec, false);
-        m_filterPanel.loadConfiguration(m_conf, spec);
+        
+        m_dsConf.loadDefaults(dsSpec, false);
+        m_dataSetPanel.loadConfiguration(m_dsConf, dsSpec);
+    }
+    
+    private void updateAttributeConfig(final DataTableSpec attrSpec) {
+        if (m_attrConf == null) {
+        	m_attrConf = createDCSFilterConfiguration();
+        }
+        
+        m_attrConf.loadDefaults(attrSpec, true);
+        m_attributePanel.loadConfiguration(m_attrConf, attrSpec);
     }
 	
     /** A new configuration to store the settings. Also enables the type filter.
@@ -131,17 +179,20 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
         System.out.println("LOAD SETTINGS");
     	final DataTableSpec spec = specs[0];
         if (spec == null || spec.getNumColumns() == 0) {
-            throw new NotConfigurableException("No columns available for "
-                    + "selection.");
+            throw new NotConfigurableException("No columns available for selection.");
         }
 
-        updateConfigurations(spec);
+        updateDataSetConfig(spec);
     }
     
     @Override
 	public void saveAdditionalSettingsTo(final NodeSettingsWO settings) {
-    	settings.addString("filePath", file.getFilePath());
-    	String[] dsPaths = m_filterPanel.getIncludedNamesAsSet().toArray(new String[] {});
+    	settings.addString("filePath", m_filePath);
+    	
+    	String[] dsPaths = m_dataSetPanel.getIncludedNamesAsSet().toArray(new String[] {});
 		settings.addStringArray("dataSets", dsPaths);
+		
+    	String[] attrPaths = m_attributePanel.getIncludedNamesAsSet().toArray(new String[] {});
+		settings.addStringArray("attributes", attrPaths);
 	}
 }

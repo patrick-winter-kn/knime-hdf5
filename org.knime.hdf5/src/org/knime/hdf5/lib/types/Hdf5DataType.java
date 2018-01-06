@@ -4,9 +4,14 @@ import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.node.NodeLogger;
 
+import hdf.hdf5lib.H5;
+import hdf.hdf5lib.exceptions.HDF5LibraryException;
+
 public class Hdf5DataType {
 	
 	public static final int DEFAULT_STRING_SIZE = 0;
+	
+	public static int stringAmount = 0;
 	
 	private final Hdf5HdfDataType m_hdfType;
 
@@ -27,16 +32,14 @@ public class Hdf5DataType {
 		
 		switch(type) {
 		case "H5T_INTEGER":
-			typeCode = 10 + (unsigned ? 1 : 0);
+			typeCode = 100 * size + 10 + (unsigned ? 1 : 0);
 			break;
 		case "H5T_FLOAT":
-			typeCode = 20;
+			typeCode = 100 * size + 20;
 			break;
 		case "H5T_CHAR":
 			typeCode = 30 + (unsigned ? 1 : 0);
 		}
-		
-		typeCode += 100 * size;
 		
 		switch (typeCode) {
 		case 110:
@@ -69,14 +72,15 @@ public class Hdf5DataType {
 		case 820:
 			m_hdfType = Hdf5HdfDataType.DOUBLE;
 			break;
-		case 430:
+		case 30:
 			m_hdfType = Hdf5HdfDataType.CHAR;
 			break;
-		case 431:
+		case 31:
 			m_hdfType = Hdf5HdfDataType.UCHAR;
 			break;
 		default:
 			m_hdfType = Hdf5HdfDataType.STRING;
+			stringAmount++;
 			break;
 		}
 		
@@ -122,11 +126,33 @@ public class Hdf5DataType {
 		} else if (type.equals(pack + "String")) {
 			return new Hdf5DataType("H5T_STRING", DEFAULT_STRING_SIZE, false, false);
 		} else {
-			NodeLogger.getLogger("HDF5 Files").error("Datatype is not supported", new UnsupportedDataTypeException());
+			NodeLogger.getLogger("HDF5 Files").error("Datatype of array is not supported", new UnsupportedDataTypeException());
 			return null;
 		}
 	}
 
+	public static void closeString() {
+		if (stringAmount == 1) {
+			// Terminate access to the file and memory type (see Hdf5DataSet.updateDimensions())
+			Hdf5HdfDataType dataType = Hdf5HdfDataType.STRING;
+			try {
+				if (dataType.getConstants()[0] >= 0) {
+	 				H5.H5Tclose(dataType.getConstants()[0]);
+	 				dataType.getConstants()[0] = -1;
+	 			}
+				if (dataType.getConstants()[1] >= 0) {
+	 				H5.H5Tclose(dataType.getConstants()[1]);
+	 				dataType.getConstants()[1] = -1;
+	 			}
+			} catch (HDF5LibraryException e) {
+				e.printStackTrace();
+			}
+		}
+		if (stringAmount >= 1) {
+			stringAmount--;
+		}
+	}
+	
 	public Hdf5HdfDataType getHdfType() {
 		return m_hdfType;
 	}
@@ -172,7 +198,7 @@ public class Hdf5DataType {
 		case SHORT:
 			return (Integer) (int) (short) in;
 		case USHORT:
-			return (Integer) ((int) in + ((int) (short) in < 0 ? (int) Math.pow(2, 16) : 0));
+			return (Integer) ((int) (short) in + ((int) (short) in < 0 ? (int) Math.pow(2, 16) : 0));
 		case INTEGER:
 			return in;
 		case UINTEGER:

@@ -124,8 +124,9 @@ public class Hdf5Attribute<Type> {
 			try {
 				// TODO check if other things also have to be closed
 				H5.H5Aclose(attributeId);
-				// TODO error of info?
-				NodeLogger.getLogger("HDF5 Files").error("DataType of \"" + name + "\" is not supported");
+				// TODO error or info?
+				NodeLogger.getLogger("HDF5 Files").error("DataType of \"" 
+						+ treeElement.getPathFromFile() + treeElement.getName() + "/" + name + "\" is not supported");
 			} catch (HDF5LibraryException hle) {
 				hle.printStackTrace();
 			}
@@ -248,12 +249,7 @@ public class Hdf5Attribute<Type> {
             if (isOpen()) {
                 if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
         	 		// Terminate access to the file and mem type.
-        			for (long datatype: getType().getConstants()) {
-        		 		if (datatype >= 0) {
-    		 				H5.H5Tclose(datatype);
-    		 				datatype = -1;
-    		 			}
-        			}
+        			Hdf5DataType.closeString();
          		}
 
                 // Close the dataspace.

@@ -23,6 +23,7 @@ public enum Hdf5HdfDataType {
 	
 	private final long[] m_constants = new long[2];
 
+	
 	Hdf5HdfDataType(final int typeId) {
 		m_typeId = typeId;
 		

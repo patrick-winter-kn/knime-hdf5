@@ -167,6 +167,23 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return group;
 	}
 	
+	public Hdf5Group getGroupByPath(String path) {
+		Hdf5Group group = null;
+		String name = path.split("/")[0];
+		
+		if (path.contains("/")) {
+			Hdf5Group grp = getGroup(name);
+			
+			if (grp != null) {
+				group = grp.getGroupByPath(path.substring(name.length() + 1));
+			}
+		} else {
+			group = getGroup(name);
+		}
+		
+		return group;
+	}
+	
 	public Hdf5DataSet<?> getDataSet(final String name) {
 		Hdf5DataSet<?> dataSet = null;
 		Iterator<Hdf5DataSet<?>> iter = getDataSets().iterator();
@@ -374,6 +391,32 @@ public class Hdf5Group extends Hdf5TreeElement {
 		while (iterG.hasNext()) {
 			Hdf5Group group = getGroup(iterG.next());
 			paths.addAll(group.getAllDataSetPaths());
+			group.close();
+		}
+		
+		return paths;
+	}
+
+	public List<String> getAllAttributePaths() {
+		List<String> paths = new LinkedList<>();
+		String path = getPathFromFile() + (this instanceof Hdf5File ? "" : getName() + "/");
+		
+		Iterator<String> iterAttr = loadAttributeNames().iterator();
+		while (iterAttr.hasNext()) {
+			paths.add(path + iterAttr.next());
+		}
+		
+		Iterator<String> iterDS = loadDataSetNames().iterator();
+		while (iterDS.hasNext()) {
+			Hdf5DataSet<?> dataSet = getDataSet(iterDS.next());
+			paths.addAll(dataSet.getDirectAttributePaths());
+			dataSet.close();
+		}
+		
+		Iterator<String> iterG = loadGroupNames().iterator();
+		while (iterG.hasNext()) {
+			Hdf5Group group = getGroup(iterG.next());
+			paths.addAll(group.getAllAttributePaths());
 			group.close();
 		}
 		
