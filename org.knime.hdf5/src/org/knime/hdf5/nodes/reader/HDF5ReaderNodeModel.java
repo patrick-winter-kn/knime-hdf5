@@ -120,6 +120,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				DataType type = dataType.getColumnType();
 				String pathWithName = dataSet.getPathFromFile() + dataSet.getName();
 
+				//System.out.println("DS pathWithName: " + pathWithName);
 				int rowNum = (int) dataSet.getDimensions()[0];
 				m_maxRows = rowNum > m_maxRows ? rowNum : m_maxRows;
 				

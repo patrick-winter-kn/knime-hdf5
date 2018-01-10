@@ -66,9 +66,19 @@ public class Hdf5Attribute<Type> {
 				if (attributeId >= 0) {
 					filetypeId = H5.H5Aget_type(attributeId);
 				}
+				dataspaceId = H5.H5Aget_space(attributeId);
+				if (dataspaceId >= 0) {
+					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
+					if (dims[0] > 1) {
+						H5.H5Aclose(attributeId);
+						NodeLogger.getLogger("HDF5 Files").error("String DataType with array length >1 of \"" 
+								+ treeElement.getPathFromFile() + treeElement.getName() + "/" + name + "\" is not supported");
+						return null;
+					}
+				}
 				if (filetypeId >= 0) {
-    				dims[0] = H5.H5Tget_size(filetypeId) + 1;
     				// (+1) for: Make room for null terminator
+    				dims[0] = H5.H5Tget_size(filetypeId) + 1;
 				}
 				
 				// Create the memory datatype.
@@ -86,11 +96,17 @@ public class Hdf5Attribute<Type> {
 					dataspaceId = H5.H5Aget_space(attributeId);
 				}
 				
+				if (dataspaceId >= 0 && H5.H5Sget_simple_extent_type(dataspaceId) == HDF5Constants.H5S_SCALAR) {
+					H5.H5Aclose(attributeId);
+					NodeLogger.getLogger("HDF5 Files").error("Scalar DataType of \"" 
+							+ treeElement.getPathFromFile() + treeElement.getName() + "/" + name + "\" is not supported");
+					return null;
+				}
+				
 				if (dataspaceId >= 0) {
 					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
 				}
 			}
-
 			
 			Object[] dataOut = (Object[]) dataType.getKnimeType().createArray((int) dims[0]);
 			
@@ -122,7 +138,7 @@ public class Hdf5Attribute<Type> {
         	
 		} catch (HDF5DatatypeInterfaceException hdtie) {
 			try {
-				// TODO check if other things also have to be closed
+				// TODO check if other things also have to be closed (see also about line 90)
 				H5.H5Aclose(attributeId);
 				// TODO error or info?
 				NodeLogger.getLogger("HDF5 Files").error("DataType of \"" 

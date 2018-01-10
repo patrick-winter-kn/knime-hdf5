@@ -5,6 +5,7 @@ import java.awt.event.ActionListener;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import javax.swing.JFileChooser;
 
@@ -23,9 +24,9 @@ import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterPanel;
-import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 // TODO it should close all Files before ending KNIME
@@ -81,6 +82,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 			        	selectTab("DataSet Selector");
 			        	// TODO more concrete Exception name
 		        	} catch (Exception ex) {
+		        		ex.getStackTrace();
 		        	} finally {
 		        		file.close();
 		        	}
@@ -122,13 +124,13 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 			dsColSpecList.add(new DataColumnSpecCreator(pathWithName, type).createSpec());	
 		}
 		
-		Iterator<String> iterAttr = file.getAllAttributePaths().iterator();
+		Map<String, Hdf5DataType> attrInfo = file.getAllAttributesInfo();
+		Iterator<String> iterAttr = attrInfo.keySet().iterator();
 		while (iterAttr.hasNext()) {
 			String attrPath = iterAttr.next();
-			Hdf5Attribute<?> attribute = file.getAttributeByPath(attrPath);
-			if (attribute != null) {
-				Hdf5KnimeDataType attrDataType = attribute.getType().getKnimeType();
-				DataType attrType = attrDataType.getColumnType();
+			Hdf5DataType dataType = attrInfo.get(attrPath);
+			if (dataType != null) {
+				DataType attrType = dataType.getKnimeType().getColumnType();
 				
 				attrColSpecList.add(new DataColumnSpecCreator(attrPath, attrType).createSpec());
 			}

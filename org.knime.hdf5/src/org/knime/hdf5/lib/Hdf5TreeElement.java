@@ -1,8 +1,10 @@
 package org.knime.hdf5.lib;
 
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
@@ -118,6 +120,18 @@ abstract public class Hdf5TreeElement {
 		return attribute;
 	}
 	
+	public boolean existsAttribute(final String name) {
+		List<String> attrNames = loadAttributeNames();
+		if (attrNames != null) {
+			for (String n: attrNames) {
+				if (n.equals(name)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	
 	public Hdf5Attribute<?> getAttributeByPath(final String path) {
 		Hdf5Attribute<?> attribute = null;
 		
@@ -141,16 +155,27 @@ abstract public class Hdf5TreeElement {
 		return attribute;
 	}
 	
-	public boolean existsAttribute(final String name) {
-		List<String> attrNames = loadAttributeNames();
-		if (attrNames != null) {
-			for (String n: attrNames) {
-				if (n.equals(name)) {
-					return true;
+	public Hdf5DataType getAttrTypeByPath(final String path) {
+		Hdf5DataType dataType = null;
+		
+		if (path.contains("/")) {
+			String name = path.substring(path.lastIndexOf("/") + 1);
+			if (this instanceof Hdf5Group) {
+				assert (this instanceof Hdf5Group);
+				String pathWithoutName = path.substring(0, path.length() - name.length() - 1);
+				Hdf5DataSet<?> dataSet = ((Hdf5Group) this).getDataSetByPath(pathWithoutName);
+				if (dataSet != null) {
+					dataType = dataSet.findAttributeType(name);
+				} else {
+					Hdf5Group group = ((Hdf5Group) this).getGroupByPath(pathWithoutName);
+					dataType = group.findAttributeType(name);
 				}
 			}
+		} else {
+			dataType = findAttributeType(path);
 		}
-		return false;
+		
+		return dataType;
 	}
 	
 	// TODO it maybe makes more sense if it's only possible for dataSets
@@ -180,13 +205,14 @@ abstract public class Hdf5TreeElement {
 		return attrNames;
 	}
 	
-	List<String> getDirectAttributePaths() {
-		List<String> paths = new LinkedList<>();
+	Map<String, Hdf5DataType> getDirectAttributePaths() {
+		Map<String, Hdf5DataType> paths = new LinkedHashMap<>();
 		String path = getPathFromFile() + (this instanceof Hdf5File ? "" : getName() + "/");
 		
 		Iterator<String> iterAttr = loadAttributeNames().iterator();
 		while (iterAttr.hasNext()) {
-			paths.add(path + iterAttr.next());
+			String name = iterAttr.next();
+			paths.put(path + name, findAttributeType(name));
 		}
 		
 		return paths;

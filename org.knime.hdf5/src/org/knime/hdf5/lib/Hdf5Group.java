@@ -3,8 +3,10 @@ package org.knime.hdf5.lib;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
@@ -397,26 +399,27 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return paths;
 	}
 
-	public List<String> getAllAttributePaths() {
-		List<String> paths = new LinkedList<>();
+	public Map<String, Hdf5DataType> getAllAttributesInfo() {
+		Map<String, Hdf5DataType> paths = new LinkedHashMap<>();
 		String path = getPathFromFile() + (this instanceof Hdf5File ? "" : getName() + "/");
 		
 		Iterator<String> iterAttr = loadAttributeNames().iterator();
 		while (iterAttr.hasNext()) {
-			paths.add(path + iterAttr.next());
+			String name = iterAttr.next();
+			paths.put(path + name, findAttributeType(name));
 		}
 		
 		Iterator<String> iterDS = loadDataSetNames().iterator();
 		while (iterDS.hasNext()) {
 			Hdf5DataSet<?> dataSet = getDataSet(iterDS.next());
-			paths.addAll(dataSet.getDirectAttributePaths());
+			paths.putAll(dataSet.getDirectAttributePaths());
 			dataSet.close();
 		}
 		
 		Iterator<String> iterG = loadGroupNames().iterator();
 		while (iterG.hasNext()) {
 			Hdf5Group group = getGroup(iterG.next());
-			paths.addAll(group.getAllAttributePaths());
+			paths.putAll(group.getAllAttributesInfo());
 			group.close();
 		}
 		
