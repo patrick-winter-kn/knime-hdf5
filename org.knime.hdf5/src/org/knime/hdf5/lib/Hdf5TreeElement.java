@@ -155,31 +155,6 @@ abstract public class Hdf5TreeElement {
 		return attribute;
 	}
 	
-	public Hdf5DataType getAttrTypeByPath(final String path) {
-		Hdf5DataType dataType = null;
-		
-		if (path.contains("/")) {
-			String name = path.substring(path.lastIndexOf("/") + 1);
-			if (this instanceof Hdf5Group) {
-				assert (this instanceof Hdf5Group);
-				String pathWithoutName = path.substring(0, path.length() - name.length() - 1);
-				Hdf5DataSet<?> dataSet = ((Hdf5Group) this).getDataSetByPath(pathWithoutName);
-				if (dataSet != null) {
-					dataType = dataSet.findAttributeType(name);
-				} else {
-					Hdf5Group group = ((Hdf5Group) this).getGroupByPath(pathWithoutName);
-					dataType = group.findAttributeType(name);
-				}
-			}
-		} else {
-			dataType = findAttributeType(path);
-		}
-		
-		return dataType;
-	}
-	
-	// TODO it maybe makes more sense if it's only possible for dataSets
-	// if it's also possible for parent groups, it should be done recursively (add the attributes from parent groups to dataSets)
 	public List<String> loadAttributeNames() {
 		List<String> attrNames = new LinkedList<>();
 		long numAttrs = -1;
@@ -205,7 +180,7 @@ abstract public class Hdf5TreeElement {
 		return attrNames;
 	}
 	
-	Map<String, Hdf5DataType> getDirectAttributePaths() {
+	Map<String, Hdf5DataType> getDirectAttributesInfo() {
 		Map<String, Hdf5DataType> paths = new LinkedHashMap<>();
 		String path = getPathFromFile() + (this instanceof Hdf5File ? "" : getName() + "/");
 		
@@ -227,13 +202,13 @@ abstract public class Hdf5TreeElement {
 			
 			try {
 				attributeId = H5.H5Aopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
-				long filetypeId = H5.H5Aget_type(attributeId);
-				dataType = H5.H5Tget_class_name(H5.H5Tget_class(filetypeId));
-				size = (int) H5.H5Tget_size(filetypeId);
+				long typeId = H5.H5Aget_type(attributeId);
+				dataType = H5.H5Tget_class_name(H5.H5Tget_class(typeId));
+				size = (int) H5.H5Tget_size(typeId);
 				if (dataType.equals("H5T_INTEGER") || dataType.equals("H5T_CHAR")) {
-					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(filetypeId);
+					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(typeId);
 				}
-				H5.H5Tclose(filetypeId);
+				H5.H5Tclose(typeId);
 				H5.H5Aclose(attributeId);
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
@@ -241,8 +216,8 @@ abstract public class Hdf5TreeElement {
 			
 			return new Hdf5DataType(dataType, size, unsigned, false);
 		} else {
-			NodeLogger.getLogger("HDF5 Files").error("There isn't an attribute with this name in this treeElement!",
-					new IllegalArgumentException());
+			NodeLogger.getLogger("HDF5 Files").error("There isn't an attribute \"" + name + "\" in treeElement!\""
+					+ getPathFromFile() + getName() + '"', new IllegalArgumentException());
 			return null;
 		}
 	}

@@ -291,19 +291,21 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	public void extendRows(DataRow[] rows) {
 		Type[] dataRead = read();
 		
-		int rowNum = (int) getDimensions()[0];
-		int colNum = (int) numberOfValuesRange(1, getDimensions().length);
-		
-		for (int c = 0; c < colNum; c++) {
-			for (int r = 0; r < rows.length; r++) {
-				DefaultRow row = new DefaultRow("Row" + r, getDataCell(r < rowNum, r < rowNum ? dataRead[r * colNum + c] : null));
-				rows[r] = (rows[r] == null) ? row : new JoinedRow(rows[r], row);
+		if (getDimensions().length != 0) {
+			int rowNum = (int) getDimensions()[0];
+			int colNum = (int) numberOfValuesRange(1, getDimensions().length);
+			
+			for (int c = 0; c < colNum; c++) {
+				for (int r = 0; r < rows.length; r++) {
+					DefaultRow row = new DefaultRow("Row" + r, getDataCell(r < rowNum ? dataRead[r * colNum + c] : null));
+					rows[r] = (rows[r] == null) ? row : new JoinedRow(rows[r], row);
+				}
 			}
 		}
 	}
 	
-	private DataCell getDataCell(boolean valid, Type value) {
-		if (!valid || value == null) {
+	private DataCell getDataCell(Type value) {
+		if (value == null) {
 			return new MissingCell("(null) on joining dataSets");
 		}
 		

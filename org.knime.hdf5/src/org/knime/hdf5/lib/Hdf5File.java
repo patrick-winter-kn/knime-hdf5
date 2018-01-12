@@ -118,7 +118,7 @@ public class Hdf5File extends Hdf5Group {
 			e.printStackTrace();
 		}
 
-        System.out.println("Open objects:\n");
+        System.out.println("Open objects:");
 
         for (int i = 0; i < openedObjects; i++) {
         	try {
@@ -131,8 +131,9 @@ public class Hdf5File extends Hdf5Group {
 			} catch (HDF5LibraryException e) {
 				e.printStackTrace();
 			}
-            System.out.println(i + ": type " + objectType + ", name " + pathFromFile);
+            System.out.println("\t" + i + ": type " + objectType + ", name " + pathFromFile);
         }
+        System.out.println();
          
         return openedObjects;
 	}
@@ -154,14 +155,15 @@ public class Hdf5File extends Hdf5Group {
 	    		while (iterAttrs.hasNext()) {
 	    			iterAttrs.next().close();
 	    		}
-	    		
+
 	    		Iterator<Hdf5Group> iterGrps = getGroups().iterator();
 	    		while (iterGrps.hasNext()) {
 	    			iterGrps.next().close();
 	    		}
 
-            	whatIsOpen();
-				NodeLogger.getLogger("HDF5 Files").info("File " + getName() + " closed: "
+				NodeLogger.getLogger("HDF5 Files").debug("Number of open objects in file \""
+						+ getName() + "\": " + (whatIsOpen() - 1));
+				NodeLogger.getLogger("HDF5 Files").debug("File \"" + getName() + "\" closed: "
 						+ H5.H5Fclose(getElementId()));
                 setOpen(false);
             }

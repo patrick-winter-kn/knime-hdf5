@@ -71,7 +71,7 @@ public class Hdf5Attribute<Type> {
 					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
 					if (dims[0] > 1) {
 						H5.H5Aclose(attributeId);
-						NodeLogger.getLogger("HDF5 Files").error("String DataType with array length >1 of \"" 
+						NodeLogger.getLogger("HDF5 Files").error("String DataType with array length >1 of Attribute \"" 
 								+ treeElement.getPathFromFile() + treeElement.getName() + "/" + name + "\" is not supported");
 						return null;
 					}
@@ -98,7 +98,7 @@ public class Hdf5Attribute<Type> {
 				
 				if (dataspaceId >= 0 && H5.H5Sget_simple_extent_type(dataspaceId) == HDF5Constants.H5S_SCALAR) {
 					H5.H5Aclose(attributeId);
-					NodeLogger.getLogger("HDF5 Files").error("Scalar DataType of \"" 
+					NodeLogger.getLogger("HDF5 Files").error("Scalar DataType of Attribute \"" 
 							+ treeElement.getPathFromFile() + treeElement.getName() + "/" + name + "\" is not supported");
 					return null;
 				}
@@ -106,6 +106,13 @@ public class Hdf5Attribute<Type> {
 				if (dataspaceId >= 0) {
 					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
 				}
+			}
+			
+			if (dims[0] == 0) {
+				H5.H5Aclose(attributeId);
+				NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + treeElement.getPathFromFile()
+						+ treeElement.getName() + "/" + name + "\" with first dimension 0 (dims[0] == 0) cannot be read");
+				return null;
 			}
 			
 			Object[] dataOut = (Object[]) dataType.getKnimeType().createArray((int) dims[0]);
@@ -138,10 +145,10 @@ public class Hdf5Attribute<Type> {
         	
 		} catch (HDF5DatatypeInterfaceException hdtie) {
 			try {
-				// TODO check if other things also have to be closed (see also about line 90)
+				// TODO check if other things also have to be closed (see also at the scalar and dim[0] == 0 exception)
 				H5.H5Aclose(attributeId);
 				// TODO error or info?
-				NodeLogger.getLogger("HDF5 Files").error("DataType of \"" 
+				NodeLogger.getLogger("HDF5 Files").error("DataType of Attribute \"" 
 						+ treeElement.getPathFromFile() + treeElement.getName() + "/" + name + "\" is not supported");
 			} catch (HDF5LibraryException hle) {
 				hle.printStackTrace();

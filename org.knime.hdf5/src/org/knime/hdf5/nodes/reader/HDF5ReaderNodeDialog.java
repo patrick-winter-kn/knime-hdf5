@@ -2,17 +2,10 @@ package org.knime.hdf5.nodes.reader;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
 
 import javax.swing.JFileChooser;
 
-import org.knime.core.data.DataColumnSpec;
-import org.knime.core.data.DataColumnSpecCreator;
 import org.knime.core.data.DataTableSpec;
-import org.knime.core.data.DataType;
 import org.knime.core.node.FlowVariableModel;
 import org.knime.core.node.NodeDialogPane;
 import org.knime.core.node.NodeSettingsRO;
@@ -24,10 +17,7 @@ import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterPanel;
-import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
-import org.knime.hdf5.lib.types.Hdf5DataType;
-import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 // TODO it should close all Files before ending KNIME
 
@@ -78,7 +68,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		        		// TODO there's a NullPointerException if the user quits before the file has been initialized
 			        	file = Hdf5File.createFile(newValue);
 			        	m_filePath = file.getFilePath();
-			        	updateLists(file);
+			        	updateConfigs(file);
 			        	selectTab("DataSet Selector");
 			        	// TODO more concrete Exception name
 		        	} catch (Exception ex) {
@@ -99,48 +89,9 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
         
     }
     
-    // TODO make discovery of dataSets and attributes more efficient
-    private void updateLists(Hdf5File file) throws Exception {
-    	List<String> dsPaths = file.getAllDataSetPaths();
-    	List<Hdf5DataSet<?>> dsList = new LinkedList<>();
-    	
-    	for (String path: dsPaths) {
-    		Hdf5DataSet<?> dataSet = file.getDataSetByPath(path);
-    		if (dataSet != null) {
-    			dsList.add(dataSet);
-    		}
-		}
-
-    	List<DataColumnSpec> dsColSpecList = new LinkedList<>();
-    	List<DataColumnSpec> attrColSpecList = new LinkedList<>();
-    	
-		Iterator<Hdf5DataSet<?>> iterDS = dsList.iterator();
-		while (iterDS.hasNext()) {
-			Hdf5DataSet<?> dataSet = iterDS.next();
-			Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
-			DataType type = dataType.getColumnType();
-			String pathWithName = dataSet.getPathFromFile() + dataSet.getName();
-			
-			dsColSpecList.add(new DataColumnSpecCreator(pathWithName, type).createSpec());	
-		}
-		
-		Map<String, Hdf5DataType> attrInfo = file.getAllAttributesInfo();
-		Iterator<String> iterAttr = attrInfo.keySet().iterator();
-		while (iterAttr.hasNext()) {
-			String attrPath = iterAttr.next();
-			Hdf5DataType dataType = attrInfo.get(attrPath);
-			if (dataType != null) {
-				DataType attrType = dataType.getKnimeType().getColumnType();
-				
-				attrColSpecList.add(new DataColumnSpecCreator(attrPath, attrType).createSpec());
-			}
-		}
-		
-		DataColumnSpec[] dsColSpecs = dsColSpecList.toArray(new DataColumnSpec[] {});
-		updateDataSetConfig(new DataTableSpec(dsColSpecs));
-		
-		DataColumnSpec[] attrColSpecs = attrColSpecList.toArray(new DataColumnSpec[] {});
-		updateAttributeConfig(new DataTableSpec(attrColSpecs));
+    private void updateConfigs(Hdf5File file) throws Exception {
+    	updateDataSetConfig(file.createSpecOfDataSets());
+		updateAttributeConfig(file.createSpecOfAttributes());
     }
     
     private void updateDataSetConfig(final DataTableSpec dsSpec) {

@@ -10,7 +10,7 @@ enum Hdf5Object {
 	TYPE(2),			// Object is a named data type
 	LINK(3),			// Object is a symbolic link
 	UDLINK(4),			// Object is a user-defined link
-	RESERVED_5(5), 		// Reserved for future use
+	ATTRIBUTE(5), 		// Object is an attribute (but not a real object in .h5)
 	RESERVED_6(6),		// Reserved for future use
 	RESERVED_7(7);		// Reserved for future use
 	private static final Map<Integer, Hdf5Object> lookup = new HashMap<>();

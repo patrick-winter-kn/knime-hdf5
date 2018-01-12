@@ -46,10 +46,10 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			NodeLogger.getLogger("HDF5 Files").error("No dataSet to use", new NullPointerException());
 			throw new NullPointerException();
 		}
-		
+
 		Hdf5File file = null;
 		BufferedDataContainer outContainer = null;
-		
+
 		try {
 			file = Hdf5File.createFile(m_filePath);
 			outContainer = exec.createDataContainer(createOutSpec());
@@ -58,7 +58,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			}
 			
 			pushFlowVariables(file);
-			
+
 		} catch (Exception e) {
 		} finally {
 			file.close();
@@ -70,7 +70,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	
 	private DataRow[] dataSetsToRows(Hdf5File file) {
 		DataRow[] rows = new DataRow[m_maxRows];
-		
+
 		for (String dsPath: m_dsPaths) {
 			Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPath);
 			dataSet.open();
@@ -90,7 +90,6 @@ public class HDF5ReaderNodeModel extends NodeModel {
 					
 					if (attrNum == 1) {
 						if (attr.getType().isKnimeType(Hdf5KnimeDataType.INTEGER)) {
-							// TODO maybe only add dataSet name to attr name if the attr name would exist more than once
 							pushFlowVariableInt(attrPath, (Integer) attr.getValue()[0]);
 							
 						} else if (attr.getType().isKnimeType(Hdf5KnimeDataType.DOUBLE)) {
@@ -118,16 +117,18 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPath);
 				Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
 				DataType type = dataType.getColumnType();
-				String pathWithName = dataSet.getPathFromFile() + dataSet.getName();
 
-				//System.out.println("DS pathWithName: " + pathWithName);
-				int rowNum = (int) dataSet.getDimensions()[0];
-				m_maxRows = rowNum > m_maxRows ? rowNum : m_maxRows;
-				
-				// TODO later only for 2-dimensional dataSets
-				int colNum = (int) dataSet.numberOfValuesRange(1, dataSet.getDimensions().length);
-				for (int i = 0; i < colNum; i++) {
-					colSpecList.add(new DataColumnSpecCreator(pathWithName + i, type).createSpec());
+				if (dataSet.getDimensions().length != 0) {
+					int rowNum = (int) dataSet.getDimensions()[0];
+					m_maxRows = rowNum > m_maxRows ? rowNum : m_maxRows;
+					
+					int colNum = (int) dataSet.numberOfValuesRange(1, dataSet.getDimensions().length);
+					for (int i = 0; i < colNum; i++) {
+						colSpecList.add(new DataColumnSpecCreator(dsPath + i, type).createSpec());
+					}
+				} else {
+					NodeLogger.getLogger("HDF5 Files").error("DataSet \"" + dsPath + "\" has 0 dimensions",
+							new UnsupportedOperationException());
 				}
 			}
 		}
