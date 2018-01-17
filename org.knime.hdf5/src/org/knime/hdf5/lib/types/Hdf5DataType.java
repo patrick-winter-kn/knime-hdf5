@@ -1,9 +1,5 @@
 package org.knime.hdf5.lib.types;
 
-import javax.activation.UnsupportedDataTypeException;
-
-import org.knime.core.node.NodeLogger;
-
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
@@ -125,12 +121,11 @@ public class Hdf5DataType {
 			return new Hdf5DataType("H5T_FLOAT", 8, false, false);
 		} else if (type.equals(pack + "String")) {
 			return new Hdf5DataType("H5T_STRING", DEFAULT_STRING_SIZE, false, false);
-		} else {
-			NodeLogger.getLogger("HDF5 Files").error("Datatype of array is not supported", new UnsupportedDataTypeException());
-			return null;
 		}
+		return null;
 	}
 
+	// TODO is there parallelization?
 	public static void closeString() {
 		if (stringAmount == 1) {
 			// Terminate access to the file and memory type (see Hdf5DataSet.updateDimensions())
@@ -228,5 +223,10 @@ public class Hdf5DataType {
 		default:
 			return null;
 		}
+	}
+	
+	@Override
+	public String toString() {
+		return "hdfType=" + m_hdfType + ",knimeType=" + m_knimeType + ",fromDS=" + m_fromDS;
 	}
 }

@@ -12,20 +12,21 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.NotConfigurableException;
 import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
+import org.knime.core.node.defaultnodesettings.DialogComponentBoolean;
 import org.knime.core.node.defaultnodesettings.DialogComponentButton;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
+import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterPanel;
+import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
-
-// TODO it should close all Files before ending KNIME
 
 class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 
-    private SettingsModelString m_source;
+    private SettingsModelString m_fcSource;
 
-    private FlowVariableModel m_sourceFvm;	
+    private FlowVariableModel m_fcSourceFvm;
     
 	private String m_filePath;
 
@@ -37,35 +38,50 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 
     private DataColumnSpecFilterConfiguration m_attrConf;
     
-	
+    private DialogComponentBoolean m_missingValues;
+    
+    private SettingsModelBoolean m_mvSource;
 
     /**
      * Creates a new {@link NodeDialogPane} for the column filter in order to
      * set the desired columns.
      */
     public HDF5ReaderNodeDialog() {
-        m_source = SettingsFactory.createSourceSettings();
-        m_sourceFvm = super.createFlowVariableModel(m_source);
+    	createFileChooser();
         renameTab("Options", "File Chooser");
         
-    	DialogComponentFileChooser source = new DialogComponentFileChooser(m_source,
-    			"sourceHistory", JFileChooser.OPEN_DIALOG, false, m_sourceFvm);
-    	source.setBorderTitle("Input file:");
-    	addDialogComponent(source);
+        m_dataSetPanel = new DataColumnSpecFilterPanel();
+        addTab("DataSet Selector", m_dataSetPanel);
+        
+        m_attributePanel = new DataColumnSpecFilterPanel();
+        addTab("Attribute Selector", m_attributePanel);
+
+    	m_mvSource = new SettingsModelBoolean("source", true);
+    	m_missingValues = new DialogComponentBoolean(m_mvSource, "allow missing values");
+    	addDialogComponent(m_missingValues);
+        
+    }
+    
+    private void createFileChooser() {
+    	m_fcSource = SettingsFactory.createSourceSettings();
+        m_fcSourceFvm = super.createFlowVariableModel(m_fcSource);
+    	DialogComponentFileChooser fileChooser = new DialogComponentFileChooser(m_fcSource,
+    			"sourceHistory", JFileChooser.OPEN_DIALOG, false, m_fcSourceFvm);
+    	fileChooser.setBorderTitle("Input file:");
+    	addDialogComponent(fileChooser);
 
     	// "Browse File"-Button
         DialogComponentButton fileButton = new DialogComponentButton("Browse File");
         fileButton.addActionListener(new ActionListener(){
 			@Override
 			public void actionPerformed(ActionEvent e) {
-		        final SettingsModelString model = (SettingsModelString) source.getModel();
-		        final String newValue = model.getStringValue();
+		        SettingsModelString model = (SettingsModelString) fileChooser.getModel();
+		        String newValue = model.getStringValue();
 		        
 		        if (!newValue.equals("")) {
 		        	Hdf5File file = null;
 		        	
 		        	try {
-		        		// TODO there's a NullPointerException if the user quits before the file has been initialized
 			        	file = Hdf5File.createFile(newValue);
 			        	m_filePath = file.getFilePath();
 			        	updateConfigs(file);
@@ -80,13 +96,6 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 			}
         });
         addDialogComponent(fileButton);
-        
-        m_dataSetPanel = new DataColumnSpecFilterPanel();
-        super.addTab("DataSet Selector", m_dataSetPanel);
-        
-        m_attributePanel = new DataColumnSpecFilterPanel();
-        super.addTab("Attribute Selector", m_attributePanel);
-        
     }
     
     private void updateConfigs(Hdf5File file) throws Exception {
@@ -144,6 +153,26 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     	
     	String[] dsPaths = m_dataSetPanel.getIncludedNamesAsSet().toArray(new String[] {});
 		settings.addStringArray("dataSets", dsPaths);
+		
+		SettingsModelBoolean model = (SettingsModelBoolean) m_missingValues.getModel();
+        boolean missingValues = model.getBooleanValue();
+        
+        if (!missingValues) {
+			Hdf5File file = Hdf5File.createFile(m_filePath);
+			boolean allRowsEqual = true;
+			long rows = 0;
+			int i = 0;
+			while (allRowsEqual && i < dsPaths.length) {
+				Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPaths[i]);
+				if (i == 0) {
+					rows = dataSet.getDimensions()[0];
+				} else {
+					allRowsEqual = rows == dataSet.getDimensions()[0];
+				}
+				i++;
+			}
+			settings.addBoolean("allRowsEqual", allRowsEqual);
+		}
 		
     	String[] attrPaths = m_attributePanel.getIncludedNamesAsSet().toArray(new String[] {});
 		settings.addStringArray("attributes", attrPaths);

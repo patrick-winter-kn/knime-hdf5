@@ -54,13 +54,11 @@ public class Hdf5File extends Hdf5Group {
 			if (!isOpen()) {
 				setElementId(H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDWR,
 						HDF5Constants.H5P_DEFAULT));
-				NodeLogger.getLogger("HDF5 Files").info("File " + getName() + " opened: " + getElementId());
 				setOpen(true);
 			}
 		} catch (HDF5FileInterfaceException fie) {
 	    	try {
 				setElementId(H5.H5Fcreate(getFilePath(), HDF5Constants.H5F_ACC_TRUNC, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
-				NodeLogger.getLogger("HDF5 Files").info("File " + getName() + " created: " + getElementId());
                 setOpen(true);
             } catch (Exception e) {
 				e.printStackTrace();
@@ -96,7 +94,7 @@ public class Hdf5File extends Hdf5Group {
         	if (isOpen()) {
         		count = H5.H5Fget_obj_count(getElementId(), HDF5Constants.H5F_OBJ_ALL);
 			} else {
-				NodeLogger.getLogger("HDF5 Files").error("File " + getName() + " is not opened!",
+				NodeLogger.getLogger("HDF5 Files").error("File " + getFilePath() + " is not opened!",
 						new IllegalStateException());
 				return count;
 			}

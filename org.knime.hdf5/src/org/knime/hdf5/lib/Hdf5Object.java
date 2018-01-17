@@ -4,7 +4,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 
-enum Hdf5Object {
+public enum Hdf5Object {
 	GROUP(0),			// Object is a group
 	DATASET(1),			// Object is a dataset
 	TYPE(2),			// Object is a named data type

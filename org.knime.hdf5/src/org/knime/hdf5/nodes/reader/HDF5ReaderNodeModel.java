@@ -36,6 +36,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	
 	private String[] m_attrPaths;
 	
+	
 	protected HDF5ReaderNodeModel() {
 		super(0, 1);
 	}
@@ -44,7 +45,6 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
 		if (m_filePath == null || m_dsPaths == null || m_dsPaths.length == 0) {
 			NodeLogger.getLogger("HDF5 Files").error("No dataSet to use", new NullPointerException());
-			throw new NullPointerException();
 		}
 
 		Hdf5File file = null;
@@ -53,6 +53,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		try {
 			file = Hdf5File.createFile(m_filePath);
 			outContainer = exec.createDataContainer(createOutSpec());
+			
 			for (DataRow row: dataSetsToRows(file)) {
 				outContainer.addRowToTable(row);
 			}
@@ -122,9 +123,15 @@ public class HDF5ReaderNodeModel extends NodeModel {
 					int rowNum = (int) dataSet.getDimensions()[0];
 					m_maxRows = rowNum > m_maxRows ? rowNum : m_maxRows;
 					
-					int colNum = (int) dataSet.numberOfValuesRange(1, dataSet.getDimensions().length);
-					for (int i = 0; i < colNum; i++) {
-						colSpecList.add(new DataColumnSpecCreator(dsPath + i, type).createSpec());
+					if (dataSet.getDimensions().length > 1) {
+						long[] colDims = new long[dataSet.getDimensions().length - 1];
+						Arrays.fill(colDims, 0);
+						
+						do {
+							colSpecList.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
+						} while (dataSet.nextColumnDims(colDims));
+					} else {
+						colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
 					}
 				} else {
 					NodeLogger.getLogger("HDF5 Files").error("DataSet \"" + dsPath + "\" has 0 dimensions",
@@ -133,14 +140,11 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			}
 		}
 		
-		DataColumnSpec[] colSpecs = colSpecList.toArray(new DataColumnSpec[] {});
-		DataTableSpec tableSpec = new DataTableSpec(colSpecs);
-        return tableSpec;
+        return new DataTableSpec(colSpecList.toArray(new DataColumnSpec[] {}));
     }
 	
 	@Override
 	protected DataTableSpec[] configure(DataTableSpec[] inSpecs) throws InvalidSettingsException {
-		// TODO here for Exceptions you know before using execute()
 		return new DataTableSpec[]{createOutSpec()};
     }
 
@@ -156,7 +160,12 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	protected void saveSettingsTo(NodeSettingsWO settings) {}
 
 	@Override
-	protected void validateSettings(NodeSettingsRO settings) throws InvalidSettingsException {}
+	protected void validateSettings(NodeSettingsRO settings) throws InvalidSettingsException {
+		if (settings.containsKey("allRowsEqual") && !settings.getBoolean("allRowsEqual")) {
+			throw new InvalidSettingsException("contains MissingCells (not all columns have equal row number)");
+		}
+		System.out.println("missingCells");
+	}
 
 	@Override
 	protected void loadValidatedSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
@@ -164,6 +173,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			m_filePath = settings.getString("filePath");
 			m_dsPaths = settings.getStringArray("dataSets");
 			m_maxRows = 0;
+			//m_containsMissingCells = false;
 			m_attrPaths = settings.getStringArray("attributes");
 		}
 	}

@@ -1,5 +1,7 @@
 package org.knime.hdf5.lib;
 
+import javax.activation.UnsupportedDataTypeException;
+
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
@@ -23,6 +25,8 @@ public class Hdf5Attribute<Type> {
 	
 	private long m_dimension;
 	
+	private long m_stringLength;
+	
 	private boolean m_open;
 	
 	private final Hdf5DataType m_type;
@@ -40,11 +44,11 @@ public class Hdf5Attribute<Type> {
 	public Hdf5Attribute(final String name, final Type[] value) {
 		m_name = name;
 		m_value = value;
-		m_dimension = value.length;
 		m_type = Hdf5DataType.getTypeByArray(value);
 		
-		if (m_type.isHdfType(Hdf5HdfDataType.STRING)) {
-			setDimension(((String) value[0]).length() + 1);
+		if (m_type == null) {
+			NodeLogger.getLogger("HDF5 Files").error("Datatype of array is not supported",
+					new UnsupportedDataTypeException());
 		}
 	}
 	
@@ -58,6 +62,7 @@ public class Hdf5Attribute<Type> {
 			long dataspaceId = -1;
 
 			long[] dims = new long[1];
+			long stringLength = 0;
 			if (dataType.isHdfType(Hdf5HdfDataType.STRING)) {
 				long filetypeId = -1;
 				long memtypeId = -1;
@@ -65,26 +70,28 @@ public class Hdf5Attribute<Type> {
 				// Get the datatype and its size.
 				if (attributeId >= 0) {
 					filetypeId = H5.H5Aget_type(attributeId);
+					dataspaceId = H5.H5Aget_space(attributeId);
 				}
-				dataspaceId = H5.H5Aget_space(attributeId);
+				
 				if (dataspaceId >= 0) {
 					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
 					if (dims[0] > 1) {
 						H5.H5Aclose(attributeId);
-						NodeLogger.getLogger("HDF5 Files").error("String DataType with array length >1 of Attribute \"" 
-								+ treeElement.getPathFromFile() + treeElement.getName() + "/" + name + "\" is not supported");
+						NodeLogger.getLogger("HDF5 Files").error("String DataType with array length >1 of attribute \"" 
+								+ treeElement.getPathFromFileWithName(true) + name + "\" is not supported");
 						return null;
 					}
 				}
+				
 				if (filetypeId >= 0) {
-    				// (+1) for: Make room for null terminator
-    				dims[0] = H5.H5Tget_size(filetypeId) + 1;
+    				stringLength = H5.H5Tget_size(filetypeId);
 				}
 				
 				// Create the memory datatype.
 				memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
 				if (memtypeId >= 0) {
-					H5.H5Tset_size(memtypeId, dims[0]);
+    				// (+1) for: Make room for null terminator
+					H5.H5Tset_size(memtypeId, stringLength + 1);
 				}
 				
 				dataType.getConstants()[0] = filetypeId;
@@ -99,7 +106,7 @@ public class Hdf5Attribute<Type> {
 				if (dataspaceId >= 0 && H5.H5Sget_simple_extent_type(dataspaceId) == HDF5Constants.H5S_SCALAR) {
 					H5.H5Aclose(attributeId);
 					NodeLogger.getLogger("HDF5 Files").error("Scalar DataType of Attribute \"" 
-							+ treeElement.getPathFromFile() + treeElement.getName() + "/" + name + "\" is not supported");
+							+ treeElement.getPathFromFileWithName(true) + name + "\" is not supported");
 					return null;
 				}
 				
@@ -110,27 +117,31 @@ public class Hdf5Attribute<Type> {
 			
 			if (dims[0] == 0) {
 				H5.H5Aclose(attributeId);
-				NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + treeElement.getPathFromFile()
-						+ treeElement.getName() + "/" + name + "\" with first dimension 0 (dims[0] == 0) cannot be read");
+				NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + treeElement.getPathFromFileWithName(true)
+						+ name + "\" with first dimension 0 (dims[0] == 0) cannot be read");
 				return null;
 			}
 			
 			Object[] dataOut = (Object[]) dataType.getKnimeType().createArray((int) dims[0]);
 			
 			if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
-				byte[] dataRead = new byte[(int) dims[0]];
+				byte[] dataRead = new byte[(int) stringLength];
 				H5.H5Aread(attributeId, dataType.getConstants()[1], dataRead);
+				
 				char[] dataChar = new char[dataRead.length];
 				for (int i = 0; i < dataChar.length; i++) {
 					dataChar[i] = (char) dataRead[i];
 				}
+				
 				dataOut = new String[]{String.copyValueOf(dataChar)};
+				
 			} else if (dataType.equalTypes()) {
 				H5.H5Aread(attributeId, dataType.getConstants()[1], dataOut);
 				
 			} else {
 				Object[] dataRead = (Object[]) dataType.getHdfType().createArray((int) dims[0]);
 				H5.H5Aread(attributeId, dataType.getConstants()[1], dataRead);
+				
 				for (int i = 0; i < dataRead.length; i++) {
 					dataOut[i] = dataType.hdfToKnime(dataRead[i]);
 				}
@@ -140,6 +151,8 @@ public class Hdf5Attribute<Type> {
 			
 			attribute.setDataspaceId(dataspaceId);
 			attribute.setAttributeId(attributeId);
+			attribute.setDimension(dims[0]);
+			attribute.setStringLength(stringLength);
     		treeElement.getAttributes().add(attribute);
         	attribute.setOpen(true);
         	
@@ -149,7 +162,7 @@ public class Hdf5Attribute<Type> {
 				H5.H5Aclose(attributeId);
 				// TODO error or info?
 				NodeLogger.getLogger("HDF5 Files").error("DataType of Attribute \"" 
-						+ treeElement.getPathFromFile() + treeElement.getName() + "/" + name + "\" is not supported");
+						+ treeElement.getPathFromFileWithName(true) + name + "\" is not supported");
 			} catch (HDF5LibraryException hle) {
 				hle.printStackTrace();
 			}
@@ -192,6 +205,14 @@ public class Hdf5Attribute<Type> {
 		m_dimension = dimension;
 	}
 
+	public long getStringLength() {
+		return m_stringLength;
+	}
+
+	public void setStringLength(long m_stringLength) {
+		this.m_stringLength = m_stringLength;
+	}
+
 	boolean isOpen() {
 		return m_open;
 	}
@@ -229,19 +250,16 @@ public class Hdf5Attribute<Type> {
 				if (getAttributeId() >= 0) {
 					filetypeId = H5.H5Aget_type(getAttributeId());
 				}
+				
 				if (filetypeId >= 0) {
-    				dims[0] = H5.H5Tget_size(filetypeId) + 1;
-    				// (+1) for: Make room for null terminator
+					setStringLength(H5.H5Tget_size(filetypeId));
 				}
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-			
-			// Create the memory datatype.
-			try {
+
+        		// Create the memory datatype.
 				memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
 				if (memtypeId >= 0) {
-					H5.H5Tset_size(memtypeId, dims[0]);
+    				// (+1) for: Make room for null terminator
+					H5.H5Tset_size(memtypeId, getStringLength() + 1);
 				}
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -253,13 +271,12 @@ public class Hdf5Attribute<Type> {
 			try {
 				if (getDataspaceId() >= 0) {
 					H5.H5Sget_simple_extent_dims(getDataspaceId(), dims, null);
+					setDimension(dims[0]);
 				}
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
 			}
 		}
-
-		setDimension(dims[0]);
 	}
 	
 	public void close() {
@@ -284,8 +301,6 @@ public class Hdf5Attribute<Type> {
                 // Close the attribute.
                 H5.H5Aclose(getAttributeId());
                 setOpen(false);
-
-                NodeLogger.getLogger("HDF5 Files").info("Attribute " + getName() + " closed.");
             }
         } catch (Exception e) {
             e.printStackTrace();

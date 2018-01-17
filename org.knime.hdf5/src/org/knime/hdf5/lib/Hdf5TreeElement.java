@@ -100,11 +100,21 @@ abstract public class Hdf5TreeElement {
 		m_parent = parent;
 	}
 
+	/**
+	 * 
+	 * @param endSlash {@code true} if an '/' will always be added to the return value,
+	 * {@code false} if only to treeElements which are not files
+	 * @return
+	 */
+	public String getPathFromFileWithName(boolean endSlash) {
+		return this instanceof Hdf5File ? (endSlash ? "/" : "") : getPathFromFile() + getName() + "/";
+	}
+	
 	public Hdf5Attribute<?> getAttribute(final String name) {
-		Iterator<Hdf5Attribute<?>> iter = getAttributes().iterator();
 		Hdf5Attribute<?> attribute = null;
-		boolean found = false;
 		
+		Iterator<Hdf5Attribute<?>> iter = getAttributes().iterator();
+		boolean found = false;
 		while (!found && iter.hasNext()) {
 			Hdf5Attribute<?> attr = iter.next();
 			if (attr.getName().equals(name)) {
@@ -182,7 +192,7 @@ abstract public class Hdf5TreeElement {
 	
 	Map<String, Hdf5DataType> getDirectAttributesInfo() {
 		Map<String, Hdf5DataType> paths = new LinkedHashMap<>();
-		String path = getPathFromFile() + (this instanceof Hdf5File ? "" : getName() + "/");
+		String path = getPathFromFileWithName(false);
 		
 		Iterator<String> iterAttr = loadAttributeNames().iterator();
 		while (iterAttr.hasNext()) {
@@ -216,7 +226,7 @@ abstract public class Hdf5TreeElement {
 			
 			return new Hdf5DataType(dataType, size, unsigned, false);
 		} else {
-			NodeLogger.getLogger("HDF5 Files").error("There isn't an attribute \"" + name + "\" in treeElement!\""
+			NodeLogger.getLogger("HDF5 Files").error("There isn't an attribute \"" + name + "\" in treeElement \""
 					+ getPathFromFile() + getName() + '"', new IllegalArgumentException());
 			return null;
 		}
@@ -226,7 +236,6 @@ abstract public class Hdf5TreeElement {
 		try {
             if (getElementId() >= 0) {
             	attribute.setAttributeId(H5.H5Aopen(getElementId(), attribute.getName(), HDF5Constants.H5P_DEFAULT));
-                NodeLogger.getLogger("HDF5 Files").info("Attribute " + attribute.getName() + " opened: " + attribute.getAttributeId());
         		getAttributes().add(attribute);
         		attribute.updateDimension();
             	attribute.setOpen(true);
@@ -242,16 +251,12 @@ abstract public class Hdf5TreeElement {
 	    		try {
 	    			filetypeId = H5.H5Tcopy(HDF5Constants.H5T_FORTRAN_S1);
 	    			if (filetypeId >= 0) {
-	    				H5.H5Tset_size(filetypeId, attribute.getDimension() - 1);
+	    				H5.H5Tset_size(filetypeId, attribute.getStringLength());
 	    			}
-	    		} catch (Exception e) {
-	    			e.printStackTrace();
-	    		}
-	    		
-	    		try {
+	    			
 	    			memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
 	    			if (memtypeId >= 0) {
-	    				H5.H5Tset_size(memtypeId, attribute.getDimension());
+	    				H5.H5Tset_size(memtypeId, attribute.getStringLength() + 1);
 	    			}
 	    		} catch (Exception e) {
 	    			e.printStackTrace();
@@ -276,7 +281,6 @@ abstract public class Hdf5TreeElement {
                 	attribute.setAttributeId(H5.H5Acreate(getElementId(), attribute.getName(),
                     		attribute.getType().getConstants()[0], attribute.getDataspaceId(),
                             HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
-                    NodeLogger.getLogger("HDF5 Files").info("Attribute " + attribute.getName() + " created: " + attribute.getAttributeId());
                 	attribute.setOpen(true);
                     
                     if (attribute.getAttributeId() >= 0 && attribute.getType().getConstants()[1] >= 0) {
