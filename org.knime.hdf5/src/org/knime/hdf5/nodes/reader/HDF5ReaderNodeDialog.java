@@ -5,8 +5,10 @@ import java.awt.event.ActionListener;
 
 import javax.swing.JFileChooser;
 
+import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.node.FlowVariableModel;
+import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeDialogPane;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
@@ -17,6 +19,7 @@ import org.knime.core.node.defaultnodesettings.DialogComponentButton;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
+import org.knime.core.node.util.filter.NameFilterConfiguration;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterPanel;
 import org.knime.hdf5.lib.Hdf5DataSet;
@@ -27,16 +30,20 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     private SettingsModelString m_fcSource;
 
     private FlowVariableModel m_fcSourceFvm;
-    
-	private String m_filePath;
+	
+	private Hdf5File m_file;
 
 	private final DataColumnSpecFilterPanel m_dataSetPanel;
 
     private DataColumnSpecFilterConfiguration m_dsConf;
+
+    private DataTableSpec m_dsSpec;
     
 	private final DataColumnSpecFilterPanel m_attributePanel;
 
     private DataColumnSpecFilterConfiguration m_attrConf;
+    
+    private DataTableSpec m_attrSpec;
     
     private DialogComponentBoolean m_missingValues;
     
@@ -79,18 +86,16 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		        String newValue = model.getStringValue();
 		        
 		        if (!newValue.equals("")) {
-		        	Hdf5File file = null;
+		        	m_file = null;
 		        	
 		        	try {
-			        	file = Hdf5File.createFile(newValue);
-			        	m_filePath = file.getFilePath();
-			        	updateConfigs(file);
-			        	selectTab("DataSet Selector");
+			        	m_file = Hdf5File.createFile(newValue);
+			        	updateConfigs();
 			        	// TODO more concrete Exception name
 		        	} catch (Exception ex) {
 		        		ex.getStackTrace();
 		        	} finally {
-		        		file.close();
+		        		m_file.close();
 		        	}
 		        }
 			}
@@ -98,27 +103,32 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
         addDialogComponent(fileButton);
     }
     
-    private void updateConfigs(Hdf5File file) throws Exception {
-    	updateDataSetConfig(file.createSpecOfDataSets());
-		updateAttributeConfig(file.createSpecOfAttributes());
+    private void updateConfigs() throws Exception {
+    	updateDataSetConfig();
+		updateAttributeConfig();
+    	selectTab("DataSet Selector");
     }
     
-    private void updateDataSetConfig(final DataTableSpec dsSpec) {
+    private void updateDataSetConfig() {
+    	m_dsSpec = m_file.createSpecOfDataSets();
+    	
         if (m_dsConf == null) {
             m_dsConf = createDCSFilterConfiguration();
         }
-        
-        m_dsConf.loadDefaults(dsSpec, false);
-        m_dataSetPanel.loadConfiguration(m_dsConf, dsSpec);
+
+        m_dsConf.loadDefaults(m_dsSpec, false);
+        m_dataSetPanel.loadConfiguration(m_dsConf, m_dsSpec);
     }
     
-    private void updateAttributeConfig(final DataTableSpec attrSpec) {
+    private void updateAttributeConfig() {
+    	m_attrSpec = m_file.createSpecOfAttributes();
+    	
         if (m_attrConf == null) {
         	m_attrConf = createDCSFilterConfiguration();
         }
         
-        m_attrConf.loadDefaults(attrSpec, true);
-        m_attributePanel.loadConfiguration(m_attrConf, attrSpec);
+        m_attrConf.loadDefaults(m_attrSpec, true);
+        m_attributePanel.loadConfiguration(m_attrConf, m_attrSpec);
     }
 	
     /** A new configuration to store the settings. Also enables the type filter.
@@ -136,34 +146,56 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
      *             filtering
      */
     @Override
-    protected void loadSettingsFrom(final NodeSettingsRO settings,
+	public void loadAdditionalSettingsFrom(final NodeSettingsRO settings,
             final DataTableSpec[] specs) throws NotConfigurableException {
-        System.out.println("LOAD SETTINGS");
-    	final DataTableSpec spec = specs[0];
-        if (spec == null || spec.getNumColumns() == 0) {
-            throw new NotConfigurableException("No columns available for selection.");
-        }
-
-        updateDataSetConfig(spec);
+    	if (settings.containsKey("filePath") && settings.containsKey("missingValues")) {
+        	try {
+				m_file = Hdf5File.createFile(settings.getString("filePath"));
+				updateConfigs();
+				m_mvSource.setBooleanValue(settings.getBoolean("missingValues"));
+				
+	        	if (settings.containsKey("dsIncl") && settings.containsKey("dsExcl")) {
+    				DataTableSpec dsInclSpec = DataTableSpec.load(settings.getConfig("dsIncl"));
+    				DataTableSpec dsExclSpec = DataTableSpec.load(settings.getConfig("dsExcl"));
+    		        m_dsConf.loadDefaults(dsInclSpec.getColumnNames(), dsExclSpec.getColumnNames(),
+    		        		NameFilterConfiguration.EnforceOption.EnforceInclusion);
+    		        m_dataSetPanel.loadConfiguration(m_dsConf, m_dsSpec);
+	            }
+	        	
+	        	if (settings.containsKey("attrIncl") && settings.containsKey("attrExcl")) {
+	                DataTableSpec attrInclSpec = DataTableSpec.load(settings.getConfig("attrIncl"));
+    				DataTableSpec attrExclSpec = DataTableSpec.load(settings.getConfig("attrExcl"));
+    		        m_attrConf.loadDefaults(attrInclSpec.getColumnNames(), attrExclSpec.getColumnNames(),
+    		        		NameFilterConfiguration.EnforceOption.EnforceInclusion);
+    		        m_attributePanel.loadConfiguration(m_attrConf, m_attrSpec);
+	            }
+			} catch (InvalidSettingsException ise) {
+				ise.printStackTrace();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+    	}
     }
     
     @Override
 	public void saveAdditionalSettingsTo(final NodeSettingsWO settings) {
-    	settings.addString("filePath", m_filePath);
-    	
-    	String[] dsPaths = m_dataSetPanel.getIncludedNamesAsSet().toArray(new String[] {});
-		settings.addStringArray("dataSets", dsPaths);
+    	settings.addString("filePath", m_file.getFilePath());
+
+    	DataTableSpec dsInclSpec = new DataTableSpec(m_dataSetPanel.getIncludeList().toArray(new DataColumnSpec[] {}));
+		dsInclSpec.save(settings.addConfig("dsIncl"));
+		(new DataTableSpec(m_dataSetPanel.getExcludeList().toArray(new DataColumnSpec[] {}))).save(settings.addConfig("dsExcl"));
 		
 		SettingsModelBoolean model = (SettingsModelBoolean) m_missingValues.getModel();
         boolean missingValues = model.getBooleanValue();
+        settings.addBoolean("missingValues", missingValues);
         
+        String[] dsPaths = dsInclSpec.getColumnNames();
         if (!missingValues) {
-			Hdf5File file = Hdf5File.createFile(m_filePath);
 			boolean allRowsEqual = true;
 			long rows = 0;
 			int i = 0;
 			while (allRowsEqual && i < dsPaths.length) {
-				Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPaths[i]);
+				Hdf5DataSet<?> dataSet = m_file.getDataSetByPath(dsPaths[i]);
 				if (i == 0) {
 					rows = dataSet.getDimensions()[0];
 				} else {
@@ -174,7 +206,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 			settings.addBoolean("allRowsEqual", allRowsEqual);
 		}
 		
-    	String[] attrPaths = m_attributePanel.getIncludedNamesAsSet().toArray(new String[] {});
-		settings.addStringArray("attributes", attrPaths);
+		(new DataTableSpec(m_attributePanel.getIncludeList().toArray(new DataColumnSpec[] {}))).save(settings.addConfig("attrIncl"));
+		(new DataTableSpec(m_attributePanel.getExcludeList().toArray(new DataColumnSpec[] {}))).save(settings.addConfig("attrExcl"));
 	}
 }

@@ -75,12 +75,6 @@ public class Hdf5Attribute<Type> {
 				
 				if (dataspaceId >= 0) {
 					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
-					if (dims[0] > 1) {
-						H5.H5Aclose(attributeId);
-						NodeLogger.getLogger("HDF5 Files").error("String DataType with array length >1 of attribute \"" 
-								+ treeElement.getPathFromFileWithName(true) + name + "\" is not supported");
-						return null;
-					}
 				}
 				
 				if (filetypeId >= 0) {
@@ -125,15 +119,18 @@ public class Hdf5Attribute<Type> {
 			Object[] dataOut = (Object[]) dataType.getKnimeType().createArray((int) dims[0]);
 			
 			if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
-				byte[] dataRead = new byte[(int) stringLength];
+				byte[] dataRead = new byte[(int) dims[0] * ((int) stringLength + 1)];
 				H5.H5Aread(attributeId, dataType.getConstants()[1], dataRead);
 				
-				char[] dataChar = new char[dataRead.length];
+				dataOut = new String[(int) dims[0]];
+				char[][] dataChar = new char[(int) dims[0]][(int) stringLength + 1];
 				for (int i = 0; i < dataChar.length; i++) {
-					dataChar[i] = (char) dataRead[i];
+					for (int j = 0; j < dataChar[0].length; j++) {
+						dataChar[i][j] = (char) dataRead[i * ((int) stringLength + 1) + j];
+					}
+					
+					dataOut[i] = String.copyValueOf(dataChar[i]);
 				}
-				
-				dataOut = new String[]{String.copyValueOf(dataChar)};
 				
 			} else if (dataType.equalTypes()) {
 				H5.H5Aread(attributeId, dataType.getConstants()[1], dataOut);

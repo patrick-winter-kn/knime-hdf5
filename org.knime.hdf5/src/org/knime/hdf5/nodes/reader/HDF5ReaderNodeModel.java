@@ -164,17 +164,15 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		if (settings.containsKey("allRowsEqual") && !settings.getBoolean("allRowsEqual")) {
 			throw new InvalidSettingsException("contains MissingCells (not all columns have equal row number)");
 		}
-		System.out.println("missingCells");
 	}
 
 	@Override
 	protected void loadValidatedSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
-		if (settings.containsKey("filePath") && settings.containsKey("dataSets") && settings.containsKey("attributes")) {
+		if (settings.containsKey("filePath") && settings.containsKey("dsIncl") && settings.containsKey("attrIncl")) {
 			m_filePath = settings.getString("filePath");
-			m_dsPaths = settings.getStringArray("dataSets");
+			m_dsPaths = DataTableSpec.load(settings.getConfig("dsIncl")).getColumnNames();
 			m_maxRows = 0;
-			//m_containsMissingCells = false;
-			m_attrPaths = settings.getStringArray("attributes");
+			m_attrPaths = DataTableSpec.load(settings.getConfig("attrIncl")).getColumnNames();
 		}
 	}
 
