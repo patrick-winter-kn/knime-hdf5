@@ -57,11 +57,12 @@ public class Hdf5Attribute<Type> {
 		Hdf5DataType dataType = treeElement.findAttributeType(name);
 		
 		long attributeId = -1;
+		long dataspaceId = -1;
+		long[] dims = new long[1];
+		int lsize = 1;
 		try {
 			attributeId = H5.H5Aopen(treeElement.getElementId(), name, HDF5Constants.H5P_DEFAULT);
-			long dataspaceId = -1;
 
-			long[] dims = new long[1];
 			long stringLength = 0;
 			if (dataType.isHdfType(Hdf5HdfDataType.STRING)) {
 				long filetypeId = -1;
@@ -72,9 +73,16 @@ public class Hdf5Attribute<Type> {
 					filetypeId = H5.H5Aget_type(attributeId);
 					dataspaceId = H5.H5Aget_space(attributeId);
 				}
-				
+
 				if (dataspaceId >= 0) {
-					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
+					int rank = H5.H5Sget_simple_extent_ndims(dataspaceId);
+					if (rank > 0) {
+	                    dims = new long[rank];
+						H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
+	                    for (int j = 0; j < dims.length; j++) {
+	                        lsize *= dims[j];
+	                    }
+	                }
 				}
 				
 				if (filetypeId >= 0) {
@@ -96,40 +104,52 @@ public class Hdf5Attribute<Type> {
 				if (attributeId >= 0) {
 					dataspaceId = H5.H5Aget_space(attributeId);
 				}
-				
+				/*
 				if (dataspaceId >= 0 && H5.H5Sget_simple_extent_type(dataspaceId) == HDF5Constants.H5S_SCALAR) {
-					H5.H5Aclose(attributeId);
+					close(attributeId, dataspaceId, dataType);
 					NodeLogger.getLogger("HDF5 Files").error("Scalar DataType of Attribute \"" 
 							+ treeElement.getPathFromFileWithName(true) + name + "\" is not supported");
 					return null;
 				}
-				
+				*/
 				if (dataspaceId >= 0) {
 					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
 				}
 			}
-			
+			/*
 			if (dims[0] == 0) {
-				H5.H5Aclose(attributeId);
+				close(attributeId, dataspaceId, dataType);
 				NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + treeElement.getPathFromFileWithName(true)
 						+ name + "\" with first dimension 0 (dims[0] == 0) cannot be read");
 				return null;
 			}
-			
+			*/
 			Object[] dataOut = (Object[]) dataType.getKnimeType().createArray((int) dims[0]);
 			
 			if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
-				byte[] dataRead = new byte[(int) dims[0] * ((int) stringLength + 1)];
-				H5.H5Aread(attributeId, dataType.getConstants()[1], dataRead);
-				
-				dataOut = new String[(int) dims[0]];
-				char[][] dataChar = new char[(int) dims[0]][(int) stringLength + 1];
-				for (int i = 0; i < dataChar.length; i++) {
-					for (int j = 0; j < dataChar[0].length; j++) {
-						dataChar[i][j] = (char) dataRead[i * ((int) stringLength + 1) + j];
-					}
+				long typeId = H5.H5Tget_native_type(dataType.getConstants()[0]);
+                int typeClass = H5.H5Tget_class(typeId);
+                if (dims[0] == 0 /* scalar */ && typeClass == HDF5Constants.H5T_ARRAY) {
+                    H5.H5AreadComplex(attributeId, typeId, (String[]) dataOut);
+                	
+                } else if (typeClass == HDF5Constants.H5T_VLEN) {
+                	String[] str = new String[lsize];
+                    H5.H5AreadVL(attributeId, typeId, str);
+                    dataOut = str;
+                    
+                } else {
+					byte[] dataRead = new byte[(int) dims[0] * ((int) stringLength + 1)];
+					H5.H5Aread(attributeId, dataType.getConstants()[1], dataRead);
 					
-					dataOut[i] = String.copyValueOf(dataChar[i]);
+					dataOut = new String[(int) dims[0]];
+					char[][] dataChar = new char[(int) dims[0]][(int) stringLength + 1];
+					for (int i = 0; i < dataChar.length; i++) {
+						for (int j = 0; j < dataChar[0].length; j++) {
+							dataChar[i][j] = (char) dataRead[i * ((int) stringLength + 1) + j];
+						}
+						
+						dataOut[i] = String.copyValueOf(dataChar[i]);
+					}
 				}
 				
 			} else if (dataType.equalTypes()) {
@@ -155,8 +175,7 @@ public class Hdf5Attribute<Type> {
         	
 		} catch (HDF5DatatypeInterfaceException hdtie) {
 			try {
-				// TODO check if other things also have to be closed (see also at the scalar and dim[0] == 0 exception)
-				H5.H5Aclose(attributeId);
+				close(attributeId, dataspaceId, dataType);
 				// TODO error or info?
 				NodeLogger.getLogger("HDF5 Files").error("DataType of Attribute \"" 
 						+ treeElement.getPathFromFileWithName(true) + name + "\" is not supported");
@@ -168,6 +187,21 @@ public class Hdf5Attribute<Type> {
 		}
 		
 		return attribute;
+	}
+	
+	private static void close(long attributeId, long dataspaceId, Hdf5DataType dataType) throws HDF5LibraryException {
+		if (dataType.isHdfType(Hdf5HdfDataType.STRING)) {
+	 		// Terminate access to the file and mem type.
+			Hdf5DataType.closeString();
+ 		}
+
+        // Close the dataspace.
+        if (dataspaceId >= 0) {
+            H5.H5Sclose(dataspaceId);
+        }
+
+        // Close the attribute.
+        H5.H5Aclose(attributeId);
 	}
 	
 	public String getName() {
