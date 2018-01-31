@@ -227,26 +227,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				}
 		        
 				if (type.isHdfType(Hdf5HdfDataType.STRING)) {
-					long filetypeId = -1;
-					long memtypeId = -1;
-					
-		    		// Get the datatype and its size.
-		    		if (isOpen()) {
-	    				filetypeId = H5.H5Dget_type(dataSetId);
-	    			}
-	    			if (filetypeId >= 0) {
-	    				stringLength = H5.H5Tget_size(filetypeId);
-	    				// (+1) for: Make room for null terminator
-	    			}
-		    		
-		    		// Create the memory datatype.
-		    		memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-	    			if (memtypeId >= 0) {
-	    				H5.H5Tset_size(memtypeId, stringLength + 1);
-	    			}
-		    		
-					type.getConstants()[0] = filetypeId;
-					type.getConstants()[1] = memtypeId;
+					stringLength = type.updateStringTypes(dataSetId);
 					
         			// Terminate access to the file and mem type.
 					H5.H5Tclose(H5.H5Dget_type(dataSetId));
@@ -520,7 +501,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				lnpe.printStackTrace();
 			}
 			
-			return new Hdf5DataType(dataType, size, unsigned, true);
+			return new Hdf5DataType(dataType, size, unsigned, false, true);
 		} else {
 			NodeLogger.getLogger("HDF5 Files").error("There isn't a dataSet \"" + name + "\" in group"
 					+ getPathFromFile() + getName(), new IllegalArgumentException());

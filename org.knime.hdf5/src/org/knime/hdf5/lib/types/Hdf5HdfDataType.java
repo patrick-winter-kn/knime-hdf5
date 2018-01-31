@@ -2,7 +2,7 @@ package org.knime.hdf5.lib.types;
 
 import hdf.hdf5lib.HDF5Constants;
 
-// TODO maybe change back to package visibility
+// TODO maybe change back to package visibility if possible
 public enum Hdf5HdfDataType {
 	UNKNOWN(-1),		// data type is unknown
 	BYTE(0),			// data type is a Byte
@@ -17,7 +17,8 @@ public enum Hdf5HdfDataType {
 	DOUBLE(9),			// data type is a Double
 	CHAR(10),			// data type is a Char
 	UCHAR(11),			// data type is an unsigned Char
-	STRING(12);			// data type is a String
+	STRING(12),			// data type is a String
+	REFERENCE(13);			// data type is an object reference
 	
 	private final int m_typeId;
 	
@@ -78,13 +79,17 @@ public enum Hdf5HdfDataType {
 			break;
 		case 12:
 			// constants will be initialized later in this case
+			break;
+		case 13:
+			m_constants[0] = HDF5Constants.H5T_REFERENCE;
+			// TODO missing
 		}
 	}
 	
 	long[] getConstants() {
 		return m_constants;
 	}
-	
+
 	public Object createArray(int length) {
 		switch (this) {
 		case BYTE:

@@ -333,28 +333,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		
 		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
 			setStringLength(stringLength);
-			long filetypeId = -1;
-			long memtypeId = -1;
-			
-			// Create file and memory datatypes. For this example we will save
-			// the strings as FORTRAN strings, therefore they do not need space
-			// for the null terminator in the file.
-			try {
-				filetypeId = H5.H5Tcopy(HDF5Constants.H5T_FORTRAN_S1);
-				if (filetypeId >= 0) {
-					H5.H5Tset_size(filetypeId, getStringLength());
-				}
-
-				memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-				if (memtypeId >= 0) {
-					H5.H5Tset_size(memtypeId, getStringLength() + 1);
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-			
-			getType().getConstants()[0] = filetypeId;
-			getType().getConstants()[1] = memtypeId;
+			getType().createStringTypes(getStringLength());
     	}
 		
     	// Create the data space for the dataset.
@@ -392,31 +371,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		}
         
 		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
-			long filetypeId = -1;
-			long memtypeId = -1;
-			
-    		// Get the datatype and its size.
-    		try {
-    			if (isOpen()) {
-    				filetypeId = H5.H5Dget_type(getElementId());
-    			}
-    			
-    			if (filetypeId >= 0) {
-    				setStringLength(H5.H5Tget_size(filetypeId));
-    			}
-    			
-        		// Create the memory datatype.
-    			memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-    			if (memtypeId >= 0) {
-    				// (+1) for: Make room for null terminator
-    				H5.H5Tset_size(memtypeId, getStringLength() + 1);
-    			}
-    		} catch (Exception e) {
-    			e.printStackTrace();
-    		}
-    		
-			getType().getConstants()[0] = filetypeId;
-			getType().getConstants()[1] = memtypeId;
+			setStringLength(getType().updateStringTypes(getElementId()));
     	}
 	}
 	
@@ -431,7 +386,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 
                 if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
         			// Terminate access to the file and mem type.
-					Hdf5DataType.closeString();
+                	getType().closeStringTypes();
         		}
         		
                 // Terminate access to the data space.

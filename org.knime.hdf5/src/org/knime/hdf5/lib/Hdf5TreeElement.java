@@ -102,8 +102,10 @@ abstract public class Hdf5TreeElement {
 
 	/**
 	 * 
-	 * @param endSlash {@code true} if an '/' will always be added to the return value,
-	 * {@code false} if only to treeElements which are not files
+	 * @param endSlash (only relevant if treeElement is an {@code Hdf5File})
+	 * set to {@code true} if an {@code '/'} should be added to the path. <br>
+	 * If the treeElement is not an {@code Hdf5File}, the {@code '/'} will always be
+	 * added (even if {@code endSlash == false}).
 	 * @return
 	 */
 	public String getPathFromFileWithName(boolean endSlash) {
@@ -206,25 +208,83 @@ abstract public class Hdf5TreeElement {
 	Hdf5DataType findAttributeType(String name) {
 		if (loadAttributeNames().contains(name)) {
 			long attributeId = -1;
+			long dataspaceId = -1;
 			String dataType = "";
 			int size = 0;
 			boolean unsigned = false;
+			boolean vlen = false;
 			
 			try {
 				attributeId = H5.H5Aopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
+
+				if (attributeId >= 0) {
+					dataspaceId = H5.H5Aget_space(attributeId);
+				}
+				
+				if (dataspaceId >= 0) {
+					int rank = H5.H5Sget_simple_extent_ndims(dataspaceId);
+					if (rank > 0) {
+						long[] dims = new long[rank];
+						H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
+	                    for (int j = 0; j < dims.length; j++) {
+	                    	if (dims[j] == 0) {
+		                    	try {
+		            				H5.H5Aclose(attributeId);
+		    			            H5.H5Sclose(dataspaceId);
+		    						NodeLogger.getLogger("HDF5 Files").warn("Array of Attribute \"" 
+		    								+ getPathFromFileWithName(true) + name + "\" has length 0");
+		    						return null;
+		    					} catch (HDF5LibraryException hle) {
+		    						hle.printStackTrace();
+		    					}
+		    				}
+	                    }
+	                }
+		            H5.H5Sclose(dataspaceId);
+				}
+				
 				long typeId = H5.H5Aget_type(attributeId);
 				dataType = H5.H5Tget_class_name(H5.H5Tget_class(typeId));
 				size = (int) H5.H5Tget_size(typeId);
+				vlen = dataType.equals("H5T_VLEN") || H5.H5Tis_variable_str(typeId);
 				if (dataType.equals("H5T_INTEGER") || dataType.equals("H5T_CHAR")) {
 					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(typeId);
+				} else if (vlen) {
+					// TODO determine correct dataType
+					
+					/*
+					long t = H5.H5Tget_native_type(typeId);
+					System.out.println(H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_CHAR)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_SHORT)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_INT)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_LONG)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_LLONG)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_UCHAR)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_USHORT)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_UINT)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_ULONG)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_ULLONG)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_FLOAT)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_DOUBLE)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_LDOUBLE)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_B8)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_B16)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_B32)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_B64)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_HERR)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_OPAQUE)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_HSIZE)
+							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_HADDR) + "\t" + name);
+					*/
 				}
+				
 				H5.H5Tclose(typeId);
 				H5.H5Aclose(attributeId);
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
 			}
 			
-			return new Hdf5DataType(dataType, size, unsigned, false);
+			return new Hdf5DataType(dataType, size, unsigned, vlen, false);
 		} else {
 			NodeLogger.getLogger("HDF5 Files").error("There isn't an attribute \"" + name + "\" in treeElement \""
 					+ getPathFromFile() + getName() + '"', new IllegalArgumentException());
@@ -242,28 +302,7 @@ abstract public class Hdf5TreeElement {
             }
         } catch (HDF5LibraryException le) {
         	if (attribute.getType().isHdfType(Hdf5HdfDataType.STRING)) {
-				long filetypeId = -1;
-				long memtypeId = -1;
-				
-	        	// Create file and memory datatypes. For this example we will save
-	    		// the strings as FORTRAN strings, therefore they do not need space
-	    		// for the null terminator in the file.
-	    		try {
-	    			filetypeId = H5.H5Tcopy(HDF5Constants.H5T_FORTRAN_S1);
-	    			if (filetypeId >= 0) {
-	    				H5.H5Tset_size(filetypeId, attribute.getStringLength());
-	    			}
-	    			
-	    			memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-	    			if (memtypeId >= 0) {
-	    				H5.H5Tset_size(memtypeId, attribute.getStringLength() + 1);
-	    			}
-	    		} catch (Exception e) {
-	    			e.printStackTrace();
-	    		}
-	    		
-	    		attribute.getType().getConstants()[0] = filetypeId;
-	    		attribute.getType().getConstants()[1] = memtypeId;
+        		attribute.getType().createStringTypes(attribute.getStringLength());
         	}
         	
         	// Create the data space for the attribute.
