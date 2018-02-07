@@ -68,27 +68,12 @@ public class Hdf5File extends Hdf5Group {
         }
 	}
 	
-	/**
-	 * Just to see what objects of a file are still opened. <br>
-	 * <br>
-	 * <b>Types</b>:
-	 * <ul>
-	 *   <li> 1 - File </li>
-	 *   <li> 2 - Group </li>
-	 *   <li> 3 - DataType </li>
-	 *   <li> 4 - DataSpace </li>
-	 *   <li> 5 - DataSet </li>
-	 *   <li> 6 - Attribute </li>
-	 * </ul>
-	 * 
-	 * @return number of opened objects
-	 */
-	public long whatIsOpen() {
+	public String whatIsOpen() {
         long count = -1;
         long openedObjects = -1;
-        long objectType = -1;
         long[] objects;
-        String pathFromFile = "";
+        String[] objTypes = { "Unknown object", "File", "Group", "DataType", "DataSpace", "DataSet", "Attribute" };
+        String opened = "";
 		
         try {
         	if (isOpen()) {
@@ -96,44 +81,45 @@ public class Hdf5File extends Hdf5Group {
 			} else {
 				NodeLogger.getLogger("HDF5 Files").error("File " + getFilePath() + " is not opened!",
 						new IllegalStateException());
-				return count;
+				return "(error: file already closed)";
 			}
-		} catch (HDF5LibraryException e1) {
-			e1.printStackTrace();
+		} catch (HDF5LibraryException hle) {
+			hle.printStackTrace();
 		}
 
         if (count <= 0) {
-        	return count;
+        	return "(error: couldn't find out number of opened objects)";
+        }
+        
+        if (count == 1) {
+        	return "0";
         }
 
-        System.out.println("\nObject(s) open: " + count);
-        
         objects = new long[(int) count];
+        opened += (count - 1) + " [";
 
         try {
 			openedObjects = H5.H5Fget_obj_ids(getElementId(), HDF5Constants.H5F_OBJ_ALL, count, objects);
-		} catch (HDF5LibraryException | NullPointerException e) {
-			e.printStackTrace();
+
+	        // i = 0 is just the file itself
+	        if (openedObjects > 1) {
+	    		String pathFromFile = H5.H5Iget_name(objects[1]);
+	    		String objectType = objTypes[(int) H5.H5Iget_type(objects[1])];
+	    		opened += pathFromFile + " (" +  objectType + ")";
+	        }
+	        
+	        for (int i = 2; i < openedObjects; i++) {
+	        	String objectType = objTypes[(int) H5.H5Iget_type(objects[i])];
+        		String pathFromFile = H5.H5Iget_name(objects[i]);
+	    		opened += ", " + pathFromFile + " (" +  objectType + ")";
+	        }
+		} catch (HDF5LibraryException | NullPointerException hlne) {
+			hlne.printStackTrace();
 		}
-
-        System.out.println("Open objects:");
-
-        for (int i = 0; i < openedObjects; i++) {
-        	try {
-        		objectType = H5.H5Iget_type(objects[i]);
-			} catch (HDF5LibraryException e) {
-				e.printStackTrace();
-			}
-            try {
-				pathFromFile = H5.H5Iget_name(objects[i]);
-			} catch (HDF5LibraryException e) {
-				e.printStackTrace();
-			}
-            System.out.println("\t" + i + ": type " + objectType + ", name " + pathFromFile);
-        }
-        System.out.println();
-         
-        return openedObjects;
+        
+        opened += "]";
+        
+        return opened;
 	}
 
 	/**
@@ -158,11 +144,10 @@ public class Hdf5File extends Hdf5Group {
 	    		while (iterGrps.hasNext()) {
 	    			iterGrps.next().close();
 	    		}
-
-				NodeLogger.getLogger("HDF5 Files").debug("Number of open objects in file \""
-						+ getName() + "\": " + (whatIsOpen() - 1));
-				NodeLogger.getLogger("HDF5 Files").debug("File \"" + getName() + "\" closed: "
-						+ H5.H5Fclose(getElementId()));
+	    		
+	    		NodeLogger.getLogger("HDF5 Files").debug("Number of open objects in file \""
+	    				+ getName() + "\": " + whatIsOpen());
+				H5.H5Fclose(getElementId());
                 setOpen(false);
             }
         } catch (Exception e) {

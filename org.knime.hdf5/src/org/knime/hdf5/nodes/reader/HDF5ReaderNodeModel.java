@@ -34,6 +34,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	
 	private int m_maxRows;
 	
+	private int m_totalColNum;
+	
 	private String[] m_attrPaths;
 	
 	
@@ -43,6 +45,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
+		long start = System.currentTimeMillis();
+		
 		if (m_filePath == null || m_dsPaths == null || m_dsPaths.length == 0) {
 			NodeLogger.getLogger("HDF5 Files").error("No dataSet to use", new NullPointerException());
 		}
@@ -54,28 +58,34 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			file = Hdf5File.createFile(m_filePath);
 			outContainer = exec.createDataContainer(createOutSpec());
 			
-			for (DataRow row: dataSetsToRows(file)) {
+			for (DataRow row: dataSetsToRows(file, exec)) {
 				outContainer.addRowToTable(row);
 			}
 			
 			pushFlowVariables(file);
 
-		} catch (Exception e) {
+		} catch (CanceledExecutionException cee) {
 		} finally {
 			file.close();
+			long time = System.currentTimeMillis();
 	        outContainer.close();
+	        System.out.println("outContainer.close(): " + (System.currentTimeMillis() - time) + " ms");
+	        System.out.println("total: " + (System.currentTimeMillis() - start) + " ms");
 		}
 		
 		return new BufferedDataTable[]{outContainer.getTable()};
 	}
 	
-	private DataRow[] dataSetsToRows(Hdf5File file) {
+	private DataRow[] dataSetsToRows(Hdf5File file, ExecutionContext exec) throws CanceledExecutionException {
 		DataRow[] rows = new DataRow[m_maxRows];
-
+		int curColNum = 0;
+		
 		for (String dsPath: m_dsPaths) {
+			exec.checkCanceled();
+			exec.setProgress(1.0 * curColNum / m_totalColNum);
 			Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPath);
 			dataSet.open();
-			dataSet.extendRows(rows);
+			curColNum += dataSet.extendRows(rows);
 		}
 		
 		return rows;
@@ -111,6 +121,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	
 	private DataTableSpec createOutSpec() {
 		List<DataColumnSpec> colSpecList = new LinkedList<>();
+		m_totalColNum = 0;
 		
 		if (m_filePath != null && m_dsPaths != null) {
 			Hdf5File file = Hdf5File.createFile(m_filePath);
@@ -128,9 +139,12 @@ public class HDF5ReaderNodeModel extends NodeModel {
 					
 					do {
 						colSpecList.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
+						m_totalColNum++;
+						
 					} while (dataSet.nextColumnDims(colDims));
 				} else {
 					colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
+					m_totalColNum++;
 				}
 			}
 		}

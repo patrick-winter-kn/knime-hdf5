@@ -297,22 +297,28 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return null;
 	}
 	
-	public void extendRows(DataRow[] rows) {
+	/**
+	 * 
+	 * @param rows the array of {@code DataRow}s whose should be extended with the columns of this {@code Hdf5DataSet}
+	 * @return the number of columns that extended {@code rows}
+	 */
+	public int extendRows(DataRow[] rows) {
 		Type[] dataRead = read();
+		int colNum = 0;
 		
 		if (getDimensions().length != 0) {
 			int rowNum = (int) getDimensions()[0];
-			int rowNumLen = (int) Math.ceil(Math.log10(rows.length));
-			int colNum = (int) numberOfValuesFrom(1);
+			colNum = (int) numberOfValuesFrom(1);
 			
 			for (int c = 0; c < colNum; c++) {
 				for (int r = 0; r < rows.length; r++) {
-					DefaultRow row = new DefaultRow("Row" + String.format("%0" + rowNumLen + "d", r),
-							getDataCell(r < rowNum ? dataRead[r * colNum + c] : null));
+					DefaultRow row = new DefaultRow("Row" + r, getDataCell(r < rowNum ? dataRead[r * colNum + c] : null));
 					rows[r] = (rows[r] == null) ? row : new JoinedRow(rows[r], row);
 				}
 			}
 		}
+		
+		return colNum;
 	}
 	
 	private DataCell getDataCell(Type value) {

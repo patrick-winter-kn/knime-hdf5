@@ -62,7 +62,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
         m_attributePanel = new DataColumnSpecFilterPanel();
         addTab("Attribute Selector", m_attributePanel);
 
-    	m_mvSource = new SettingsModelBoolean("source", true);
+    	m_mvSource = new SettingsModelBoolean("source", false);
     	m_missingValues = new DialogComponentBoolean(m_mvSource, "allow missing values");
     	m_missingValues.getComponentPanel().setBorder(
     			BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "Advanced settings:"));
@@ -145,23 +145,23 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     @Override
 	public void loadAdditionalSettingsFrom(final NodeSettingsRO settings,
             final DataTableSpec[] specs) throws NotConfigurableException {
-    	if (settings.containsKey("filePath") && settings.containsKey("missingValues")) {
+    	if (settings.containsKey("filePath") && settings.containsKey("allowMissingValues")) {
         	try {
 				m_file = Hdf5File.createFile(settings.getString("filePath"));
 				updateConfigs();
-				m_mvSource.setBooleanValue(settings.getBoolean("missingValues"));
+				m_mvSource.setBooleanValue(settings.getBoolean("allowMissingValues"));
 				
-	        	if (settings.containsKey("dsIncl") && settings.containsKey("dsExcl")) {
-    				DataTableSpec dsInclSpec = DataTableSpec.load(settings.getConfig("dsIncl"));
-    				DataTableSpec dsExclSpec = DataTableSpec.load(settings.getConfig("dsExcl"));
+	        	if (settings.containsKey("dataSetsIncluded") && settings.containsKey("dataSetsExcluded")) {
+    				DataTableSpec dsInclSpec = DataTableSpec.load(settings.getConfig("dataSetsIncluded"));
+    				DataTableSpec dsExclSpec = DataTableSpec.load(settings.getConfig("dataSetsExcluded"));
     		        m_dsConf.loadDefaults(dsInclSpec.getColumnNames(), dsExclSpec.getColumnNames(),
     		        		NameFilterConfiguration.EnforceOption.EnforceInclusion);
     		        m_dataSetPanel.loadConfiguration(m_dsConf, m_dsSpec);
 	            }
 	        	
-	        	if (settings.containsKey("attrIncl") && settings.containsKey("attrExcl")) {
-	                DataTableSpec attrInclSpec = DataTableSpec.load(settings.getConfig("attrIncl"));
-    				DataTableSpec attrExclSpec = DataTableSpec.load(settings.getConfig("attrExcl"));
+	        	if (settings.containsKey("attributesIncluded") && settings.containsKey("attributesExcluded")) {
+	                DataTableSpec attrInclSpec = DataTableSpec.load(settings.getConfig("attributesIncluded"));
+    				DataTableSpec attrExclSpec = DataTableSpec.load(settings.getConfig("attributesExcluded"));
     		        m_attrConf.loadDefaults(attrInclSpec.getColumnNames(), attrExclSpec.getColumnNames(),
     		        		NameFilterConfiguration.EnforceOption.EnforceInclusion);
     		        m_attributePanel.loadConfiguration(m_attrConf, m_attrSpec);

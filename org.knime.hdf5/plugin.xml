@@ -1,12 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?eclipse version="3.4"?>
 <plugin>
-   <extension
-         point="org.knime.workbench.repository.nodes">
-      <node
-            deprecated="false"
-            factory-class="org.knime.hdf5.nodes.reader.HDF5ReaderNodeFactory">
-      </node>
-   </extension>
-
+	<extension
+		point="org.knime.workbench.repository.categories">
+		<category
+			icon="src/org/knime/hdf5/nodes/hdf5files.png"
+			level-id="hdf5"
+			locked="true"
+			name="HDF5"
+			path="/community/">
+		</category>
+	</extension>
+	<extension
+		point="org.knime.workbench.repository.nodes">
+		<node
+			deprecated="false"
+			factory-class="org.knime.hdf5.nodes.reader.HDF5ReaderNodeFactory"
+			category-path="/community/hdf5">
+		</node>
+	</extension>
 </plugin>
