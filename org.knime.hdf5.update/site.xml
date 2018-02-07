@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<site>
+   <feature url="features/org.knime.hdf5.feature_1.0.0.qualifier.jar" id="org.knime.hdf5.feature" version="1.0.0.qualifier"/>
+</site>
