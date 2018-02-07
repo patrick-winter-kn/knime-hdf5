@@ -112,6 +112,10 @@ abstract public class Hdf5TreeElement {
 		return this instanceof Hdf5File ? (endSlash ? "/" : "") : getPathFromFile() + getName() + "/";
 	}
 	
+	public String getPathFromFileWithName() {
+		return getPathFromFileWithName(true);
+	}
+	
 	public Hdf5Attribute<?> getAttribute(final String name) {
 		Hdf5Attribute<?> attribute = null;
 		
@@ -205,6 +209,11 @@ abstract public class Hdf5TreeElement {
 		return paths;
 	}
 	
+	/**
+	 * 
+	 * @param name name of the attribute in this treeElement
+	 * @return dataType of the attribute (doesn't work for {@code H5T_VLEN} and {@code H5T_REFERENCE} at the moment)
+	 */
 	Hdf5DataType findAttributeType(String name) {
 		if (loadAttributeNames().contains(name)) {
 			long attributeId = -1;
@@ -249,37 +258,23 @@ abstract public class Hdf5TreeElement {
 				vlen = dataType.equals("H5T_VLEN") || H5.H5Tis_variable_str(typeId);
 				if (dataType.equals("H5T_INTEGER") || dataType.equals("H5T_CHAR")) {
 					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(typeId);
-				} else if (vlen) {
-					// TODO determine correct dataType
-					
-					/*
-					long t = H5.H5Tget_native_type(typeId);
-					System.out.println(H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_CHAR)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_SHORT)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_INT)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_LONG)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_LLONG)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_UCHAR)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_USHORT)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_UINT)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_ULONG)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_ULLONG)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_FLOAT)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_DOUBLE)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_LDOUBLE)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_B8)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_B16)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_B32)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_B64)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_HERR)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_OPAQUE)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_HSIZE)
-							+ "\t" + H5.H5Tequal(t, HDF5Constants.H5T_NATIVE_HADDR) + "\t" + name);
-					*/
 				}
-				
+
 				H5.H5Tclose(typeId);
 				H5.H5Aclose(attributeId);
+				
+				if (dataType.equals("H5T_VLEN")) {
+					// TODO find correct real dataType
+					NodeLogger.getLogger("HDF5 Files").warn("DataType H5T_VLEN of attribute \"" + name + "\" in treeElement \""
+							+ getPathFromFile() + getName() + "\" is not supported");
+					return null;
+				}
+				
+				if (dataType.equals("H5T_REFERENCE")) {
+					NodeLogger.getLogger("HDF5 Files").warn("DataType H5T_REFERENCE of attribute \"" + name + "\" in treeElement \""
+							+ getPathFromFile() + getName() + "\" is not supported");
+					return null;
+				}
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
 			}
@@ -306,8 +301,7 @@ abstract public class Hdf5TreeElement {
         	}
         	
         	// Create the data space for the attribute.
-        	// the array length can only be 1 for Strings
-        	long[] dims = { attribute.getType().isHdfType(Hdf5HdfDataType.STRING) ? 1 : attribute.getDimension() };
+        	long[] dims = { attribute.getDimension() };
             try {
             	attribute.setDataspaceId(H5.H5Screate_simple(1, dims, null));
             } catch (Exception e) {

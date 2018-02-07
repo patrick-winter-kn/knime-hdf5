@@ -132,17 +132,29 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return m_type;
 	}
 	
+	/**
+	 * calculates the number of values/cells which can be saved in the dimensions array
+	 * 
+	 * @return product of the numbers in the dimensions array 
+	 */
 	public long numberOfValues() {
 		return numberOfValuesRange(0, getDimensions().length);
 	}
 	
+	/**
+	 * calculates the number of values/cells which can be saved within the range <br>
+	 * { fromIndex - getDimensions().length - 1 } of the dimensions array
+	 * 
+	 * @param fromIndex inclusive
+	 * @return product of the numbers in the dimensions array in this range 
+	 */
 	public long numberOfValuesFrom(int fromIndex) {
 		return numberOfValuesRange(fromIndex, getDimensions().length);
 	}
 
 	/**
-	 * calculates the number of values/cells which can be saved within the range (fromIndex - toIndex)
-	 * of the dimensions array
+	 * calculates the number of values/cells which can be saved within the range <br>
+	 * { fromIndex, ..., toIndex - 1 } of the dimensions array
 	 * 
 	 * @param fromIndex inclusive
 	 * @param toIndex exclusive
@@ -222,30 +234,39 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	@SuppressWarnings("unchecked")
 	public Type[] read() {
-		Type[] dataRead = null;
+		Type[] dataOut = null;
 		
 		try {
 	        if (isOpen()) {
 	        	Hdf5DataType dataType = getType();
-	        	dataRead = (Type[]) dataType.getKnimeType().createArray((int) numberOfValues());
+	        	dataOut = (Type[]) dataType.getKnimeType().createArray((int) numberOfValues());
 				
-				if (dataType.isKnimeType(Hdf5KnimeDataType.STRING) && dataType.getConstants()[1] >= 0) {
-					H5.H5Dread_string(getElementId(), dataType.getConstants()[1],
-							HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-							HDF5Constants.H5P_DEFAULT, (String[]) dataRead);
+				if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
+	                if (dataType.isVlen()) {
+						long typeId = H5.H5Tget_native_type(dataType.getConstants()[0]);
+	                    H5.H5DreadVL(getElementId(), typeId,
+								HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+								HDF5Constants.H5P_DEFAULT, dataOut);
+	    				H5.H5Tclose(typeId);
+	                    
+	                } else {
+						H5.H5Dread_string(getElementId(), dataType.getConstants()[1],
+								HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+								HDF5Constants.H5P_DEFAULT, (String[]) dataOut);
+					}
 					
 				} else if (dataType.equalTypes()) {
 		            H5.H5Dread(getElementId(), dataType.getConstants()[1],
 		                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-		                    HDF5Constants.H5P_DEFAULT, dataRead);
+		                    HDF5Constants.H5P_DEFAULT, dataOut);
 					
 				} else {
-					Object[] data = (Object[]) dataType.getHdfType().createArray((int) numberOfValues());
+					Object[] dataRead = (Object[]) dataType.getHdfType().createArray((int) numberOfValues());
 		            H5.H5Dread(getElementId(), dataType.getConstants()[1],
 		                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-		                    HDF5Constants.H5P_DEFAULT, data);
-					for (int i = 0; i < data.length; i++) {
-						dataRead[i] = (Type) dataType.hdfToKnime(data[i]);
+		                    HDF5Constants.H5P_DEFAULT, dataRead);
+					for (int i = 0; i < dataRead.length; i++) {
+						dataOut[i] = (Type) dataType.hdfToKnime(dataRead[i]);
 					}
 				}
 			}
@@ -253,7 +274,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	        e.printStackTrace();
 	    }
 		
-		return dataRead;
+		return dataOut;
 	}
 	
 	public Type readCell(int... indices) {
@@ -281,11 +302,13 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		
 		if (getDimensions().length != 0) {
 			int rowNum = (int) getDimensions()[0];
+			int rowNumLen = (int) Math.ceil(Math.log10(rows.length));
 			int colNum = (int) numberOfValuesFrom(1);
 			
 			for (int c = 0; c < colNum; c++) {
 				for (int r = 0; r < rows.length; r++) {
-					DefaultRow row = new DefaultRow("Row" + r, getDataCell(r < rowNum ? dataRead[r * colNum + c] : null));
+					DefaultRow row = new DefaultRow("Row" + String.format("%0" + rowNumLen + "d", r),
+							getDataCell(r < rowNum ? dataRead[r * colNum + c] : null));
 					rows[r] = (rows[r] == null) ? row : new JoinedRow(rows[r], row);
 				}
 			}
@@ -364,6 +387,13 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			long[] dims = new long[ndims];
 			if (getDataspaceId() >= 0) {
 				H5.H5Sget_simple_extent_dims(getDataspaceId(), dims, null);
+				
+				if (dims.length == 0) {
+					NodeLogger.getLogger("HDF5 Files").warn("DataSet \"" + getPathFromFileWithName() + "\" has 0 dimensions. "
+							+ "Dimensions are set to dims = new long[]{ 1L } now.");
+					dims = new long[]{ 1L };
+				}
+				
 				setDimensions(dims);
 			}
 		} catch (Exception e) {

@@ -18,7 +18,7 @@ public enum Hdf5HdfDataType {
 	CHAR(10),			// data type is a Char
 	UCHAR(11),			// data type is an unsigned Char
 	STRING(12),			// data type is a String
-	REFERENCE(13);			// data type is an object reference
+	REFERENCE(13);		// data type is an object reference
 	
 	private final int m_typeId;
 	

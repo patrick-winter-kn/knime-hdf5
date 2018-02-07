@@ -74,9 +74,9 @@ public class Hdf5Attribute<Type> {
 			}
 			
 			if (dataspaceId >= 0) {
-				int rank = H5.H5Sget_simple_extent_ndims(dataspaceId);
-				if (rank > 0) {
-					long[] dims = new long[rank];
+				int ndims = H5.H5Sget_simple_extent_ndims(dataspaceId);
+				if (ndims > 0) {
+					long[] dims = new long[ndims];
 					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
                     for (int j = 0; j < dims.length; j++) {
                         lsize *= dims[j];
@@ -87,11 +87,12 @@ public class Hdf5Attribute<Type> {
 			Object[] dataOut = (Object[]) dataType.getKnimeType().createArray(lsize);
 			
 			if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
-				long typeId = H5.H5Tget_native_type(dataType.getConstants()[0]);
-                if (H5.H5Tis_variable_str(typeId) /* TODO should later be: dataType.isVlen() */) {
+                if (dataType.isVlen()) {
+    				long typeId = H5.H5Tget_native_type(dataType.getConstants()[0]);
                 	String[] strs = new String[lsize];
                     H5.H5AreadVL(attributeId, typeId, strs);
                     dataOut = strs;
+    				H5.H5Tclose(typeId);
                     
                 } else {
 					byte[] dataRead = new byte[lsize * ((int) stringLength + 1)];
@@ -107,7 +108,6 @@ public class Hdf5Attribute<Type> {
 						dataOut[i] = String.copyValueOf(dataChar[i]);
 					}
 				}
-				H5.H5Tclose(typeId);
 				
 			} else if (dataType.equalTypes()) {
 				H5.H5Aread(attributeId, dataType.getConstants()[1], dataOut);

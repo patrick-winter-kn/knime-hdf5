@@ -1,9 +1,9 @@
 package org.knime.hdf5.nodes.reader;
 
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-
+import javax.swing.BorderFactory;
 import javax.swing.JFileChooser;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataTableSpec;
@@ -15,7 +15,6 @@ import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.NotConfigurableException;
 import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
 import org.knime.core.node.defaultnodesettings.DialogComponentBoolean;
-import org.knime.core.node.defaultnodesettings.DialogComponentButton;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
@@ -65,8 +64,9 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 
     	m_mvSource = new SettingsModelBoolean("source", true);
     	m_missingValues = new DialogComponentBoolean(m_mvSource, "allow missing values");
+    	m_missingValues.getComponentPanel().setBorder(
+    			BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "Advanced settings:"));
     	addDialogComponent(m_missingValues);
-        
     }
     
     private void createFileChooser() {
@@ -76,12 +76,10 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     			"sourceHistory", JFileChooser.OPEN_DIALOG, false, m_fcSourceFvm);
     	fileChooser.setBorderTitle("Input file:");
     	addDialogComponent(fileChooser);
-
-    	// "Browse File"-Button
-        DialogComponentButton fileButton = new DialogComponentButton("Browse File");
-        fileButton.addActionListener(new ActionListener(){
+    	
+        fileChooser.getModel().addChangeListener(new ChangeListener() {
 			@Override
-			public void actionPerformed(ActionEvent e) {
+			public void stateChanged(ChangeEvent e) {
 		        SettingsModelString model = (SettingsModelString) fileChooser.getModel();
 		        String newValue = model.getStringValue();
 		        
@@ -100,7 +98,6 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		        }
 			}
         });
-        addDialogComponent(fileButton);
     }
     
     private void updateConfigs() throws Exception {
@@ -182,12 +179,12 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
     	settings.addString("filePath", m_file.getFilePath());
 
     	DataTableSpec dsInclSpec = new DataTableSpec(m_dataSetPanel.getIncludeList().toArray(new DataColumnSpec[] {}));
-		dsInclSpec.save(settings.addConfig("dsIncl"));
-		(new DataTableSpec(m_dataSetPanel.getExcludeList().toArray(new DataColumnSpec[] {}))).save(settings.addConfig("dsExcl"));
+		dsInclSpec.save(settings.addConfig("dataSetsIncluded"));
+		(new DataTableSpec(m_dataSetPanel.getExcludeList().toArray(new DataColumnSpec[] {}))).save(settings.addConfig("dataSetsExcluded"));
 		
 		SettingsModelBoolean model = (SettingsModelBoolean) m_missingValues.getModel();
         boolean missingValues = model.getBooleanValue();
-        settings.addBoolean("missingValues", missingValues);
+        settings.addBoolean("allowMissingValues", missingValues);
         
         String[] dsPaths = dsInclSpec.getColumnNames();
         if (!missingValues) {
@@ -203,10 +200,10 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 				}
 				i++;
 			}
-			settings.addBoolean("allRowsEqual", allRowsEqual);
+			settings.addBoolean("allRowSizesEqual", allRowsEqual);
 		}
 		
-		(new DataTableSpec(m_attributePanel.getIncludeList().toArray(new DataColumnSpec[] {}))).save(settings.addConfig("attrIncl"));
-		(new DataTableSpec(m_attributePanel.getExcludeList().toArray(new DataColumnSpec[] {}))).save(settings.addConfig("attrExcl"));
+		(new DataTableSpec(m_attributePanel.getIncludeList().toArray(new DataColumnSpec[] {}))).save(settings.addConfig("attributesIncluded"));
+		(new DataTableSpec(m_attributePanel.getExcludeList().toArray(new DataColumnSpec[] {}))).save(settings.addConfig("attributesExcluded"));
 	}
 }

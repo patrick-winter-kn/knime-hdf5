@@ -118,24 +118,19 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPath);
 				Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
 				DataType type = dataType.getColumnType();
-
-				if (dataSet.getDimensions().length != 0) {
-					int rowNum = (int) dataSet.getDimensions()[0];
-					m_maxRows = rowNum > m_maxRows ? rowNum : m_maxRows;
+				
+				int rowNum = (int) dataSet.getDimensions()[0];
+				m_maxRows = rowNum > m_maxRows ? rowNum : m_maxRows;
+				
+				if (dataSet.getDimensions().length > 1) {
+					long[] colDims = new long[dataSet.getDimensions().length - 1];
+					Arrays.fill(colDims, 0);
 					
-					if (dataSet.getDimensions().length > 1) {
-						long[] colDims = new long[dataSet.getDimensions().length - 1];
-						Arrays.fill(colDims, 0);
-						
-						do {
-							colSpecList.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
-						} while (dataSet.nextColumnDims(colDims));
-					} else {
-						colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
-					}
+					do {
+						colSpecList.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
+					} while (dataSet.nextColumnDims(colDims));
 				} else {
-					NodeLogger.getLogger("HDF5 Files").error("DataSet \"" + dsPath + "\" has 0 dimensions",
-							new UnsupportedOperationException());
+					colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
 				}
 			}
 		}
@@ -161,18 +156,18 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 	@Override
 	protected void validateSettings(NodeSettingsRO settings) throws InvalidSettingsException {
-		if (settings.containsKey("allRowsEqual") && !settings.getBoolean("allRowsEqual")) {
+		if (settings.containsKey("allRowSizesEqual") && !settings.getBoolean("allRowSizesEqual")) {
 			throw new InvalidSettingsException("contains MissingCells (not all columns have equal row number)");
 		}
 	}
 
 	@Override
 	protected void loadValidatedSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
-		if (settings.containsKey("filePath") && settings.containsKey("dsIncl") && settings.containsKey("attrIncl")) {
+		if (settings.containsKey("filePath") && settings.containsKey("dataSetsIncluded") && settings.containsKey("attributesIncluded")) {
 			m_filePath = settings.getString("filePath");
-			m_dsPaths = DataTableSpec.load(settings.getConfig("dsIncl")).getColumnNames();
+			m_dsPaths = DataTableSpec.load(settings.getConfig("dataSetsIncluded")).getColumnNames();
 			m_maxRows = 0;
-			m_attrPaths = DataTableSpec.load(settings.getConfig("attrIncl")).getColumnNames();
+			m_attrPaths = DataTableSpec.load(settings.getConfig("attributesIncluded")).getColumnNames();
 		}
 	}
 
