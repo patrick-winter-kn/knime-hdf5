@@ -212,6 +212,10 @@ public class Hdf5Group extends Hdf5TreeElement {
 			long stringLength = -1;
 			Hdf5DataType type = findDataSetType(name);
 			
+			if (type == null) {
+				return null;
+			}
+			
 			try {
 				dataSetId = H5.H5Dopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 				dataspaceId = H5.H5Dget_space(dataSetId);
@@ -410,20 +414,28 @@ public class Hdf5Group extends Hdf5TreeElement {
 			Iterator<String> iterAttr = loadAttributeNames().iterator();
 			while (iterAttr.hasNext()) {
 				String name = iterAttr.next();
-				paths.put(path + name, findAttributeType(name));
+				Hdf5DataType dataType = findAttributeType(name);
+				if (dataType != null) {
+					paths.put(path + name, dataType);
+				}
 			}
 			
 			Iterator<String> iterDS = loadDataSetNames().iterator();
 			while (iterDS.hasNext()) {
 				Hdf5DataSet<?> dataSet = getDataSet(iterDS.next());
-				paths.putAll(dataSet.getDirectAttributesInfo());
-				dataSet.close();
+				if (dataSet != null) {
+					paths.putAll(dataSet.getDirectAttributesInfo());
+					dataSet.close();
+				}
 			}
 		} else {
 			Iterator<String> iterDS = loadDataSetNames().iterator();
 			while (iterDS.hasNext()) {
 				String name = iterDS.next();
-				paths.put(path + name, findDataSetType(name));
+				Hdf5DataType dataType = findDataSetType(name);
+				if (dataType != null) {
+					paths.put(path + name, dataType);
+				}
 			}
 		}
 		
@@ -479,29 +491,51 @@ public class Hdf5Group extends Hdf5TreeElement {
 	public DataTableSpec createSpecOfAttributes() {
 		return createSpecOfObjects(Hdf5Object.ATTRIBUTE);
 	}
-	
+
+	/**
+	 * 
+	 * @param name name of the attribute in this treeElement
+	 * @return dataType of the attribute (TODO doesn't work for {@code H5T_VLEN} and {@code H5T_REFERENCE} at the moment)
+	 */
 	Hdf5DataType findDataSetType(String name) {
 		if (existsDataSet(name)) {
 			long dataSetId = -1;
 			String dataType = "";
 			int size = 0;
 			boolean unsigned = false;
+			boolean vlen = false;
 			
 			try {
 				dataSetId = H5.H5Dopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 				long typeId = H5.H5Dget_type(dataSetId);
 				dataType = H5.H5Tget_class_name(H5.H5Tget_class(typeId));
 				size = (int) H5.H5Tget_size(typeId);
+				vlen = dataType.equals("H5T_VLEN") || H5.H5Tis_variable_str(typeId);
 				if (dataType.equals("H5T_INTEGER") || dataType.equals("H5T_CHAR")) {
 					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(typeId);
 				}
 				H5.H5Tclose(typeId);
 				H5.H5Dclose(dataSetId);
+				
+				if (dataType.equals("H5T_VLEN")) {
+					// TODO find correct real dataType
+					NodeLogger.getLogger("HDF5 Files").warn("DataType H5T_VLEN of dataSet \""
+							+ getPathFromFileWithName() + name + "\" is not supported");
+					return null;
+				}
+				
+				if (dataType.equals("H5T_REFERENCE")) {
+					NodeLogger.getLogger("HDF5 Files").warn("DataType H5T_REFERENCE of dataSet \""
+							+ getPathFromFileWithName() + name + "\" is not supported");
+					return null;
+				}
+				
+				
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
 			}
 			
-			return new Hdf5DataType(dataType, size, unsigned, false, true);
+			return new Hdf5DataType(dataType, size, unsigned, vlen, true);
 		} else {
 			NodeLogger.getLogger("HDF5 Files").error("There isn't a dataSet \"" + name + "\" in group"
 					+ getPathFromFile() + getName(), new IllegalArgumentException());

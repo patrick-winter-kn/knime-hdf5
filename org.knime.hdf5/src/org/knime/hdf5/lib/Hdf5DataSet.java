@@ -1,15 +1,14 @@
 package org.knime.hdf5.lib;
 
+import java.nio.channels.NonReadableChannelException;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 
 import org.knime.core.data.DataCell;
-import org.knime.core.data.DataRow;
 import org.knime.core.data.MissingCell;
-import org.knime.core.data.def.DefaultRow;
 import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
-import org.knime.core.data.def.JoinedRow;
 import org.knime.core.data.def.LongCell;
 import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
@@ -232,38 +231,71 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return false;
 	}
 	
+	public Type[] readRow(long rowId) {
+		return readRows(rowId, rowId + 1);
+	}
+	
+	/**
+	 * 
+	 * @param fromRow inclusive
+	 * @param toRow exclusive
+	 * @return
+	 */
 	@SuppressWarnings("unchecked")
-	public Type[] read() {
+	public Type[] readRows(long fromRow, long toRow) {
 		Type[] dataOut = null;
 		
 		try {
 	        if (isOpen()) {
 	        	Hdf5DataType dataType = getType();
-	        	dataOut = (Type[]) dataType.getKnimeType().createArray((int) numberOfValues());
+	        	dataOut = (Type[]) dataType.getKnimeType().createArray((int) numberOfValuesFrom(1));
+
+	            long memSpaceId = H5.H5Screate_simple(m_dimensions.length - 1,
+	            		Arrays.copyOfRange(m_dimensions, 1, m_dimensions.length), null);
+	            
+	        	long[] offset = new long[m_dimensions.length];
+				offset[0] = fromRow;
+				long[] count = m_dimensions.clone();
+				count[0] = toRow - fromRow;
+				
+				int status = -1;
+			    try {
+					status = H5.H5Sselect_hyperslab(m_dataspaceId, HDF5Constants.H5S_SELECT_SET,
+							offset, null, count, null);
+					
+				} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException e) {
+					e.printStackTrace();
+				}
+			    
+			    if (status < 0) {
+					NodeLogger.getLogger("HDF5 Files").error("Next row of dataSet \"" + getPathFromFileWithName()
+							+ "\" could not be read", new NonReadableChannelException());
+			    	return null;
+			    }
 				
 				if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
 	                if (dataType.isVlen()) {
 						long typeId = H5.H5Tget_native_type(dataType.getConstants()[0]);
 	                    H5.H5DreadVL(getElementId(), typeId,
-								HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+	                    		memSpaceId, m_dataspaceId,
 								HDF5Constants.H5P_DEFAULT, dataOut);
 	    				H5.H5Tclose(typeId);
 	                    
 	                } else {
 						H5.H5Dread_string(getElementId(), dataType.getConstants()[1],
-								HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+								memSpaceId, m_dataspaceId,
 								HDF5Constants.H5P_DEFAULT, (String[]) dataOut);
 					}
 					
 				} else if (dataType.equalTypes()) {
 		            H5.H5Dread(getElementId(), dataType.getConstants()[1],
-		                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+		            		memSpaceId, m_dataspaceId,
 		                    HDF5Constants.H5P_DEFAULT, dataOut);
 					
 				} else {
-					Object[] dataRead = (Object[]) dataType.getHdfType().createArray((int) numberOfValues());
+					Object[] dataRead = (Object[]) dataType.getHdfType().createArray((int) numberOfValuesFrom(1));
 		            H5.H5Dread(getElementId(), dataType.getConstants()[1],
-		                    HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+		            		memSpaceId, m_dataspaceId,
 		                    HDF5Constants.H5P_DEFAULT, dataRead);
 					for (int i = 0; i < dataRead.length; i++) {
 						dataOut[i] = (Type) dataType.hdfToKnime(dataRead[i]);
@@ -277,48 +309,23 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return dataOut;
 	}
 	
-	public Type readCell(int... indices) {
-		int index = 0;
-		if (indices.length == getDimensions().length) {
-			for (int i = 0; i < indices.length; i++) {
-				if (indices[i] >= 0 && indices[i] < getDimensions()[i]) {
-					index += indices[i] * (int) numberOfValuesRange(i+1, indices.length);
-				} else {
-					NodeLogger.getLogger("HDF5 Files").error("Index out of bounds: indices[" + i + "] = "
-							+ indices[i] + " and should be from 0 to " + (getDimensions()[i] - 1),
-							new IllegalArgumentException());
-					return null;
-				}
-		    }
-			return read()[index];
-		}
-		NodeLogger.getLogger("HDF5 Files").error("Not the correct amount (" + getDimensions().length
-				+ ") of indices!: " + indices.length, new IllegalArgumentException());
-		return null;
-	}
-	
-	/**
-	 * 
-	 * @param rows the array of {@code DataRow}s whose should be extended with the columns of this {@code Hdf5DataSet}
-	 * @return the number of columns that extended {@code rows}
-	 */
-	public int extendRows(DataRow[] rows) {
-		Type[] dataRead = read();
-		int colNum = 0;
+	public void extendRow(List<DataCell> row, long rowId) {
+		// TODO if rowNum bigger than int_max
+		long rowNum = m_dimensions[0];
+		long colNum = (int) numberOfValuesFrom(1);
 		
-		if (getDimensions().length != 0) {
-			int rowNum = (int) getDimensions()[0];
-			colNum = (int) numberOfValuesFrom(1);
+		if (rowId < rowNum) {
+			Type[] dataRead = readRow(rowId);
 			
 			for (int c = 0; c < colNum; c++) {
-				for (int r = 0; r < rows.length; r++) {
-					DefaultRow row = new DefaultRow("Row" + r, getDataCell(r < rowNum ? dataRead[r * colNum + c] : null));
-					rows[r] = (rows[r] == null) ? row : new JoinedRow(rows[r], row);
-				}
+				row.add(getDataCell(dataRead[c]));
+			}
+			
+		} else {
+			for (int c = 0; c < colNum; c++) {
+				row.add(getDataCell(null));
 			}
 		}
-		
-		return colNum;
 	}
 	
 	private DataCell getDataCell(Type value) {

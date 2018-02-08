@@ -6,11 +6,12 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.knime.core.data.DataCell;
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataColumnSpecCreator;
-import org.knime.core.data.DataRow;
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.DataType;
+import org.knime.core.data.def.DefaultRow;
 import org.knime.core.node.BufferedDataContainer;
 import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.CanceledExecutionException;
@@ -32,9 +33,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	
 	private String[] m_dsPaths;
 	
-	private int m_maxRows;
-	
-	private int m_totalColNum;
+	private long m_maxRows;
 	
 	private String[] m_attrPaths;
 	
@@ -45,10 +44,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		long start = System.currentTimeMillis();
-		
 		if (m_filePath == null || m_dsPaths == null || m_dsPaths.length == 0) {
-			NodeLogger.getLogger("HDF5 Files").error("No dataSet to use", new NullPointerException());
+			NodeLogger.getLogger("HDF5 Reader").error("No dataSet to use", new NullPointerException());
 		}
 
 		Hdf5File file = null;
@@ -58,8 +55,22 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			file = Hdf5File.createFile(m_filePath);
 			outContainer = exec.createDataContainer(createOutSpec());
 			
-			for (DataRow row: dataSetsToRows(file, exec)) {
-				outContainer.addRowToTable(row);
+			Hdf5DataSet<?>[] dataSets = new Hdf5DataSet<?>[m_dsPaths.length];
+			for (int i = 0; i < m_dsPaths.length; i++) {
+				dataSets[i] = file.getDataSetByPath(m_dsPaths[i]);
+				dataSets[i].open();
+			}
+			
+			for (long i = 0; i < m_maxRows; i++) {
+				exec.checkCanceled();
+				exec.setProgress(1.0 * i / m_maxRows);
+				
+				List<DataCell> row = new LinkedList<>();
+				for (Hdf5DataSet<?> dataSet : dataSets) {
+					dataSet.extendRow(row, i);
+				}
+				
+				outContainer.addRowToTable(new DefaultRow("Row" + i, row));
 			}
 			
 			pushFlowVariables(file);
@@ -67,28 +78,10 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		} catch (CanceledExecutionException cee) {
 		} finally {
 			file.close();
-			long time = System.currentTimeMillis();
 	        outContainer.close();
-	        System.out.println("outContainer.close(): " + (System.currentTimeMillis() - time) + " ms");
-	        System.out.println("total: " + (System.currentTimeMillis() - start) + " ms");
 		}
 		
 		return new BufferedDataTable[]{outContainer.getTable()};
-	}
-	
-	private DataRow[] dataSetsToRows(Hdf5File file, ExecutionContext exec) throws CanceledExecutionException {
-		DataRow[] rows = new DataRow[m_maxRows];
-		int curColNum = 0;
-		
-		for (String dsPath: m_dsPaths) {
-			exec.checkCanceled();
-			exec.setProgress(1.0 * curColNum / m_totalColNum);
-			Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPath);
-			dataSet.open();
-			curColNum += dataSet.extendRows(rows);
-		}
-		
-		return rows;
 	}
 	
 	private void pushFlowVariables(Hdf5File file) {
@@ -121,7 +114,6 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	
 	private DataTableSpec createOutSpec() {
 		List<DataColumnSpec> colSpecList = new LinkedList<>();
-		m_totalColNum = 0;
 		
 		if (m_filePath != null && m_dsPaths != null) {
 			Hdf5File file = Hdf5File.createFile(m_filePath);
@@ -130,7 +122,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
 				DataType type = dataType.getColumnType();
 				
-				int rowNum = (int) dataSet.getDimensions()[0];
+				long rowNum = dataSet.getDimensions()[0];
 				m_maxRows = rowNum > m_maxRows ? rowNum : m_maxRows;
 				
 				if (dataSet.getDimensions().length > 1) {
@@ -139,12 +131,10 @@ public class HDF5ReaderNodeModel extends NodeModel {
 					
 					do {
 						colSpecList.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
-						m_totalColNum++;
 						
 					} while (dataSet.nextColumnDims(colDims));
 				} else {
 					colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
-					m_totalColNum++;
 				}
 			}
 		}

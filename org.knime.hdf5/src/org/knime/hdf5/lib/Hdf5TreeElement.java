@@ -212,7 +212,7 @@ abstract public class Hdf5TreeElement {
 	/**
 	 * 
 	 * @param name name of the attribute in this treeElement
-	 * @return dataType of the attribute (doesn't work for {@code H5T_VLEN} and {@code H5T_REFERENCE} at the moment)
+	 * @return dataType of the attribute (TODO doesn't work for {@code H5T_VLEN} and {@code H5T_REFERENCE} at the moment)
 	 */
 	Hdf5DataType findAttributeType(String name) {
 		if (loadAttributeNames().contains(name)) {
@@ -222,7 +222,7 @@ abstract public class Hdf5TreeElement {
 			int size = 0;
 			boolean unsigned = false;
 			boolean vlen = false;
-			
+
 			try {
 				attributeId = H5.H5Aopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 

@@ -55,6 +55,10 @@ public class Hdf5Attribute<Type> {
 	static Hdf5Attribute<?> getInstance(final Hdf5TreeElement treeElement, final String name) {
 		Hdf5Attribute<?> attribute = null;
 		Hdf5DataType dataType = treeElement.findAttributeType(name);
+
+		if (dataType == null) {
+			return null;
+		}
 		
 		long attributeId = -1;
 		long dataspaceId = -1;
