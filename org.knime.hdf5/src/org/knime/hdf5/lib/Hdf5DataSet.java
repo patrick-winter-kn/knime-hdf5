@@ -26,6 +26,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	private long[] m_dimensions;
 	
+	private boolean m_dimsAvailable;
+	
 	private long m_stringLength;
 	
 	private final Hdf5DataType m_type;
@@ -253,25 +255,31 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	            long memSpaceId = H5.H5Screate_simple(m_dimensions.length - 1,
 	            		Arrays.copyOfRange(m_dimensions, 1, m_dimensions.length), null);
 	            
-	        	long[] offset = new long[m_dimensions.length];
-				offset[0] = fromRow;
-				long[] count = m_dimensions.clone();
-				count[0] = toRow - fromRow;
-				
-				int status = -1;
-			    try {
-					status = H5.H5Sselect_hyperslab(m_dataspaceId, HDF5Constants.H5S_SELECT_SET,
-							offset, null, count, null);
+	            /*
+	             * chunking is not possible for dataSets with 0 dimensions according to the H5 library
+	             * (we set it to { 1L } then)
+	             */
+	            if (m_dimsAvailable) {
+		        	long[] offset = new long[m_dimensions.length];
+					offset[0] = fromRow;
+					long[] count = m_dimensions.clone();
+					count[0] = toRow - fromRow;
 					
-				} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException e) {
-					e.printStackTrace();
-				}
-			    
-			    if (status < 0) {
-					NodeLogger.getLogger("HDF5 Files").error("Next row of dataSet \"" + getPathFromFileWithName()
-							+ "\" could not be read", new NonReadableChannelException());
-			    	return null;
-			    }
+					int status = -1;
+				    try {
+						status = H5.H5Sselect_hyperslab(m_dataspaceId, HDF5Constants.H5S_SELECT_SET,
+								offset, null, count, null);
+						
+					} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException e) {
+						e.printStackTrace();
+					}
+				    
+				    if (status < 0) {
+						NodeLogger.getLogger("HDF5 Files").error("Next row of dataSet \"" + getPathFromFileWithName()
+								+ "\" could not be read", new NonReadableChannelException());
+				    	return null;
+				    }
+	            }
 				
 				if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
 	                if (dataType.isVlen()) {
@@ -400,8 +408,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			long[] dims = new long[ndims];
 			if (getDataspaceId() >= 0) {
 				H5.H5Sget_simple_extent_dims(getDataspaceId(), dims, null);
-				
-				if (dims.length == 0) {
+
+				m_dimsAvailable = dims.length != 0;
+				if (!m_dimsAvailable) {
 					NodeLogger.getLogger("HDF5 Files").warn("DataSet \"" + getPathFromFileWithName() + "\" has 0 dimensions. "
 							+ "Dimensions are set to dims = new long[]{ 1L } now.");
 					dims = new long[]{ 1L };

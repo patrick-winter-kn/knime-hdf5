@@ -131,8 +131,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
 					
 					do {
 						colSpecList.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
-						
 					} while (dataSet.nextColumnDims(colDims));
+					
 				} else {
 					colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
 				}
