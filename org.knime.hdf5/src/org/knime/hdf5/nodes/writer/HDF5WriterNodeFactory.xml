@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE knimeNode PUBLIC "-//UNIKN//DTD KNIME Node 2.0//EN" "http://www.knime.org/Node.dtd">
+<knimeNode icon="./hdf5writer.png" type="Sink">
+	<name>HDF5 Writer</name>
+
+	<shortDescription>
+		Writes dataSets and attributes in an HDF5 File.
+	</shortDescription>
+
+	<fullDescription>
+		<intro>
+			This node writes dataSets and attributes in an HDF5 File.
+			...
+		</intro>
+	</fullDescription>
+
+	<ports>
+		<inPort index="0" name="Input table">
+			Input table.
+		</inPort>
+	</ports>
+</knimeNode>
