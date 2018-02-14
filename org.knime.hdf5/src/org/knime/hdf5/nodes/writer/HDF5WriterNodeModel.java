@@ -24,13 +24,9 @@ public class HDF5WriterNodeModel extends NodeModel {
 		return null;
 	}
 	
-	private DataTableSpec createOutSpec() {
-		return null;
-    }
-	
 	@Override
 	protected DataTableSpec[] configure(DataTableSpec[] inSpecs) throws InvalidSettingsException {
-		return new DataTableSpec[]{createOutSpec()};
+		return null;
     }
 
 	@Override

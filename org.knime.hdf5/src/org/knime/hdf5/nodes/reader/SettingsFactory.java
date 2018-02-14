@@ -1,51 +1,36 @@
 package org.knime.hdf5.nodes.reader;
 
+import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 
 final class SettingsFactory {
 
+	static final String DS_CONF_KEY = "dsFilterPanel";
+	
+	static final String ATTR_CONF_KEY = "attrFilterPanel";
+	
     private SettingsFactory() {
         // Disables default constructor
     }
 
     /**
-     * Factory method for the source setting.
+     * Factory method for the source setting of the file chooser.
      * 
      * 
      * @return Source <code>SettingsModel</code>
      */
-    static SettingsModelString createSourceSettings() {
-        return new SettingsModelString("source", "");
+    static SettingsModelString createFcSourceSettings() {
+        return new SettingsModelString("fcSource", "");
     }
-
+    
     /**
-     * Factory method for the target directory setting.
+     * Factory method for the source setting of the check box "fail if rowSize differs".
      * 
      * 
-     * @return Target directory <code>SettingsModel</code>
+     * @return Source <code>SettingsModel</code>
      */
-    static SettingsModelString createTargetDirectorySettings() {
-        return new SettingsModelString("targetdirectory", "");
+    static SettingsModelBoolean createFirsdSourceSettings() {
+        return new SettingsModelBoolean("firsdSource", true);
     }
-
-    /**
-     * Factory method for the output setting.
-     * 
-     * 
-     * @return Output <code>SettingsModel</code>
-     */
-    static SettingsModelString createOutputSettings() {
-        return new SettingsModelString("output", OutputSelection.URI.getName());
-    }
-
-    /**
-     * Factory method for the if exists setting.
-     * 
-     * 
-     * @return If exists <code>SettingsModel</code>
-     */
-    static SettingsModelString createIfExistsSettings() {
-        return new SettingsModelString("ifexists", OverwritePolicy.ABORT.getName());
-    }
-
+    
 }

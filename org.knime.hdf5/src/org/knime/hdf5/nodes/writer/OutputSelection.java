@@ -1,4 +1,4 @@
-package org.knime.hdf5.nodes.reader;
+package org.knime.hdf5.nodes.writer;
 
 enum OutputSelection {
 

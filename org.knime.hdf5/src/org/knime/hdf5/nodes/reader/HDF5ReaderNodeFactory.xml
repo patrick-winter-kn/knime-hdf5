@@ -10,92 +10,53 @@
 	<fullDescription>
 		<intro>
 			This node reads dataSets and attributes from an HDF5 File.
-			The path from the root of the file to the dataSets and attributes
-			will be contained in the output.
+			The columns in the output table will be created by the dataSets and
+			the flow variables by the attributes. Both will be named by the
+			path within the file. 
 		</intro>
 
 		<tab name="File Chooser">
 			<option name="Input file">
 				Select the path to the input file.
-				<br />
-				Supported formats are:
-				<ul>
-					<li>.h5</li>
-				</ul>
 			</option>
 			<br />
-			<option name="Advanced settings">
-				Options are:
-				<ul>
-					<li>
-						<b>Allow missing values:</b> Specifies if null/missing
-						values are allowed or not. Null/missing values are the
-						result of merging two dataSets with a different number
-						of rows.
-					</li>
-				</ul>
+			<option name="Fail if rowSize differs">
+				Specifies if the node fails for missing values. Missing values
+				appear if the first dimension of the dataSet, which is the
+				rowSize of the columns in the output, is not equal for every
+				column. So the node fails at the first difference in the
+				rowSize.
 			</option>
 		</tab>
 		<tab name="DataSet Selector">
 			Specifies the included and excluded dataSets of the file.
+			<br />
+			<br />
+			The names of the dataSets are the paths within the file. The names
+			of the columns additionally contain the dimensions in terms of
+			their dimensions in the original dataSet without the first
+			dimension which is considered as rowSize.
+			<br />
+			<br />
 			So this is the content of the output table.
 			<br />
 			<br />
-			The usage is based on the Column Filter:
-			<br />
-			<br />
-			<option name="Include">
-				This list contains the paths of the dataSets that are included
-				in the output table.
-			</option>
-			
-			<option name="Enforce Inclusion">
-				Select this option to enforce the current inclusion list to stay
-				the same even if the input table specification changes. If some
-				of the included dataSets are not available anymore, a warning
-				is displayed. (New dataSets will automatically be added to the
-				exclusion list.)
-			</option>
-			
-			<option name="Select">
-				Use these buttons to move dataSets between the Include and Exclude 
-				list.
-			</option>
-			
-			<option name="Search">
-				Use one of these fields to search either within the Include
-				or Exclude list for certain dataSets paths or its substrings.
-				Repeated clicking of the search button marks the next dataSet that
-				matches the search text. The check box 'Mark all search hits' causes
-				all matching dataSets to be selected making them movable between
-				the two lists.
-			</option>
-			
-		    <option name="Exclude">
-		    	This list contains the paths of the dataSets of the file that are 
-		    	excluded at the output table.
-		    </option>
-	
-	        <option name="Enforce Exclusion">
-	            Select this option to enforce the current exclusion list to stay
-	            the same even if the input specification changes. If some
-	            of the excluded dataSets are not available anymore, a warning
-	            is displayed. (New dataSets will automatically be added to the
-	            inclusion list.)
-	        </option>
+			The usage is based on the Column Filter.
 		</tab>
 		<tab name="Attribute Selector">
 			Specifies the included and excluded attributes of the file.
 			So these are converted to the flow variables of the output.
 			<br />
 			<br />
-			Usage is the same as for the DataSet Selector.
+			The usage is also based on the Column Filter.
 		</tab>
 	</fullDescription>
 
 	<ports>
 		<outPort index="0" name="Output table">
-			All included dataSets merged together by columns.
+			All included dataSets merged together by columns. The first
+			dimension of the dataSets will be interpreted as rowSize and the
+			remaining dimensions as columns.
 		</outPort>
 	</ports>
 </knimeNode>

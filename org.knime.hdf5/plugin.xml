@@ -4,7 +4,7 @@
 	<extension
 		point="org.knime.workbench.repository.categories">
 		<category
-			icon="src/org/knime/hdf5/nodes/hdf5files.png"
+			icon="icons/hdf5files.png"
 			level-id="hdf5"
 			locked="true"
 			name="HDF5"
