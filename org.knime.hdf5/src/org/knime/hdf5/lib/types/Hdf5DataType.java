@@ -6,6 +6,14 @@ import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5DataType {
 	
+	private static final int POW_2_8 = (int) Math.pow(2, 8);
+	
+	private static final int POW_2_16 = (int) Math.pow(2, 16);
+	
+	private static final long POW_2_32 = (long) Math.pow(2, 32);
+	
+	private static final double POW_2_64 = Math.pow(2, 64);
+	
 	public static final int DEFAULT_STRING_SIZE = 0;
 	
 	private final Hdf5HdfDataType m_hdfType;
@@ -172,41 +180,41 @@ public class Hdf5DataType {
 		}
 	}
 	
-	// TODO preconditions for argument in
 	public Object hdfToKnime(Object in) {
-		switch (m_hdfType) {
+		switch(m_hdfType) {
 		case BYTE:
-			return (Integer) (int) (byte) in;
+			return (int) (byte) in;
 		case UBYTE:
-			return (Integer) ((int) (byte) in + ((int) (byte) in < 0 ? (int) Math.pow(2, 8) : 0));
+			int ubyteValue = (int) (byte) in;
+			return ubyteValue + (ubyteValue < 0 ? POW_2_8 : 0);
 		case SHORT:
-			return (Integer) (int) (short) in;
+			return (int) (short) in;
 		case USHORT:
-			return (Integer) ((int) (short) in + ((int) (short) in < 0 ? (int) Math.pow(2, 16) : 0));
-		case INTEGER:
-			return in;
+			int ushortValue = (int) (short) in;
+			return ushortValue + (ushortValue < 0 ? POW_2_16 : 0);
 		case UINTEGER:
+			long uintegerValue = (long) (int) in;
+			uintegerValue = uintegerValue + (uintegerValue < 0 ? POW_2_32 : 0);
 			if (m_fromDS) {
-				return (Long) ((long) (int) in + ((long) (int) in < 0 ? (long) Math.pow(2, 32) : 0));
+				return uintegerValue;
 			} else {
-				return (Double) (double) ((long) (int) in + ((long) (int) in < 0 ? (long) Math.pow(2, 32) : 0));
+				return (double) uintegerValue;
 			}
 		case LONG:
 			if (m_fromDS) {
 				return in;
 			} else {
-				return (Double) (double) (long) in;
+				return (double) (long) in;
 			}
 		case ULONG:
-			return (Double) ((double) (long) in + ((double) (long) in < 0 ? Math.pow(2, 64) : 0));
+			double ulongValue = (double) (long) in;
+			return ulongValue + (ulongValue < 0 ? POW_2_64 : 0);
 		case FLOAT:
-			return (Double) (double) (float) in;
+			return (double) (float) in;
+		case INTEGER:
 		case DOUBLE:
-			return in;
 		case CHAR:
-			return in;
 		case UCHAR:
-			return in;
 		case STRING:
 			return in;
 		default:

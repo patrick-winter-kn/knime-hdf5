@@ -1,6 +1,7 @@
 package org.knime.hdf5.lib;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -47,6 +48,13 @@ public class Hdf5File extends Hdf5Group {
 		}
 		
 		return new Hdf5File(filePath);
+	}
+	
+	public static Hdf5File openFile(final String filePath) throws IOException {
+		if (!new File(filePath).exists()) {
+			throw new IOException("The file " + filePath + " does not exist");
+		}
+		return createFile(filePath);
 	}
 	
 	public void open() {
