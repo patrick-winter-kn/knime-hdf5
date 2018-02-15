@@ -23,7 +23,8 @@
 		point="org.knime.workbench.repository.nodes">
 		<node
 			deprecated="false"
-			factory-class="org.knime.hdf5.nodes.writer.HDF5WriterNodeFactory">
+			factory-class="org.knime.hdf5.nodes.writer.HDF5WriterNodeFactory"
+			category-path="/community/hdf5">
 		</node>
 	</extension>
 </plugin>
