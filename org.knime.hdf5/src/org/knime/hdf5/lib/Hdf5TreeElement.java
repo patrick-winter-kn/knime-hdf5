@@ -36,23 +36,22 @@ abstract public class Hdf5TreeElement {
 	 * 
 	 * @param name
 	 */
-	protected Hdf5TreeElement(final String name, final String filePath) {
+	protected Hdf5TreeElement(final String name, final String filePath)
+			throws NullPointerException, IllegalArgumentException {
 		if (name == null) {
 			NodeLogger.getLogger("HDF5 Files").error("name is null",
 					new NullPointerException());
-			// this is necessary because m_name is final
-			m_name = null;
+			throw new NullPointerException();
 		} else if (name.equals("")) {
 			NodeLogger.getLogger("HDF5 Files").error("name may not be the empty String!",
 					new IllegalArgumentException());
-			m_name = null;
+			throw new IllegalArgumentException();
 		} else if (name.contains("/")) {
 			NodeLogger.getLogger("HDF5 Files").error("name " + name + " contains '/'",
 					new IllegalArgumentException());
-			m_name = null;
-		} else {
-			m_name = name;
+			throw new IllegalArgumentException();
 		}
+		m_name = name;
 		m_filePath = filePath;
 	}
 	
@@ -292,7 +291,7 @@ abstract public class Hdf5TreeElement {
             if (getElementId() >= 0) {
             	attribute.setAttributeId(H5.H5Aopen(getElementId(), attribute.getName(), HDF5Constants.H5P_DEFAULT));
         		getAttributes().add(attribute);
-        		attribute.updateDimension();
+        		attribute.loadDimension();
             	attribute.setOpen(true);
             }
         } catch (HDF5LibraryException le) {

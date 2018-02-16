@@ -74,7 +74,7 @@ public class Hdf5Attribute<Type> {
 			}
 			
 			if (dataType.isHdfType(Hdf5HdfDataType.STRING)) {
-				stringLength = dataType.updateStringTypes(attributeId);
+				stringLength = dataType.loadStringTypes(attributeId);
 			}
 			
 			if (dataspaceId >= 0) {
@@ -125,7 +125,7 @@ public class Hdf5Attribute<Type> {
 				}
 			}
 			
-			attribute = dataType.getKnimeType().createAttribute(name, dataOut);
+			attribute = dataType.createAttribute(name, dataOut);
 			
 			attribute.setDataspaceId(dataspaceId);
 			attribute.setAttributeId(attributeId);
@@ -221,7 +221,7 @@ public class Hdf5Attribute<Type> {
 	 * dimensions array is correct.
 	 */
 	
-	void updateDimension() {
+	void loadDimension() {
 		// Get dataspace and allocate memory for read buffer.
 		try {
 			if (getAttributeId() >= 0) {
@@ -233,7 +233,7 @@ public class Hdf5Attribute<Type> {
 		
 		long[] dims = new long[1];
 		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
-			setStringLength(getType().updateStringTypes(getAttributeId()));
+			setStringLength(getType().loadStringTypes(getAttributeId()));
 			
 		} else {
 			try {

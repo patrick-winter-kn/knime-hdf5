@@ -22,7 +22,7 @@ public class Hdf5File extends Hdf5Group {
 	 * - creating dataset/group with the same name directly after deleting it in HDFView (not always, only when there were (x is a name) x, x(1), x(2), x(3) and deleted and readded x(2))
 	 * - TODO has to be checked if or when it also happens with the method getDataSet() in Hdf5Group
 	 */
-	private Hdf5File(final String filePath) {
+	private Hdf5File(final String filePath) throws NullPointerException, IllegalArgumentException {
 		super(null, filePath, filePath.substring(filePath.lastIndexOf(File.separator) + 1), true);
 		
 		ALL_FILES.add(this);
@@ -47,7 +47,13 @@ public class Hdf5File extends Hdf5Group {
 			}
 		}
 		
-		return new Hdf5File(filePath);
+		Hdf5File file = null;
+		
+		try {
+			file = new Hdf5File(filePath);
+		} catch (NullPointerException | IllegalArgumentException npiae) {}
+		
+		return file;
 	}
 	
 	public static Hdf5File openFile(final String filePath) throws IOException {

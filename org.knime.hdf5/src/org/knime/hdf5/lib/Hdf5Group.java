@@ -28,7 +28,8 @@ public class Hdf5Group extends Hdf5TreeElement {
 	
 	private final List<Hdf5DataSet<?>> m_dataSets = new LinkedList<>();
 
-	protected Hdf5Group(final Hdf5Group parent, final String filePath, final String name, boolean create) {
+	protected Hdf5Group(final Hdf5Group parent, final String filePath, final String name, boolean create)
+			throws NullPointerException, IllegalArgumentException {
 		super(name, filePath);
 		if (!(this instanceof Hdf5File)) {
 			if (parent == null) {
@@ -83,7 +84,11 @@ public class Hdf5Group extends Hdf5TreeElement {
 		
 		if (!existsDataSet(name)) {
 			if (!existsGroup(name) || policy == Hdf5OverwritePolicy.OVERWRITE) {
-				group = new Hdf5Group(this, getFilePath(), name, true);
+				try {
+					group = new Hdf5Group(this, getFilePath(), name, true);
+				} catch (NullPointerException | IllegalArgumentException npiae) {
+					group = null;
+				}
 				
 			} else if (policy == Hdf5OverwritePolicy.ABORT) {
 				group = getGroup(name);
@@ -168,7 +173,11 @@ public class Hdf5Group extends Hdf5TreeElement {
 		}
 		
 		if (!found) {
-			group = new Hdf5Group(this, getFilePath(), name, false);
+			try {
+				group = new Hdf5Group(this, getFilePath(), name, false);
+			} catch (NullPointerException | IllegalArgumentException npiae) {
+				group = null;
+			}
 		}
 		
 		return group;
@@ -231,7 +240,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				}
 		        
 				if (type.isHdfType(Hdf5HdfDataType.STRING)) {
-					stringLength = type.updateStringTypes(dataSetId);
+					stringLength = type.loadStringTypes(dataSetId);
 					
         			// Terminate access to the file and mem type.
 					H5.H5Tclose(H5.H5Dget_type(dataSetId));

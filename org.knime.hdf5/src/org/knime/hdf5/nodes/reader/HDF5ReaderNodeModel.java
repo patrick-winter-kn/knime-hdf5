@@ -50,7 +50,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		checkForErrors();
+		checkForErrors(m_filePathSettings, m_failIfRowSizeDiffersSettings, m_dataSetFilterConfig);
 		Hdf5File file = null;
 		BufferedDataContainer outContainer = null;
 
@@ -158,17 +158,19 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 	@Override
 	protected DataTableSpec[] configure(DataTableSpec[] inSpecs) throws InvalidSettingsException {
-		checkForErrors();
+		checkForErrors(m_filePathSettings, m_failIfRowSizeDiffersSettings, m_dataSetFilterConfig);
 		return new DataTableSpec[] { createOutSpec() };
 	}
 	
-	private void checkForErrors() throws InvalidSettingsException {
-		String filePath = m_filePathSettings.getStringValue();
+	private static void checkForErrors(SettingsModelString filePathSettings, 
+			SettingsModelBoolean failIfRowSizeDiffersSettings, 
+			DataColumnSpecFilterConfiguration dataSetFilterConfig) throws InvalidSettingsException {
+		String filePath = filePathSettings.getStringValue();
 		if (filePath.trim().isEmpty()) {
 			throw new InvalidSettingsException("No file selected");
 		}
 		if (!new File(filePath).exists()) {
-			throw new InvalidSettingsException("The selected file " + filePath + " does not exist");
+			throw new InvalidSettingsException("The selected file \"" + filePath + "\" does not exist");
 		}
 		Hdf5File file = null;
 		try {
@@ -176,8 +178,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		} catch (Exception e) {
 			throw new InvalidSettingsException(e.getMessage(), e);
 		}
-		if (m_failIfRowSizeDiffersSettings.getBooleanValue()) {
-			String[] dataSetPaths = m_dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
+		if (failIfRowSizeDiffersSettings.getBooleanValue()) {
+			String[] dataSetPaths = dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
 			Set<Long> rowSizes = new TreeSet<>();
 			for (String dataSetPath : dataSetPaths) {
 				Hdf5DataSet<?> dataSet = file.getDataSetByPath(dataSetPath);
@@ -209,11 +211,17 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 	@Override
 	protected void validateSettings(NodeSettingsRO settings) throws InvalidSettingsException {
-		m_filePathSettings.validateSettings(settings);
-		m_failIfRowSizeDiffersSettings.validateSettings(settings);
+		SettingsModelString filePathSettings = SettingsFactory.createFilePathSettings();
+		filePathSettings.validateSettings(settings);
+		filePathSettings.loadSettingsFrom(settings);
+		SettingsModelBoolean failIfRowSizeDiffersSettings = SettingsFactory.createFailIfRowSizeDiffersSettings();
+		failIfRowSizeDiffersSettings.validateSettings(settings);
+		failIfRowSizeDiffersSettings.loadSettingsFrom(settings);
 		DataColumnSpecFilterConfiguration dataSetFilterConfig = SettingsFactory.createDataSetFilterConfiguration();
 		dataSetFilterConfig.loadConfigurationInModel(settings);
-		DataColumnSpecFilterConfiguration attributeFilterConfig = SettingsFactory.createDataSetFilterConfiguration();
+		checkForErrors(filePathSettings, failIfRowSizeDiffersSettings, dataSetFilterConfig);
+		
+		DataColumnSpecFilterConfiguration attributeFilterConfig = SettingsFactory.createAttributeFilterConfiguration();
 		attributeFilterConfig.loadConfigurationInModel(settings);
 	}
 
@@ -224,7 +232,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		DataColumnSpecFilterConfiguration dataSetFilterConfig = SettingsFactory.createDataSetFilterConfiguration();
 		dataSetFilterConfig.loadConfigurationInModel(settings);
 		m_dataSetFilterConfig = dataSetFilterConfig;
-		DataColumnSpecFilterConfiguration attributeFilterConfig = SettingsFactory.createDataSetFilterConfiguration();
+		DataColumnSpecFilterConfiguration attributeFilterConfig = SettingsFactory.createAttributeFilterConfiguration();
 		attributeFilterConfig.loadConfigurationInModel(settings);
 		m_attributeFilterConfig = attributeFilterConfig;
 	}

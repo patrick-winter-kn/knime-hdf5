@@ -1,5 +1,8 @@
 package org.knime.hdf5.lib.types;
 
+import org.knime.core.node.NodeLogger;
+import org.knime.hdf5.lib.Hdf5Attribute;
+
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
@@ -24,8 +27,6 @@ public class Hdf5DataType {
 	
 	private final boolean m_fromDS;
 	
-	private final long[] m_stringType = new long[] {-1, -1};
-	
 	/**
 	 * 
 	 * @param type dataType class name ( starts with H5T_ )
@@ -37,83 +38,45 @@ public class Hdf5DataType {
 	public Hdf5DataType(String type, int size, boolean unsigned, boolean vlen, boolean fromDS) {
 		m_fromDS = fromDS;
 		m_vlen = vlen;
-		int typeCode = 0;
+		
+		// see Hdf5HdfDataType for the structure of the typeId
+		int typeId = 0;
 		
 		switch(type) {
 		case "H5T_INTEGER":
-			typeCode = 100 * size + 10 + (unsigned ? 1 : 0);
+			typeId = 100 * size + 10 + (unsigned ? 1 : 0);
 			break;
 		case "H5T_FLOAT":
-			typeCode = 100 * size + 20;
+			typeId = 100 * size + 20;
 			break;
 		case "H5T_CHAR":
-			typeCode = 30 + (unsigned ? 1 : 0);
+			typeId = 30 + (unsigned ? 1 : 0);
 		}
 		
-		switch (typeCode) {
-		case 110:
-			m_hdfType = Hdf5HdfDataType.BYTE;
-			break;
-		case 111:
-			m_hdfType = Hdf5HdfDataType.UBYTE;
-			break;
-		case 210:
-			m_hdfType = Hdf5HdfDataType.SHORT;
-			break;
-		case 211:
-			m_hdfType = Hdf5HdfDataType.USHORT;
-			break;
-		case 410:
-			m_hdfType = Hdf5HdfDataType.INTEGER;
-			break;
-		case 411:
-			m_hdfType = Hdf5HdfDataType.UINTEGER;
-			break;
-		case 810:
-			m_hdfType = Hdf5HdfDataType.LONG;
-			break;
-		case 811:
-			m_hdfType = Hdf5HdfDataType.ULONG;
-			break;
-		case 420:
-			m_hdfType = Hdf5HdfDataType.FLOAT;
-			break;
-		case 820:
-			m_hdfType = Hdf5HdfDataType.DOUBLE;
-			break;
-		case 30:
-			m_hdfType = Hdf5HdfDataType.CHAR;
-			break;
-		case 31:
-			m_hdfType = Hdf5HdfDataType.UCHAR;
-			break;
-		default:
-			m_hdfType = Hdf5HdfDataType.STRING;
-			break;
-		}
+		m_hdfType = Hdf5HdfDataType.createInstance(typeId);
 		
-		switch (m_hdfType) {
-		case BYTE:
-		case UBYTE:
-		case SHORT:
-		case USHORT:
-		case INTEGER:
+		switch (m_hdfType.getTypeId()) {
+		case Hdf5HdfDataType.BYTE:
+		case Hdf5HdfDataType.UBYTE:
+		case Hdf5HdfDataType.SHORT:
+		case Hdf5HdfDataType.USHORT:
+		case Hdf5HdfDataType.INTEGER:
 			m_knimeType = Hdf5KnimeDataType.INTEGER;
 			break;
-		case UINTEGER:
-		case LONG:
+		case Hdf5HdfDataType.UINTEGER:
+		case Hdf5HdfDataType.LONG:
 			if (fromDS) {
 				m_knimeType = Hdf5KnimeDataType.LONG;
 				break;
 			}
-		case ULONG:
-		case FLOAT:
-		case DOUBLE:
+		case Hdf5HdfDataType.ULONG:
+		case Hdf5HdfDataType.FLOAT:
+		case Hdf5HdfDataType.DOUBLE:
 			m_knimeType = Hdf5KnimeDataType.DOUBLE;
 			break;
-		case CHAR:
-		case UCHAR:
-		case STRING:
+		case Hdf5HdfDataType.CHAR:
+		case Hdf5HdfDataType.UCHAR:
+		case Hdf5HdfDataType.STRING:
 			m_knimeType = Hdf5KnimeDataType.STRING;
 			break;
 		default:
@@ -123,15 +86,14 @@ public class Hdf5DataType {
 	}
 	
 	public static Hdf5DataType getTypeByArray(Object[] objects) {
-		String type = objects.getClass().getComponentType().toString();
-		String pack = "class java.lang.";
-		if (type.equals(pack + "Integer")) {
+		Object type = objects.getClass().getComponentType();
+		if (type.equals(Integer.class)) {
 			return new Hdf5DataType("H5T_INTEGER", 4, false, false, false);
-		} else if (type.equals(pack + "Long")) {
+		} else if (type.equals(Long.class)) {
 			return new Hdf5DataType("H5T_INTEGER", 8, false, false, false);
-		} else if (type.equals(pack + "Double")) {
+		} else if (type.equals(Double.class)) {
 			return new Hdf5DataType("H5T_FLOAT", 8, false, false, false);
-		} else if (type.equals(pack + "String")) {
+		} else if (type.equals(String.class)) {
 			return new Hdf5DataType("H5T_STRING", DEFAULT_STRING_SIZE, false, false, false);
 		}
 		return null;
@@ -150,15 +112,11 @@ public class Hdf5DataType {
 	}
 
 	public long[] getConstants() {
-		if (isHdfType(Hdf5HdfDataType.STRING)) {
-			return m_stringType;
-		}
-		
 		return m_hdfType.getConstants();
 	}
 	
-	public boolean isHdfType(Hdf5HdfDataType hdfType) {
-		return m_hdfType == hdfType;
+	public boolean isHdfType(int hdfTypeId) {
+		return m_hdfType.getTypeId() == hdfTypeId;
 	}
 
 	public boolean isKnimeType(Hdf5KnimeDataType knimeType) {
@@ -180,19 +138,32 @@ public class Hdf5DataType {
 		}
 	}
 	
+	public Hdf5Attribute<?> createAttribute(String name, Object[] data) {
+		switch (m_knimeType) {
+		case INTEGER:
+			return new Hdf5Attribute<Integer>(name, (Integer[]) data);
+		case DOUBLE:
+			return new Hdf5Attribute<Double>(name, (Double[]) data);
+		case STRING:
+			return new Hdf5Attribute<String>(name, (String[]) data);
+		default:
+			return null;
+		}
+	}
+	
 	public Object hdfToKnime(Object in) {
-		switch(m_hdfType) {
-		case BYTE:
+		switch(m_hdfType.getTypeId()) {
+		case Hdf5HdfDataType.BYTE:
 			return (int) (byte) in;
-		case UBYTE:
+		case Hdf5HdfDataType.UBYTE:
 			int ubyteValue = (int) (byte) in;
 			return ubyteValue + (ubyteValue < 0 ? POW_2_8 : 0);
-		case SHORT:
+		case Hdf5HdfDataType.SHORT:
 			return (int) (short) in;
-		case USHORT:
+		case Hdf5HdfDataType.USHORT:
 			int ushortValue = (int) (short) in;
 			return ushortValue + (ushortValue < 0 ? POW_2_16 : 0);
-		case UINTEGER:
+		case Hdf5HdfDataType.UINTEGER:
 			long uintegerValue = (long) (int) in;
 			uintegerValue = uintegerValue + (uintegerValue < 0 ? POW_2_32 : 0);
 			if (m_fromDS) {
@@ -200,22 +171,22 @@ public class Hdf5DataType {
 			} else {
 				return (double) uintegerValue;
 			}
-		case LONG:
+		case Hdf5HdfDataType.LONG:
 			if (m_fromDS) {
 				return in;
 			} else {
 				return (double) (long) in;
 			}
-		case ULONG:
+		case Hdf5HdfDataType.ULONG:
 			double ulongValue = (double) (long) in;
 			return ulongValue + (ulongValue < 0 ? POW_2_64 : 0);
-		case FLOAT:
+		case Hdf5HdfDataType.FLOAT:
 			return (double) (float) in;
-		case INTEGER:
-		case DOUBLE:
-		case CHAR:
-		case UCHAR:
-		case STRING:
+		case Hdf5HdfDataType.INTEGER:
+		case Hdf5HdfDataType.DOUBLE:
+		case Hdf5HdfDataType.CHAR:
+		case Hdf5HdfDataType.UCHAR:
+		case Hdf5HdfDataType.STRING:
 			return in;
 		default:
 			return null;
@@ -223,7 +194,7 @@ public class Hdf5DataType {
 	}
 	
 	public void createStringTypes(long stringLength) {
-		if (m_hdfType == Hdf5HdfDataType.STRING) {
+		if (isHdfType(Hdf5HdfDataType.STRING)) {
 			long filetypeId = -1;
 			long memtypeId = -1;
 			
@@ -240,19 +211,19 @@ public class Hdf5DataType {
     			if (memtypeId >= 0) {
     				H5.H5Tset_size(memtypeId, stringLength + 1);
     			}
-    		} catch (Exception e) {
-    			e.printStackTrace();
+    		} catch (HDF5LibraryException hle) {
+    			NodeLogger.getLogger("HDF Files").error("StringType could not be created", hle);
     		}
     		
-    		m_stringType[0] = filetypeId;
-    		m_stringType[1] = memtypeId;
+    		getConstants()[0] = filetypeId;
+    		getConstants()[1] = memtypeId;
 		}
 	}
 	
-	public long updateStringTypes(long elementId) {
+	public long loadStringTypes(long elementId) {
 		long stringLength = -1;
 		
-		if (m_hdfType == Hdf5HdfDataType.STRING) {
+		if (isHdfType(Hdf5HdfDataType.STRING)) {
 			long filetypeId = -1;
 			long memtypeId = -1;
 			
@@ -271,12 +242,12 @@ public class Hdf5DataType {
 				if (memtypeId >= 0) {
 					H5.H5Tset_size(memtypeId, stringLength + 1);
 				}
-    		} catch (Exception e) {
-    			e.printStackTrace();
+    		} catch (HDF5LibraryException hle) {
+    			NodeLogger.getLogger("HDF Files").error("StringType could not be updated", hle);
     		}
     		
-			m_stringType[0] = filetypeId;
-			m_stringType[1] = memtypeId;
+			getConstants()[0] = filetypeId;
+			getConstants()[1] = memtypeId;
 		}
 		
 		return stringLength;
@@ -285,9 +256,9 @@ public class Hdf5DataType {
 	public void closeStringTypes() {
 		try {
 			for (int i = 0; i < 2; i++) {
-				if (m_stringType[i] >= 0) {
-	 				H5.H5Tclose(m_stringType[i]);
-	 				m_stringType[i] = -1;
+				if (getConstants()[i] >= 0) {
+	 				H5.H5Tclose(getConstants()[i]);
+	 				getConstants()[i] = -1;
 	 			}
 			}
 		} catch (HDF5LibraryException e) {
@@ -297,6 +268,6 @@ public class Hdf5DataType {
 	
 	@Override
 	public String toString() {
-		return "hdfType=" + m_hdfType + ",knimeType=" + m_knimeType + ",vlen=" + m_vlen + ",fromDS=" + m_fromDS;
+		return "{ hdfType=" + m_hdfType + ",knimeType=" + m_knimeType + ",vlen=" + m_vlen + ",fromDS=" + m_fromDS + " }";
 	}
 }

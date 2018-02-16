@@ -5,7 +5,6 @@ import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
 import org.knime.core.data.def.LongCell;
 import org.knime.core.data.def.StringCell;
-import org.knime.hdf5.lib.Hdf5Attribute;
 
 public enum Hdf5KnimeDataType {
 	UNKNOWN,		// data type is unknown
@@ -39,21 +38,6 @@ public enum Hdf5KnimeDataType {
 			return new Double[length];
 		case STRING:
 			return new String[length];
-		default:
-			return null;
-		}
-	}
-	
-	public Hdf5Attribute<?> createAttribute(String name, Object[] data) {
-		switch (this) {
-		case INTEGER:
-			return new Hdf5Attribute<Integer>(name, (Integer[]) data);
-		case LONG:
-			return new Hdf5Attribute<Long>(name, (Long[]) data);
-		case DOUBLE:
-			return new Hdf5Attribute<Double>(name, (Double[]) data);
-		case STRING:
-			return new Hdf5Attribute<String>(name, (String[]) data);
 		default:
 			return null;
 		}

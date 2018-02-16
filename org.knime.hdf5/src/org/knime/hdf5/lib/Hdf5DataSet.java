@@ -32,20 +32,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	private final Hdf5DataType m_type;
 	
-	/**
-	 * Creates a dataSet of the type of {@code type}. <br>
-	 * Possible types of numbers are Integer, Long, Double and String. <br>
-	 * <br>
-	 * The last index of the dimensions array represents the maximum length of
-	 * the strings plus one more space for the null terminator. <br>
-	 * So if you want the stringLength 7, the last index of the array should be 8.
-	 * 
-	 * @param name
-	 * @param dimensions
-	 * @param type
-	 */
 	private Hdf5DataSet(final Hdf5Group parent, final String name, long[] dimensions,
-			long stringLength, final Hdf5DataType type, boolean create) {
+			long stringLength, final Hdf5DataType type, boolean create) 
+					throws NullPointerException, IllegalArgumentException {
 		super(name, parent.getFilePath());
 		m_type = type;
 
@@ -91,17 +80,23 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			NodeLogger.getLogger("HDF5 Files").error("parent group " + parent.getPathFromFile()
 					+ parent.getName() + " is not open!", new IllegalStateException());
 			return null;
-		} else switch (type.getKnimeType()) {
-		case INTEGER:
-			return new Hdf5DataSet<Integer>(parent, name, dimensions, 0, type, create);
-		case LONG:
-			return new Hdf5DataSet<Long>(parent, name, dimensions, 0, type, create);
-		case DOUBLE:
-			return new Hdf5DataSet<Double>(parent, name, dimensions, 0, type, create);
-		case STRING:
-			return new Hdf5DataSet<String>(parent, name, dimensions, stringLength, type, create);
-		default:
-			return null;
+		} else {
+			try {
+				switch (type.getKnimeType()) {
+					case INTEGER:
+						return new Hdf5DataSet<Integer>(parent, name, dimensions, 0, type, create);
+					case LONG:
+						return new Hdf5DataSet<Long>(parent, name, dimensions, 0, type, create);
+					case DOUBLE:
+						return new Hdf5DataSet<Double>(parent, name, dimensions, 0, type, create);
+					case STRING:
+						return new Hdf5DataSet<String>(parent, name, dimensions, stringLength, type, create);
+					default:
+						return null;
+					}
+			} catch (NullPointerException | IllegalArgumentException npiae) {
+				return null;
+			}
 		}
 	}
 
@@ -365,7 +360,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				setElementId(H5.H5Dopen(getParent().getElementId(), getName(),
 						HDF5Constants.H5P_DEFAULT));
 				setOpen(true);
-				updateDimensions();
+				loadDimensions();
 			}
 		} catch (HDF5LibraryException | NullPointerException e) {
 			e.printStackTrace();
@@ -393,7 +388,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * Updates the dimensions array after opening a dataset to ensure that the
 	 * dimensions array is correct.
 	 */
-	private void updateDimensions() {
+	private void loadDimensions() {
 		// Get dataspace and allocate memory for read buffer.
 		try {
 			if (isOpen()) {
@@ -423,7 +418,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		}
         
 		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
-			setStringLength(getType().updateStringTypes(getElementId()));
+			setStringLength(getType().loadStringTypes(getElementId()));
     	}
 	}
 	
