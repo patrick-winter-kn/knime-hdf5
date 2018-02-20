@@ -24,15 +24,17 @@ public class Hdf5HdfDataType {
 	public static final int DOUBLE = 820;
 	public static final int CHAR = 30;
 	public static final int UCHAR = 31;
-	public static final int STRING = 0;
-	public static final int REFERENCE = 1;	// dataType is an object reference
+	public static final int STRING = 41;
+	public static final int REFERENCE = 51;	// dataType is an object reference
 
 	private static final Map<Integer, Hdf5HdfDataType> LOOKUP = new HashMap<>();
 	private static final Map<Long, Hdf5HdfDataType> LOOKUP_STRING = new HashMap<>();
 	
 	private final int m_typeId;
 	
-	private final long[] m_constants = new long[2];
+	private final long[] m_constants = { -1, -1 };
+	
+	private long m_stringLength;
 	
 	/**
 	 * {@code Hdf5HdfDataType} is the representation of the dataType in the .h5 file.
@@ -52,23 +54,11 @@ public class Hdf5HdfDataType {
 	 * 				<br>
 	 * 				{@code typeId == 0} if it isn't a int, float or char
 	 * 
-	 * @param fileTypeId
-	 * @param memTypeId
-	 * 
 	 */
-	private Hdf5HdfDataType(final int typeId, long fileTypeId, long memTypeId) {
-		this(typeId);
-		
-		if (m_typeId == 0) {
-			m_constants[0] = fileTypeId;
-			m_constants[1] = memTypeId;
-		}
-	}
-	
 	private Hdf5HdfDataType(final int typeId) {
 		m_typeId = typeId;
 		
-		if (m_typeId != 0) {
+		if (m_typeId != STRING) {
 			LOOKUP.put(m_typeId, this);
 		}
 		
@@ -130,18 +120,42 @@ public class Hdf5HdfDataType {
 			m_constants[0] = HDF5Constants.H5T_REFERENCE;
 		}
 	}
-	
-	static synchronized Hdf5HdfDataType createInstance(final int typeId) {
+
+	static synchronized Hdf5HdfDataType getInstance(final int typeId) {
 		if (LOOKUP.containsKey(typeId)) {
-			return getInstance(typeId);
+			return LOOKUP.get(typeId);
 		}
 		
 		return new Hdf5HdfDataType(typeId);
 	}
 	
-	public static synchronized Hdf5HdfDataType createInstanceString(final long elementId, final long stringLength) {
-		if (LOOKUP.containsKey(elementId)) {
-			return getInstanceString(elementId);
+	private void updateInstanceString(final long elementId, final long fileTypeId,
+			final long memTypeId, final long stringLength) {
+		if (m_typeId == STRING) {
+			m_constants[0] = fileTypeId;
+			m_constants[1] = memTypeId;
+			m_stringLength = stringLength;
+			
+			LOOKUP_STRING.put(elementId, this);
+		}
+	}
+	
+	private void equalizeTo(Hdf5HdfDataType dataType) {
+		if (m_typeId == STRING) {
+			m_constants[0] = dataType.getConstants()[0];
+			m_constants[1] = dataType.getConstants()[1];
+			m_stringLength = dataType.getStringLength();
+		}
+	}
+	
+	public synchronized void createInstanceString(final long elementId, final long stringLength) {
+		if (LOOKUP_STRING.containsKey(elementId)) {
+			try {
+				throw new java.rmi.AlreadyBoundException("cannot create"
+						+ "String dataType (already exists)");
+			} catch (java.rmi.AlreadyBoundException e) {
+				e.printStackTrace();
+			}
 		}
 		
 		long filetypeId = -1;
@@ -164,43 +178,58 @@ public class Hdf5HdfDataType {
 			NodeLogger.getLogger("HDF Files").error("StringType could not be created", hle);
 		}
 		
-		return new Hdf5HdfDataType(STRING, filetypeId, memtypeId);
+		updateInstanceString(elementId, filetypeId, memtypeId, stringLength);
 	}
 	
-	public static Hdf5HdfDataType getInstance(final int typeId) {
-		return LOOKUP.get(typeId);
-	}
-	
-	public static Hdf5HdfDataType getInstanceString(final long elementId) {
-		/*
-		long stringLength = -1;
-	
-		long filetypeId = -1;
-		long memtypeId = -1;
-		try {
-    		// Get the datatype and its size.
-    		if (elementId >= 0) {
-				filetypeId = m_fromDS ? H5.H5Dget_type(elementId) : H5.H5Aget_type(elementId);
+	// TODO exception in case the dataType is not a string
+	public synchronized void initInstanceString(final long elementId) {
+		if (LOOKUP_STRING.containsKey(elementId)) {
+			equalizeTo(LOOKUP_STRING.get(elementId));
+			
+		} else {
+			long stringLength = -1;
+		
+			long filetypeId = -1;
+			long memtypeId = -1;
+			try {
+	    		// Get the datatype and its size.
+	    		if (elementId >= 0) {
+	    			int elementTypeId = H5.H5Iget_type(elementId);
+					filetypeId = elementTypeId == HDF5Constants.H5I_DATASET ? H5.H5Dget_type(elementId)
+							: (elementTypeId == HDF5Constants.H5I_ATTR ? H5.H5Aget_type(elementId) : -1);
+				}
+				if (filetypeId >= 0) {
+					stringLength = H5.H5Tget_size(filetypeId);
+					// (+1) for: Make room for null terminator
+				}
+	    		
+	    		// Create the memory datatype.
+	    		memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+				if (memtypeId >= 0) {
+					H5.H5Tset_size(memtypeId, stringLength + 1);
+				}
+			} catch (HDF5LibraryException hle) {
+				NodeLogger.getLogger("HDF Files").error("StringType could not be initialized", hle);
 			}
-			if (filetypeId >= 0) {
-				stringLength = H5.H5Tget_size(filetypeId);
-				// (+1) for: Make room for null terminator
-			}
-    		
-    		// Create the memory datatype.
-    		memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-			if (memtypeId >= 0) {
-				H5.H5Tset_size(memtypeId, stringLength + 1);
-			}
-		} catch (HDF5LibraryException hle) {
-			NodeLogger.getLogger("HDF Files").error("StringType could not be updated", hle);
+
+			updateInstanceString(elementId, filetypeId, memtypeId, stringLength);
 		}
-		
-		getConstants()[0] = filetypeId;
-		getConstants()[1] = memtypeId;
-		
-		return stringLength;*/
-		return null;
+	}
+
+	public void closeIfString() {
+		if (m_typeId == STRING) {
+			try {
+		 		// Terminate access to the file and mem type.
+				for (int i = 0; i < 2; i++) {
+					if (getConstants()[i] >= 0) {
+		 				H5.H5Tclose(getConstants()[i]);
+		 				getConstants()[i] = -1;
+		 			}
+				}
+			} catch (HDF5LibraryException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 	
 	int getTypeId() {
@@ -209,6 +238,10 @@ public class Hdf5HdfDataType {
 	
 	long[] getConstants() {
 		return m_constants;
+	}
+
+	public long getStringLength() {
+		return m_stringLength;
 	}
 
 	public Object createArray(int length) {

@@ -135,6 +135,7 @@ abstract public class Hdf5TreeElement {
 		return attribute;
 	}
 	
+	// TODO use library function instead of this
 	public boolean existsAttribute(final String name) {
 		List<String> attrNames = loadAttributeNames();
 		if (attrNames != null) {
@@ -214,10 +215,12 @@ abstract public class Hdf5TreeElement {
 	 * @return dataType of the attribute (TODO doesn't work for {@code H5T_VLEN} and {@code H5T_REFERENCE} at the moment)
 	 */
 	Hdf5DataType findAttributeType(String name) {
+		Hdf5DataType dataType = null;
+		
 		if (loadAttributeNames().contains(name)) {
 			long attributeId = -1;
 			long dataspaceId = -1;
-			String dataType = "";
+			long classId = -1;
 			int size = 0;
 			boolean unsigned = false;
 			boolean vlen = false;
@@ -252,33 +255,41 @@ abstract public class Hdf5TreeElement {
 				}
 				
 				long typeId = H5.H5Aget_type(attributeId);
-				dataType = H5.H5Tget_class_name(H5.H5Tget_class(typeId));
+				classId = H5.H5Tget_class(typeId);
 				size = (int) H5.H5Tget_size(typeId);
-				vlen = dataType.equals("H5T_VLEN") || H5.H5Tis_variable_str(typeId);
-				if (dataType.equals("H5T_INTEGER") || dataType.equals("H5T_CHAR")) {
+				vlen = classId == HDF5Constants.H5T_VLEN || H5.H5Tis_variable_str(typeId);
+				if (classId == HDF5Constants.H5T_INTEGER /*TODO || classId == HDF5Constants.H5T_CHAR*/) {
 					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(typeId);
 				}
 
 				H5.H5Tclose(typeId);
-				H5.H5Aclose(attributeId);
 				
-				if (dataType.equals("H5T_VLEN")) {
+				if (classId == HDF5Constants.H5T_VLEN) {
 					// TODO find correct real dataType
 					NodeLogger.getLogger("HDF5 Files").warn("DataType H5T_VLEN of attribute \"" + name + "\" in treeElement \""
 							+ getPathFromFile() + getName() + "\" is not supported");
+					H5.H5Aclose(attributeId);
 					return null;
 				}
 				
-				if (dataType.equals("H5T_REFERENCE")) {
+				if (classId == HDF5Constants.H5T_REFERENCE) {
 					NodeLogger.getLogger("HDF5 Files").warn("DataType H5T_REFERENCE of attribute \"" + name + "\" in treeElement \""
 							+ getPathFromFile() + getName() + "\" is not supported");
+					H5.H5Aclose(attributeId);
 					return null;
 				}
+				
+				dataType = new Hdf5DataType(classId, size, unsigned, vlen, false);
+				if (classId == HDF5Constants.H5T_STRING) {
+					dataType.getHdfType().initInstanceString(attributeId);
+				}
+				H5.H5Aclose(attributeId);
+				
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
 				lnpe.printStackTrace();
 			}
 			
-			return new Hdf5DataType(dataType, size, unsigned, vlen, false);
+			return dataType;
 		} else {
 			NodeLogger.getLogger("HDF5 Files").error("There isn't an attribute \"" + name + "\" in treeElement \""
 					+ getPathFromFile() + getName() + '"', new IllegalArgumentException());
@@ -295,8 +306,10 @@ abstract public class Hdf5TreeElement {
             	attribute.setOpen(true);
             }
         } catch (HDF5LibraryException le) {
+        	// TODO makes no sense at the moment, but will be changed when the HDF5WriterDialog has been implemented
         	if (attribute.getType().isHdfType(Hdf5HdfDataType.STRING)) {
-        		attribute.getType().createStringTypes(attribute.getStringLength());
+        		attribute.getType().getHdfType().createInstanceString(attribute.getAttributeId(),
+        				attribute.getType().getHdfType().getStringLength());
         	}
         	
         	// Create the data space for the attribute.

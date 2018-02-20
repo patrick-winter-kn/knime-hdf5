@@ -119,13 +119,13 @@ public class Hdf5File extends Hdf5Group {
 	        if (openedObjects > 1) {
 	    		String pathFromFile = H5.H5Iget_name(objects[1]);
 	    		String objectType = objTypes[(int) H5.H5Iget_type(objects[1])];
-	    		opened += pathFromFile + " (" +  objectType + ")";
+	    		opened += "\"" + pathFromFile + "\" (" +  objectType + ")";
 	        }
 	        
 	        for (int i = 2; i < openedObjects; i++) {
 	        	String objectType = objTypes[(int) H5.H5Iget_type(objects[i])];
         		String pathFromFile = H5.H5Iget_name(objects[i]);
-	    		opened += ", " + pathFromFile + " (" +  objectType + ")";
+	    		opened += ", \"" + pathFromFile + "\" (" +  objectType + ")";
 	        }
 		} catch (HDF5LibraryException | NullPointerException hlne) {
 			hlne.printStackTrace();

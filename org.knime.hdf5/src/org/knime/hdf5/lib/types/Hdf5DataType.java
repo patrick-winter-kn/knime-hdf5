@@ -1,11 +1,8 @@
 package org.knime.hdf5.lib.types;
 
-import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.Hdf5Attribute;
 
-import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
-import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5DataType {
 	
@@ -17,7 +14,7 @@ public class Hdf5DataType {
 	
 	private static final double POW_2_64 = Math.pow(2, 64);
 	
-	public static final int DEFAULT_STRING_SIZE = 0;
+	public static final int DEFAULT_STRING_TYPE_SIZE = 0;
 	
 	private final Hdf5HdfDataType m_hdfType;
 
@@ -35,25 +32,25 @@ public class Hdf5DataType {
 	 * @param vlen true if dataType has a variable length
 	 * @param fromDS true if the dataType is from a dataSet
 	 */
-	public Hdf5DataType(String type, int size, boolean unsigned, boolean vlen, boolean fromDS) {
+	public Hdf5DataType(long classId, int size, boolean unsigned, boolean vlen, boolean fromDS) {
 		m_fromDS = fromDS;
 		m_vlen = vlen;
 		
 		// see Hdf5HdfDataType for the structure of the typeId
-		int typeId = 0;
+		// if typeId cannot be defined differently, it will stay a STRING
+		int typeId = Hdf5HdfDataType.STRING;
 		
-		switch(type) {
-		case "H5T_INTEGER":
+		if (classId == HDF5Constants.H5T_INTEGER) {
 			typeId = 100 * size + 10 + (unsigned ? 1 : 0);
-			break;
-		case "H5T_FLOAT":
+			
+		} else if (classId == HDF5Constants.H5T_FLOAT) {
 			typeId = 100 * size + 20;
-			break;
-		case "H5T_CHAR":
+			
+		}/* else if (classId == HDF5Constants.H5T_CHAR) {
 			typeId = 30 + (unsigned ? 1 : 0);
-		}
+		}*/
 		
-		m_hdfType = Hdf5HdfDataType.createInstance(typeId);
+		m_hdfType = Hdf5HdfDataType.getInstance(typeId);
 		
 		switch (m_hdfType.getTypeId()) {
 		case Hdf5HdfDataType.BYTE:
@@ -88,13 +85,13 @@ public class Hdf5DataType {
 	public static Hdf5DataType getTypeByArray(Object[] objects) {
 		Object type = objects.getClass().getComponentType();
 		if (type.equals(Integer.class)) {
-			return new Hdf5DataType("H5T_INTEGER", 4, false, false, false);
+			return new Hdf5DataType(HDF5Constants.H5T_INTEGER, 4, false, false, false);
 		} else if (type.equals(Long.class)) {
-			return new Hdf5DataType("H5T_INTEGER", 8, false, false, false);
+			return new Hdf5DataType(HDF5Constants.H5T_INTEGER, 8, false, false, false);
 		} else if (type.equals(Double.class)) {
-			return new Hdf5DataType("H5T_FLOAT", 8, false, false, false);
+			return new Hdf5DataType(HDF5Constants.H5T_FLOAT, 8, false, false, false);
 		} else if (type.equals(String.class)) {
-			return new Hdf5DataType("H5T_STRING", DEFAULT_STRING_SIZE, false, false, false);
+			return new Hdf5DataType(HDF5Constants.H5T_STRING, DEFAULT_STRING_TYPE_SIZE, false, false, false);
 		}
 		return null;
 	}
@@ -190,79 +187,6 @@ public class Hdf5DataType {
 			return in;
 		default:
 			return null;
-		}
-	}
-	
-	public void createStringTypes(long stringLength) {
-		if (isHdfType(Hdf5HdfDataType.STRING)) {
-			long filetypeId = -1;
-			long memtypeId = -1;
-			
-        	// Create file and memory datatypes. For this example we will save
-    		// the strings as FORTRAN strings, therefore they do not need space
-    		// for the null terminator in the file.
-    		try {
-    			filetypeId = H5.H5Tcopy(HDF5Constants.H5T_FORTRAN_S1);
-    			if (filetypeId >= 0) {
-    				H5.H5Tset_size(filetypeId, stringLength);
-    			}
-    			
-    			memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-    			if (memtypeId >= 0) {
-    				H5.H5Tset_size(memtypeId, stringLength + 1);
-    			}
-    		} catch (HDF5LibraryException hle) {
-    			NodeLogger.getLogger("HDF Files").error("StringType could not be created", hle);
-    		}
-    		
-    		getConstants()[0] = filetypeId;
-    		getConstants()[1] = memtypeId;
-		}
-	}
-	
-	public long loadStringTypes(long elementId) {
-		long stringLength = -1;
-		
-		if (isHdfType(Hdf5HdfDataType.STRING)) {
-			long filetypeId = -1;
-			long memtypeId = -1;
-			
-			try {
-	    		// Get the datatype and its size.
-	    		if (elementId >= 0) {
-					filetypeId = m_fromDS ? H5.H5Dget_type(elementId) : H5.H5Aget_type(elementId);
-				}
-				if (filetypeId >= 0) {
-					stringLength = H5.H5Tget_size(filetypeId);
-					// (+1) for: Make room for null terminator
-				}
-	    		
-	    		// Create the memory datatype.
-	    		memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-				if (memtypeId >= 0) {
-					H5.H5Tset_size(memtypeId, stringLength + 1);
-				}
-    		} catch (HDF5LibraryException hle) {
-    			NodeLogger.getLogger("HDF Files").error("StringType could not be updated", hle);
-    		}
-    		
-			getConstants()[0] = filetypeId;
-			getConstants()[1] = memtypeId;
-		}
-		
-		return stringLength;
-	}
-	
-	public void closeStringTypes() {
-		try {
-			for (int i = 0; i < 2; i++) {
-				if (getConstants()[i] >= 0) {
-	 				H5.H5Tclose(getConstants()[i]);
-	 				getConstants()[i] = -1;
-	 			}
-			}
-		} catch (HDF5LibraryException e) {
-			e.printStackTrace();
 		}
 	}
 	

@@ -28,8 +28,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	private boolean m_dimsAvailable;
 	
-	private long m_stringLength;
-	
 	private final Hdf5DataType m_type;
 	
 	private Hdf5DataSet(final Hdf5Group parent, final String name, long[] dimensions,
@@ -114,14 +112,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	private void setDimensions(long[] dimensions) {
 		m_dimensions = dimensions;
-	}
-
-	public long getStringLength() {
-		return m_stringLength;
-	}
-
-	private void setStringLength(long stringLength) {
-		m_stringLength = stringLength;
 	}
 	
 	public Hdf5DataType getType() {
@@ -370,10 +360,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	private void createDimensions(long[] dimensions, long stringLength) {
 		setDimensions(dimensions);
 		
-		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
-			setStringLength(stringLength);
-			getType().createStringTypes(getStringLength());
-    	}
+		if (m_type.isHdfType(Hdf5HdfDataType.STRING)) {
+			m_type.getHdfType().createInstanceString(getElementId(), stringLength);
+        }
 		
     	// Create the data space for the dataset.
         try {
@@ -417,8 +406,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			e.printStackTrace();
 		}
         
-		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
-			setStringLength(getType().loadStringTypes(getElementId()));
+		if (m_type.isHdfType(Hdf5HdfDataType.STRING)) {
+			m_type.getHdfType().initInstanceString(getElementId());
     	}
 	}
 	
@@ -431,15 +420,12 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         			iter.next().close();
         		}
 
-                if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
-        			// Terminate access to the file and mem type.
-                	getType().closeStringTypes();
-        		}
+                m_type.getHdfType().closeIfString();
         		
                 // Terminate access to the data space.
-                if (getDataspaceId() >= 0) {
-                	H5.H5Sclose(getDataspaceId());
-                    setDataspaceId(-1);
+                if (m_dataspaceId >= 0) {
+                	H5.H5Sclose(m_dataspaceId);
+                    m_dataspaceId = -1;
                 }
                 
                 H5.H5Dclose(getElementId());

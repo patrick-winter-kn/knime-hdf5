@@ -25,8 +25,6 @@ public class Hdf5Attribute<Type> {
 	
 	private long m_dimension;
 	
-	private long m_stringLength;
-	
 	private boolean m_open;
 	
 	private final Hdf5DataType m_type;
@@ -65,16 +63,10 @@ public class Hdf5Attribute<Type> {
 		int lsize = 1;
 		try {
 			attributeId = H5.H5Aopen(treeElement.getElementId(), name, HDF5Constants.H5P_DEFAULT);
-
-			long stringLength = 0;
 			
 			// Get dataspace and allocate memory for read buffer.
 			if (attributeId >= 0) {
 				dataspaceId = H5.H5Aget_space(attributeId);
-			}
-			
-			if (dataType.isHdfType(Hdf5HdfDataType.STRING)) {
-				stringLength = dataType.loadStringTypes(attributeId);
 			}
 			
 			if (dataspaceId >= 0) {
@@ -99,6 +91,7 @@ public class Hdf5Attribute<Type> {
     				H5.H5Tclose(typeId);
                     
                 } else {
+                	long stringLength = dataType.getHdfType().getStringLength();
 					byte[] dataRead = new byte[lsize * ((int) stringLength + 1)];
 					H5.H5Aread(attributeId, dataType.getConstants()[1], dataRead);
 					
@@ -130,7 +123,6 @@ public class Hdf5Attribute<Type> {
 			attribute.setDataspaceId(dataspaceId);
 			attribute.setAttributeId(attributeId);
 			attribute.setDimension(lsize);
-			attribute.setStringLength(stringLength);
     		treeElement.getAttributes().add(attribute);
         	attribute.setOpen(true);
         	
@@ -150,10 +142,7 @@ public class Hdf5Attribute<Type> {
 	}
 	
 	private static void close(long attributeId, long dataspaceId, Hdf5DataType dataType) throws HDF5LibraryException {
-		if (dataType.isHdfType(Hdf5HdfDataType.STRING)) {
-	 		// Terminate access to the file and mem type.
-			dataType.closeStringTypes();
- 		}
+		dataType.getHdfType().closeIfString();
 
         // Close the dataspace.
         if (dataspaceId >= 0) {
@@ -196,14 +185,6 @@ public class Hdf5Attribute<Type> {
 		m_dimension = dimension;
 	}
 
-	public long getStringLength() {
-		return m_stringLength;
-	}
-
-	public void setStringLength(long m_stringLength) {
-		this.m_stringLength = m_stringLength;
-	}
-
 	boolean isOpen() {
 		return m_open;
 	}
@@ -221,10 +202,11 @@ public class Hdf5Attribute<Type> {
 	 * dimensions array is correct.
 	 */
 	
+	// TODO maybe delete this
 	void loadDimension() {
 		// Get dataspace and allocate memory for read buffer.
 		try {
-			if (getAttributeId() >= 0) {
+			if (m_attributeId >= 0) {
 				setDataspaceId(H5.H5Aget_space(getAttributeId()));
 			}
 		} catch (Exception e) {
@@ -232,13 +214,13 @@ public class Hdf5Attribute<Type> {
 		}
 		
 		long[] dims = new long[1];
-		if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
-			setStringLength(getType().loadStringTypes(getAttributeId()));
+		if (m_type.isHdfType(Hdf5HdfDataType.STRING)) {
+			m_type.getHdfType().initInstanceString(getAttributeId());
 			
 		} else {
 			try {
-				if (getDataspaceId() >= 0) {
-					H5.H5Sget_simple_extent_dims(getDataspaceId(), dims, null);
+				if (m_dataspaceId >= 0) {
+					H5.H5Sget_simple_extent_dims(m_dataspaceId, dims, null);
 					setDimension(dims[0]);
 				}
 			} catch (HDF5LibraryException | NullPointerException lnpe) {
@@ -255,19 +237,16 @@ public class Hdf5Attribute<Type> {
 		 */
         try {
             if (isOpen()) {
-                if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
-        	 		// Terminate access to the file and mem type.
-                	getType().closeStringTypes();
-         		}
+                m_type.getHdfType().closeIfString();
 
                 // Close the dataspace.
-                if (getDataspaceId() >= 0) {
-                    H5.H5Sclose(getDataspaceId());
-                    setDataspaceId(-1);
+                if (m_dataspaceId >= 0) {
+                    H5.H5Sclose(m_dataspaceId);
+                    m_dataspaceId = -1;
                 }
 
                 // Close the attribute.
-                H5.H5Aclose(getAttributeId());
+                H5.H5Aclose(m_attributeId);
                 setOpen(false);
             }
         } catch (Exception e) {
