@@ -1,5 +1,7 @@
 package org.knime.hdf5.lib.types;
 
+import javax.activation.UnsupportedDataTypeException;
+
 import org.knime.core.data.DataType;
 import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
@@ -13,7 +15,7 @@ public enum Hdf5KnimeDataType {
 	DOUBLE,			// data type is a Double
 	STRING;			// data type is a String
 
-	public DataType getColumnType() {
+	public DataType getColumnDataType() throws UnsupportedDataTypeException {
 		switch (this) {
 		case INTEGER:
 			return IntCell.TYPE;
@@ -24,11 +26,11 @@ public enum Hdf5KnimeDataType {
 		case STRING:
 			return StringCell.TYPE;
 		default:
-			return null;
+			throw new UnsupportedDataTypeException("");
 		}
 	}
 
-	public Object createArray(int length) {
+	public Object createArray(int length) throws UnsupportedDataTypeException {
 		switch (this) {
 		case INTEGER:
 			return new Integer[length];
@@ -39,7 +41,7 @@ public enum Hdf5KnimeDataType {
 		case STRING:
 			return new String[length];
 		default:
-			return null;
+			throw new UnsupportedDataTypeException("Cannot create array of this dataType");
 		}
 	}
 	

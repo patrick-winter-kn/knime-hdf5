@@ -4,10 +4,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+
+import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.data.DataCell;
 import org.knime.core.data.DataColumnSpec;
@@ -21,6 +22,7 @@ import org.knime.core.node.CanceledExecutionException;
 import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.ExecutionMonitor;
 import org.knime.core.node.InvalidSettingsException;
+import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeModel;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
@@ -73,7 +75,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				exec.checkCanceled();
 				exec.setProgress((double) i / maxRows);
 
-				List<DataCell> row = new LinkedList<>();
+				List<DataCell> row = new ArrayList<>();
 				for (Hdf5DataSet<?> dataSet : dataSets) {
 					dataSet.extendRow(row, i);
 				}
@@ -87,7 +89,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			file.close();
 			outContainer.close();
 		}
-
+		
 		return new BufferedDataTable[] { outContainer.getTable() };
 	}
 
@@ -136,19 +138,24 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			for (String dsPath : dataSetPaths) {
 				Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPath);
 				Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
-				DataType type = dataType.getColumnType();
-
-				if (dataSet.getDimensions().length > 1) {
-					long[] colDims = new long[dataSet.getDimensions().length - 1];
-					Arrays.fill(colDims, 0);
-
-					do {
-						colSpecList
-								.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
-					} while (dataSet.nextColumnDims(colDims));
-
-				} else {
-					colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
+				
+				try {
+					DataType type = dataType.getColumnDataType();
+	
+					if (dataSet.getDimensions().length > 1) {
+						long[] colDims = new long[dataSet.getDimensions().length - 1];
+						Arrays.fill(colDims, 0);
+	
+						do {
+							colSpecList
+									.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
+						} while (dataSet.nextColumnDims(colDims));
+	
+					} else {
+						colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
+					}
+				} catch (UnsupportedDataTypeException udte) {
+					NodeLogger.getLogger("HDF5 Files").warn("Unknown dataType of columns in \"" + dsPath + "\"");
 				}
 			}
 		}

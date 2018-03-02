@@ -3,7 +3,7 @@ package org.knime.hdf5.lib;
 import java.io.File;
 import java.io.IOException;
 import java.util.Iterator;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.knime.core.node.NodeLogger;
@@ -15,14 +15,14 @@ import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5File extends Hdf5Group {
 	
-	private static final List<Hdf5File> ALL_FILES = new LinkedList<>();
+	private static final List<Hdf5File> ALL_FILES = new ArrayList<>();
 
 	/* TODO when opening the file: make a backup of the file because sometimes there were some things wrong with datasets/groups in it
 	 * it happened when ...
 	 * - creating dataset/group with the same name directly after deleting it in HDFView (not always, only when there were (x is a name) x, x(1), x(2), x(3) and deleted and readded x(2))
 	 * - TODO has to be checked if or when it also happens with the method getDataSet() in Hdf5Group
 	 */
-	private Hdf5File(final String filePath) throws NullPointerException, IllegalArgumentException {
+	private Hdf5File(final String filePath) throws HDF5LibraryException, NullPointerException, IllegalArgumentException {
 		super(null, filePath, filePath.substring(filePath.lastIndexOf(File.separator) + 1), true);
 		
 		ALL_FILES.add(this);
@@ -51,18 +51,24 @@ public class Hdf5File extends Hdf5Group {
 		
 		try {
 			file = new Hdf5File(filePath);
-		} catch (NullPointerException | IllegalArgumentException npiae) {}
+			
+		} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException hlnpiae) {
+			NodeLogger.getLogger("HDF5 Files").error(hlnpiae.getMessage(), hlnpiae);
+		}
 		
 		return file;
 	}
 	
 	public static Hdf5File openFile(final String filePath) throws IOException {
 		if (!new File(filePath).exists()) {
-			throw new IOException("The file " + filePath + " does not exist");
+			throw new IOException("The file \"" + filePath + "\" does not exist");
 		}
 		return createFile(filePath);
 	}
 	
+	/**
+	 * 
+	 */
 	public void open() {
 		try {
 			if (!isOpen()) {
@@ -74,11 +80,12 @@ public class Hdf5File extends Hdf5Group {
 	    	try {
 				setElementId(H5.H5Fcreate(getFilePath(), HDF5Constants.H5F_ACC_TRUNC, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
                 setOpen(true);
+                
             } catch (Exception e) {
-				e.printStackTrace();
+                NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be created", e);
 			}
         } catch (Exception e) {
-            e.printStackTrace();
+            NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be opened", e);
         }
 	}
 	
@@ -93,12 +100,10 @@ public class Hdf5File extends Hdf5Group {
         	if (isOpen()) {
         		count = H5.H5Fget_obj_count(getElementId(), HDF5Constants.H5F_OBJ_ALL);
 			} else {
-				NodeLogger.getLogger("HDF5 Files").error("File " + getFilePath() + " is not opened!",
-						new IllegalStateException());
 				return "(error: file already closed)";
 			}
 		} catch (HDF5LibraryException hle) {
-			hle.printStackTrace();
+			NodeLogger.getLogger("HDF5 Files").error("Number of opened objects in file could not be loaded", hle);
 		}
 
         if (count <= 0) {
@@ -127,9 +132,9 @@ public class Hdf5File extends Hdf5Group {
         		String pathFromFile = H5.H5Iget_name(objects[i]);
 	    		opened += ", \"" + pathFromFile + "\" (" +  objectType + ")";
 	        }
-		} catch (HDF5LibraryException | NullPointerException hlne) {
-			hlne.printStackTrace();
-		}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("Info of opened objects in file could not be loaded", hlnpe);
+        }
         
         opened += "]";
         
@@ -164,8 +169,8 @@ public class Hdf5File extends Hdf5Group {
 				H5.H5Fclose(getElementId());
                 setOpen(false);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (HDF5LibraryException hle) {
+            NodeLogger.getLogger("HDF5 Files").error("File could not be closed", hle);
         }
 	}
 }

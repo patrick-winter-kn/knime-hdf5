@@ -2,9 +2,12 @@ package org.knime.hdf5.lib;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
+import java.rmi.AlreadyBoundException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
@@ -12,6 +15,7 @@ import org.knime.hdf5.lib.types.Hdf5HdfDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
+import hdf.hdf5lib.exceptions.HDF5Exception;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 abstract public class Hdf5TreeElement {
@@ -20,7 +24,7 @@ abstract public class Hdf5TreeElement {
 	
 	private final String m_filePath;
 	
-	private final List<Hdf5Attribute<?>> m_attributes = new LinkedList<>();
+	private final List<Hdf5Attribute<?>> m_attributes = new ArrayList<>();
 	
 	private long m_elementId = -1;
 	
@@ -39,18 +43,15 @@ abstract public class Hdf5TreeElement {
 	protected Hdf5TreeElement(final String name, final String filePath)
 			throws NullPointerException, IllegalArgumentException {
 		if (name == null) {
-			NodeLogger.getLogger("HDF5 Files").error("name is null",
-					new NullPointerException());
-			throw new NullPointerException();
+			throw new NullPointerException("name is null");
+			
 		} else if (name.equals("")) {
-			NodeLogger.getLogger("HDF5 Files").error("name may not be the empty String!",
-					new IllegalArgumentException());
-			throw new IllegalArgumentException();
+			throw new IllegalArgumentException("name may not be the empty String!");
+			
 		} else if (name.contains("/")) {
-			NodeLogger.getLogger("HDF5 Files").error("name " + name + " contains '/'",
-					new IllegalArgumentException());
-			throw new IllegalArgumentException();
+			throw new IllegalArgumentException("name " + name + " contains '/'");
 		}
+		
 		m_name = name;
 		m_filePath = filePath;
 	}
@@ -128,24 +129,20 @@ abstract public class Hdf5TreeElement {
 			}
 		}
 		
-		if (!found && existsAttribute(name)) {
-			attribute = Hdf5Attribute.getInstance(this, name);
+		try {
+			if (!found && existsAttribute(name)) {
+				attribute = Hdf5Attribute.getInstance(this, name);
+			}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			NodeLogger.getLogger("HDF5 Files").error("Existence of attribute could not be checked", hlnpe);
+			/* attribute stays null */
 		}
 		
 		return attribute;
 	}
 	
-	// TODO use library function instead of this
-	public boolean existsAttribute(final String name) {
-		List<String> attrNames = loadAttributeNames();
-		if (attrNames != null) {
-			for (String n: attrNames) {
-				if (n.equals(name)) {
-					return true;
-				}
-			}
-		}
-		return false;
+	public boolean existsAttribute(final String name) throws HDF5LibraryException, NullPointerException {
+		return H5.H5Aexists(getElementId(), name);
 	}
 	
 	public Hdf5Attribute<?> getAttributeByPath(final String path) {
@@ -172,7 +169,7 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	public List<String> loadAttributeNames() {
-		List<String> attrNames = new LinkedList<>();
+		List<String> attrNames = new ArrayList<>();
 		long numAttrs = -1;
 		Hdf5TreeElement treeElement = this instanceof Hdf5File ? this : getParent();
 		String path = this instanceof Hdf5File ? "/" : getName();
@@ -186,11 +183,11 @@ abstract public class Hdf5TreeElement {
 							HDF5Constants.H5P_DEFAULT));
 				}
 			} else {
-				NodeLogger.getLogger("HDF5 Files").error("The parent "
-						+ treeElement.getName() + " of " + path + " is not open!", new IllegalStateException());
+				NodeLogger.getLogger("HDF5 Files").error("The parent \"" + treeElement.getName()
+						+ "\" of \"" + path + "\" is not open!", new IllegalStateException());
 			}
-		} catch (HDF5LibraryException | NullPointerException lnpe) {
-			lnpe.printStackTrace();
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			NodeLogger.getLogger("HDF5 Files").error("List of attributes could not be loaded", hlnpe);
 		}
 		
 		return attrNames;
@@ -203,7 +200,17 @@ abstract public class Hdf5TreeElement {
 		Iterator<String> iterAttr = loadAttributeNames().iterator();
 		while (iterAttr.hasNext()) {
 			String name = iterAttr.next();
-			paths.put(path + name, findAttributeType(name));
+			
+			try {
+				Hdf5DataType dataType = findAttributeType(name);
+				paths.put(path + name, dataType);
+				
+			} catch (IllegalArgumentException iae) {
+				NodeLogger.getLogger("HDF5 Files").error(iae.getMessage(), iae);
+				
+			} catch (UnsupportedDataTypeException udte) {
+				NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
+			}
 		}
 		
 		return paths;
@@ -213,8 +220,9 @@ abstract public class Hdf5TreeElement {
 	 * 
 	 * @param name name of the attribute in this treeElement
 	 * @return dataType of the attribute (TODO doesn't work for {@code H5T_VLEN} and {@code H5T_REFERENCE} at the moment)
+	 * @throws UnsupportedDataTypeException 
 	 */
-	Hdf5DataType findAttributeType(String name) {
+	Hdf5DataType findAttributeType(String name) throws UnsupportedDataTypeException, IllegalArgumentException {
 		Hdf5DataType dataType = null;
 		
 		if (loadAttributeNames().contains(name)) {
@@ -239,15 +247,10 @@ abstract public class Hdf5TreeElement {
 						H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
 	                    for (int j = 0; j < dims.length; j++) {
 	                    	if (dims[j] == 0) {
-		                    	try {
-		            				H5.H5Aclose(attributeId);
-		    			            H5.H5Sclose(dataspaceId);
-		    						NodeLogger.getLogger("HDF5 Files").warn("Array of Attribute \"" 
-		    								+ getPathFromFileWithName(true) + name + "\" has length 0");
-		    						return null;
-		    					} catch (HDF5LibraryException hle) {
-		    						hle.printStackTrace();
-		    					}
+		                    	H5.H5Aclose(attributeId);
+	    			            H5.H5Sclose(dataspaceId);
+	    			            throw new UnsupportedDataTypeException("Array of Attribute \"" 
+	    								+ getPathFromFileWithName(true) + name + "\" has length 0");
 		    				}
 	                    }
 	                }
@@ -266,34 +269,33 @@ abstract public class Hdf5TreeElement {
 				
 				if (classId == HDF5Constants.H5T_VLEN) {
 					// TODO find correct real dataType
-					NodeLogger.getLogger("HDF5 Files").warn("DataType H5T_VLEN of attribute \"" + name + "\" in treeElement \""
-							+ getPathFromFile() + getName() + "\" is not supported");
 					H5.H5Aclose(attributeId);
-					return null;
+					throw new UnsupportedDataTypeException("DataType H5T_VLEN of attribute \"" + name + "\" in treeElement \""
+							+ getPathFromFile() + getName() + "\" is not supported");
 				}
 				
 				if (classId == HDF5Constants.H5T_REFERENCE) {
-					NodeLogger.getLogger("HDF5 Files").warn("DataType H5T_REFERENCE of attribute \"" + name + "\" in treeElement \""
-							+ getPathFromFile() + getName() + "\" is not supported");
 					H5.H5Aclose(attributeId);
-					return null;
+					throw new UnsupportedDataTypeException("DataType H5T_REFERENCE of attribute \"" + name + "\" in treeElement \""
+							+ getPathFromFile() + getName() + "\" is not supported");
 				}
 				
 				dataType = new Hdf5DataType(classId, size, unsigned, vlen, false);
+				
 				if (classId == HDF5Constants.H5T_STRING) {
 					dataType.getHdfType().initInstanceString(attributeId);
 				}
 				H5.H5Aclose(attributeId);
 				
-			} catch (HDF5LibraryException | NullPointerException lnpe) {
-				lnpe.printStackTrace();
+			} catch (HDF5LibraryException | NullPointerException hlnpe) {
+				NodeLogger.getLogger("Hdf5 Files").error("DataType for \"" + name + "\" could not be created", hlnpe);	
 			}
 			
 			return dataType;
+			
 		} else {
-			NodeLogger.getLogger("HDF5 Files").error("There isn't an attribute \"" + name + "\" in treeElement \""
-					+ getPathFromFile() + getName() + '"', new IllegalArgumentException());
-			return null;
+			throw new IllegalArgumentException("There isn't an attribute \"" + name + "\" in treeElement \""
+					+ getPathFromFile() + getName() + "\"");
 		}
 	}
 	
@@ -308,20 +310,20 @@ abstract public class Hdf5TreeElement {
         } catch (HDF5LibraryException le) {
         	// TODO makes no sense at the moment, but will be changed when the HDF5WriterDialog has been implemented
         	if (attribute.getType().isHdfType(Hdf5HdfDataType.STRING)) {
-        		attribute.getType().getHdfType().createInstanceString(attribute.getAttributeId(),
-        				attribute.getType().getHdfType().getStringLength());
+        		try {
+					attribute.getType().getHdfType().createInstanceString(attribute.getAttributeId(),
+							attribute.getType().getHdfType().getStringLength());
+				} catch (AlreadyBoundException e) {
+					// TODO Auto-generated catch block
+				}
         	}
         	
-        	// Create the data space for the attribute.
-        	long[] dims = { attribute.getDimension() };
             try {
+            	// Create the data space for the attribute.
+            	long[] dims = { attribute.getDimension() };
             	attribute.setDataspaceId(H5.H5Screate_simple(1, dims, null));
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
 
-            // Create a dataset attribute.
-            try {
+                // Create the attribute and write the data of the Hdf5Attribute into it.
                 if (getElementId() >= 0 && attribute.getDataspaceId() >= 0 && attribute.getType().getConstants()[0] >= 0) {
                 	attribute.setAttributeId(H5.H5Acreate(getElementId(), attribute.getName(),
                     		attribute.getType().getConstants()[0], attribute.getDataspaceId(),
@@ -333,8 +335,8 @@ abstract public class Hdf5TreeElement {
                 		getAttributes().add(attribute);
                     }
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (HDF5Exception | NullPointerException hnpe) {
+                NodeLogger.getLogger("HDF5 Files").error("Attribute could not be created", hnpe);
             }
         }
 	}

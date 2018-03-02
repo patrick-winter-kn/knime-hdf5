@@ -1,7 +1,10 @@
 package org.knime.hdf5.lib.types;
 
+import java.rmi.AlreadyBoundException;
 import java.util.HashMap;
 import java.util.Map;
+
+import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.node.NodeLogger;
 
@@ -148,14 +151,9 @@ public class Hdf5HdfDataType {
 		}
 	}
 	
-	public synchronized void createInstanceString(final long elementId, final long stringLength) {
+	public synchronized void createInstanceString(final long elementId, final long stringLength) throws AlreadyBoundException {
 		if (LOOKUP_STRING.containsKey(elementId)) {
-			try {
-				throw new java.rmi.AlreadyBoundException("cannot create"
-						+ "String dataType (already exists)");
-			} catch (java.rmi.AlreadyBoundException e) {
-				e.printStackTrace();
-			}
+			throw new AlreadyBoundException("cannot create String dataType (already exists)");
 		}
 		
 		long filetypeId = -1;
@@ -174,11 +172,11 @@ public class Hdf5HdfDataType {
 			if (memtypeId >= 0) {
 				H5.H5Tset_size(memtypeId, stringLength + 1);
 			}
+			
+			updateInstanceString(elementId, filetypeId, memtypeId, stringLength);
 		} catch (HDF5LibraryException hle) {
-			NodeLogger.getLogger("HDF Files").error("StringType could not be created", hle);
+			NodeLogger.getLogger("HDF Files").error("String dataType could not be created", hle);
 		}
-		
-		updateInstanceString(elementId, filetypeId, memtypeId, stringLength);
 	}
 	
 	// TODO exception in case the dataType is not a string
@@ -208,26 +206,22 @@ public class Hdf5HdfDataType {
 				if (memtypeId >= 0) {
 					H5.H5Tset_size(memtypeId, stringLength + 1);
 				}
-			} catch (HDF5LibraryException hle) {
-				NodeLogger.getLogger("HDF Files").error("StringType could not be initialized", hle);
-			}
 
-			updateInstanceString(elementId, filetypeId, memtypeId, stringLength);
+				updateInstanceString(elementId, filetypeId, memtypeId, stringLength);
+			} catch (HDF5LibraryException hle) {
+				NodeLogger.getLogger("HDF Files").error("String dataType could not be initialized", hle);
+			}
 		}
 	}
 
-	public void closeIfString() {
+	public void closeIfString() throws HDF5LibraryException {
 		if (m_typeId == STRING) {
-			try {
-		 		// Terminate access to the file and mem type.
-				for (int i = 0; i < 2; i++) {
-					if (getConstants()[i] >= 0) {
-		 				H5.H5Tclose(getConstants()[i]);
-		 				getConstants()[i] = -1;
-		 			}
-				}
-			} catch (HDF5LibraryException e) {
-				e.printStackTrace();
+	 		// Terminate access to the file and mem type.
+			for (int i = 0; i < 2; i++) {
+				if (getConstants()[i] >= 0) {
+	 				H5.H5Tclose(getConstants()[i]);
+	 				getConstants()[i] = -1;
+	 			}
 			}
 		}
 	}
@@ -244,7 +238,7 @@ public class Hdf5HdfDataType {
 		return m_stringLength;
 	}
 
-	public Object createArray(int length) {
+	public Object createArray(int length) throws UnsupportedDataTypeException {
 		switch (m_typeId) {
 		case BYTE:
 		case UBYTE:
@@ -268,7 +262,41 @@ public class Hdf5HdfDataType {
 		case STRING:
 			return new String[length];
 		default:
-			return null;
+			throw new UnsupportedDataTypeException("Cannot create array of this dataType");
+		}
+	}
+	
+	@Override
+	public String toString() {
+		switch (m_typeId) {
+		case BYTE:
+			return "BYTE";
+		case UBYTE:
+			return "UBYTE";
+		case SHORT:
+			return "SHORT";
+		case USHORT:
+			return "USHORT";
+		case INTEGER:
+			return "INTEGER";
+		case UINTEGER:
+			return "UINTEGER";
+		case LONG:
+			return "LONG";
+		case ULONG:
+			return "ULONG";
+		case FLOAT:
+			return "FLOAT";
+		case DOUBLE:
+			return "DOUBLE";
+		case CHAR:
+			return "CHAR";
+		case UCHAR:
+			return "UCHAR";
+		case STRING:
+			return "STRING";
+		default:
+			return "UNKNOWN";
 		}
 	}
 }

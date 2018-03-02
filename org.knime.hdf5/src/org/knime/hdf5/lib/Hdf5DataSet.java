@@ -1,9 +1,11 @@
 package org.knime.hdf5.lib;
 
-import java.nio.channels.NonReadableChannelException;
+import java.rmi.AlreadyBoundException;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+
+import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.data.DataCell;
 import org.knime.core.data.MissingCell;
@@ -18,6 +20,7 @@ import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
+import hdf.hdf5lib.exceptions.HDF5Exception;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5DataSet<Type> extends Hdf5TreeElement {
@@ -48,8 +51,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	        		parent.addDataSet(this);
 	                setOpen(true);
 		        }
-	        } catch (Exception e) {
-	            e.printStackTrace();
+	        } catch (HDF5LibraryException | NullPointerException hlnpe) {
+	            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be created", hlnpe);
 	        }
 		} else {
 			parent.addDataSet(this);
@@ -212,8 +215,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	    			return true;
 	            }
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (HDF5Exception | NullPointerException hnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be written", hnpe);
         }
 		return false;
 	}
@@ -224,8 +227,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	/**
 	 * 
-	 * @param fromRow inclusive
-	 * @param toRow exclusive
+	 * @param fromRow inclusive row index
+	 * @param toRow exclusive row index
 	 * @return
 	 */
 	@SuppressWarnings("unchecked")
@@ -241,8 +244,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	            		Arrays.copyOfRange(m_dimensions, 1, m_dimensions.length), null);
 	            
 	            /*
-	             * chunking is not possible for dataSets with 0 dimensions according to the H5 library
-	             * (we set it to { 1L } then)
+	             * chunking is only possible for dataSets with available (more than 0) dimensions
+	             * according to H5.H5Sget_simple_extent_dims()
 	             */
 	            if (m_dimsAvailable) {
 		        	long[] offset = new long[m_dimensions.length];
@@ -250,20 +253,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 					long[] count = m_dimensions.clone();
 					count[0] = toRow - fromRow;
 					
-					int status = -1;
-				    try {
-						status = H5.H5Sselect_hyperslab(m_dataspaceId, HDF5Constants.H5S_SELECT_SET,
-								offset, null, count, null);
-						
-					} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException e) {
-						e.printStackTrace();
-					}
-				    
-				    if (status < 0) {
-						NodeLogger.getLogger("HDF5 Files").error("Next row of dataSet \"" + getPathFromFileWithName()
-								+ "\" could not be read", new NonReadableChannelException());
-				    	return null;
-				    }
+					H5.H5Sselect_hyperslab(m_dataspaceId, HDF5Constants.H5S_SELECT_SET,
+							offset, null, count, null);
 	            }
 				
 				if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
@@ -288,16 +279,15 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				} else {
 					Object[] dataRead = (Object[]) dataType.getHdfType().createArray((int) numberOfValuesFrom(1));
 		            H5.H5Dread(getElementId(), dataType.getConstants()[1],
-		            		memSpaceId, m_dataspaceId,
-		                    HDF5Constants.H5P_DEFAULT, dataRead);
+		            		memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, dataRead);
 					for (int i = 0; i < dataRead.length; i++) {
 						dataOut[i] = (Type) dataType.hdfToKnime(dataRead[i]);
 					}
 				}
 			}
-	    } catch (Exception e) {
-	        e.printStackTrace();
-	    }
+	    }  catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException | IllegalArgumentException hludtnpiae) {
+            NodeLogger.getLogger("HDF5 Files").error(hludtnpiae.getMessage(), hludtnpiae);
+        }
 		
 		return dataOut;
 	}
@@ -352,24 +342,28 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				setOpen(true);
 				loadDimensions();
 			}
-		} catch (HDF5LibraryException | NullPointerException e) {
-			e.printStackTrace();
-		}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened", hlnpe);
+        }
 	}
 	
 	private void createDimensions(long[] dimensions, long stringLength) {
 		setDimensions(dimensions);
 		
 		if (m_type.isHdfType(Hdf5HdfDataType.STRING)) {
-			m_type.getHdfType().createInstanceString(getElementId(), stringLength);
+			try {
+				m_type.getHdfType().createInstanceString(getElementId(), stringLength);
+			} catch (AlreadyBoundException e) {
+				// TODO Auto-generated catch block
+			}
         }
 		
     	// Create the data space for the dataset.
         try {
             setDataspaceId(H5.H5Screate_simple(getDimensions().length,
             		getDimensions(), null));
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (HDF5Exception | NullPointerException hnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("Data space could not be created", hnpe);
         }
 	}
 	
@@ -402,9 +396,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				
 				setDimensions(dims);
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("Dimensions could not be loaded", hlnpe);
+        }
         
 		if (m_type.isHdfType(Hdf5HdfDataType.STRING)) {
 			m_type.getHdfType().initInstanceString(getElementId());
@@ -431,8 +425,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
                 H5.H5Dclose(getElementId());
                 setOpen(false);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (HDF5LibraryException hle) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be closed", hle);
         }
 	}
 }

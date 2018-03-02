@@ -52,22 +52,14 @@ public class Hdf5Attribute<Type> {
 	
 	static Hdf5Attribute<?> getInstance(final Hdf5TreeElement treeElement, final String name) {
 		Hdf5Attribute<?> attribute = null;
-		Hdf5DataType dataType = treeElement.findAttributeType(name);
-
-		if (dataType == null) {
-			return null;
-		}
-		
 		long attributeId = -1;
 		long dataspaceId = -1;
 		int lsize = 1;
+		
 		try {
+			Hdf5DataType dataType = treeElement.findAttributeType(name);
 			attributeId = H5.H5Aopen(treeElement.getElementId(), name, HDF5Constants.H5P_DEFAULT);
-			
-			// Get dataspace and allocate memory for read buffer.
-			if (attributeId >= 0) {
-				dataspaceId = H5.H5Aget_space(attributeId);
-			}
+			dataspaceId = H5.H5Aget_space(attributeId);
 			
 			if (dataspaceId >= 0) {
 				int ndims = H5.H5Sget_simple_extent_ndims(dataspaceId);
@@ -128,21 +120,24 @@ public class Hdf5Attribute<Type> {
         	
 		} catch (HDF5DatatypeInterfaceException hdtie) {
 			try {
-				close(attributeId, dataspaceId, dataType);
 				NodeLogger.getLogger("HDF5 Files").error("DataType of Attribute \"" 
-						+ treeElement.getPathFromFileWithName(true) + name + "\" is not supported");
+						+ treeElement.getPathFromFileWithName(true) + name + "\" is not supported", hdtie);
+				close(attributeId, dataspaceId);
 			} catch (HDF5LibraryException hle) {
-				hle.printStackTrace();
+				NodeLogger.getLogger("HDF5 Files").error("Attribute could not be closed", hle);
 			}
-		} catch (NullPointerException | HDF5Exception lnphe) {
-			lnphe.printStackTrace();
+		} catch (HDF5Exception | NullPointerException | IllegalArgumentException hnpiae) {
+			NodeLogger.getLogger("HDF5 Files").error(hnpiae.getMessage(), hnpiae);
+			
+		} catch (UnsupportedDataTypeException udte) {
+			NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
 		}
 		
 		return attribute;
 	}
 	
-	private static void close(long attributeId, long dataspaceId, Hdf5DataType dataType) throws HDF5LibraryException {
-		dataType.getHdfType().closeIfString();
+	private static void close(long attributeId, long dataspaceId) throws HDF5LibraryException {
+		//TODO dataType.getHdfType().closeIfString();
 
         // Close the dataspace.
         if (dataspaceId >= 0) {
@@ -206,26 +201,20 @@ public class Hdf5Attribute<Type> {
 	void loadDimension() {
 		// Get dataspace and allocate memory for read buffer.
 		try {
-			if (m_attributeId >= 0) {
+			if (isOpen()) {
 				setDataspaceId(H5.H5Aget_space(getAttributeId()));
 			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		
-		long[] dims = new long[1];
-		if (m_type.isHdfType(Hdf5HdfDataType.STRING)) {
-			m_type.getHdfType().initInstanceString(getAttributeId());
 			
-		} else {
-			try {
-				if (m_dataspaceId >= 0) {
-					H5.H5Sget_simple_extent_dims(m_dataspaceId, dims, null);
-					setDimension(dims[0]);
-				}
-			} catch (HDF5LibraryException | NullPointerException lnpe) {
-				lnpe.printStackTrace();
+			long[] dims = new long[1];
+			if (m_type.isHdfType(Hdf5HdfDataType.STRING)) {
+				m_type.getHdfType().initInstanceString(getAttributeId());
+				
+			} else if (m_dataspaceId >= 0) {
+				H5.H5Sget_simple_extent_dims(m_dataspaceId, dims, null);
+				setDimension(dims[0]);
 			}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			NodeLogger.getLogger("HDF5 Files").error("Dimensions could not be loaded");
 		}
 	}
 	
@@ -250,7 +239,7 @@ public class Hdf5Attribute<Type> {
                 setOpen(false);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+			NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + getName() + "\" could not be closed");
         }
 	}
 }

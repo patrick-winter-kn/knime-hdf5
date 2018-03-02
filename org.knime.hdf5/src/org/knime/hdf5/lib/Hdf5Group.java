@@ -1,14 +1,12 @@
 package org.knime.hdf5.lib;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import javax.management.modelmbean.InvalidTargetObjectTypeException;
+import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataColumnSpecCreator;
@@ -23,33 +21,31 @@ import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5Group extends Hdf5TreeElement {
 	
-	private final List<Hdf5Group> m_groups = new LinkedList<>();
+	public static final int OBJECT_NOT_EXISTS = 0;
 	
-	private final List<Hdf5DataSet<?>> m_dataSets = new LinkedList<>();
+	private final List<Hdf5Group> m_groups = new ArrayList<>();
+	
+	private final List<Hdf5DataSet<?>> m_dataSets = new ArrayList<>();
 
 	protected Hdf5Group(final Hdf5Group parent, final String filePath, final String name, boolean create)
-			throws NullPointerException, IllegalArgumentException {
+			throws HDF5LibraryException, NullPointerException, IllegalArgumentException {
 		super(name, filePath);
 		if (!(this instanceof Hdf5File)) {
 			if (parent == null) {
-				NodeLogger.getLogger("HDF5 Files").error("parent of group " + name + " cannot be null",
-						new NullPointerException());
+				throw new NullPointerException("parent of group " + name + " cannot be null");
+				
 			} else if (!parent.isOpen()) {
-				NodeLogger.getLogger("HDF5 Files").error("parent group " + parent.getName() + " is not open!",
-						new IllegalStateException());
+				throw new IllegalStateException("parent group " + parent.getName() + " is not open!");
+				
 			} else if (!create) {
 				parent.addGroup(this);
 				open();
 			} else {
-				try {
-					setElementId(H5.H5Gcreate(parent.getElementId(), getName(), 
-							HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT,
-							HDF5Constants.H5P_DEFAULT));
-					parent.addGroup(this);
-					setOpen(true);
-				} catch (HDF5LibraryException | NullPointerException e) {
-					e.printStackTrace();
-				}
+				setElementId(H5.H5Gcreate(parent.getElementId(), getName(), 
+						HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT,
+						HDF5Constants.H5P_DEFAULT));
+				parent.addGroup(this);
+				setOpen(true);
 			}
 		}
 	}
@@ -81,38 +77,55 @@ public class Hdf5Group extends Hdf5TreeElement {
 	public Hdf5Group createGroup(final String name, Hdf5OverwritePolicy policy) {
 		Hdf5Group group = null;
 		
-		if (!existsDataSet(name)) {
-			if (!existsGroup(name) || policy == Hdf5OverwritePolicy.OVERWRITE) {
-				try {
-					group = new Hdf5Group(this, getFilePath(), name, true);
-				} catch (NullPointerException | IllegalArgumentException npiae) {
-					group = null;
-				}
+		int objectType = -1;
+		try {
+			objectType = getObjectTypeByName(name);
+			
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			NodeLogger.getLogger("HDF5 Files").error("Existence of object could not be checked", hlnpe);
+			/* group stays null */
+		}
+		
+		if (objectType == HDF5Constants.H5I_DATASET) {
+			NodeLogger.getLogger("HDF5 Files").error("There is already a dataSet with the name \"" + name + "\"", new IllegalArgumentException());
+			/* group stays null */
+			
+		} else if (objectType == OBJECT_NOT_EXISTS
+				|| (policy == Hdf5OverwritePolicy.OVERWRITE && objectType == HDF5Constants.H5I_GROUP)) {
+			try {
+				group = new Hdf5Group(this, getFilePath(), name, true);
 				
-			} else if (policy == Hdf5OverwritePolicy.ABORT) {
-				group = getGroup(name);
-				
-			} else if (policy == Hdf5OverwritePolicy.KEEP_BOTH) {
-				String oldName = name;
-				int i = 1;
-				
-				if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
-					oldName = oldName.substring(0, oldName.lastIndexOf("("));
-					i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
-				}
-				
-				String newName;
-				List<String> groupNames = loadGroupNames();
-				do {
-					 newName = oldName + "(" + i + ")";
-					 i++;
-					 System.out.print(newName + ", ");
-				} while (groupNames.contains(newName));
-	
-				group = new Hdf5Group(this, getFilePath(), newName, true);
+			} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException hlnpiae) {
+				NodeLogger.getLogger("HDF5 Files").error(hlnpiae.getMessage(), hlnpiae);
+				/* group stays null */
 			}
-		} else {
-			NodeLogger.getLogger("HDF5 Files").error("There is already a dataSet with the name " + name, new IllegalArgumentException());
+			
+		} else if (policy == Hdf5OverwritePolicy.ABORT && objectType == HDF5Constants.H5I_GROUP) {
+			group = getGroup(name);
+			
+		} else if (policy == Hdf5OverwritePolicy.KEEP_BOTH && objectType == HDF5Constants.H5I_GROUP) {
+			String oldName = name;
+			int i = 1;
+			
+			if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
+				oldName = oldName.substring(0, oldName.lastIndexOf("("));
+				i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
+			}
+			
+			String newName;
+			List<String> groupNames = loadGroupNames();
+			do {
+				 newName = oldName + "(" + i + ")";
+				 i++;
+			} while (groupNames.contains(newName));
+			
+			try {
+				group = new Hdf5Group(this, getFilePath(), newName, true);
+				
+			} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException hlnpiae) {
+				NodeLogger.getLogger("HDF5 Files").error(hlnpiae.getMessage(), hlnpiae);
+				/* group stays null */
+			}
 		}
 		
 		return group;
@@ -122,36 +135,47 @@ public class Hdf5Group extends Hdf5TreeElement {
 			long stringLength, Hdf5DataType type, Hdf5OverwritePolicy policy) {
 		Hdf5DataSet<?> dataSet = null;
 		
-		if (!existsGroup(name)) {
-			if (!existsDataSet(name)) {
-				dataSet = Hdf5DataSet.getInstance(this, name, dimensions, stringLength, type, true);
-			} else if (policy == Hdf5OverwritePolicy.OVERWRITE) {
-				NodeLogger.getLogger("HDF5 Files").error("A dataSet cannot be overwritten", new IllegalArgumentException());
-				
-			} else if (policy == Hdf5OverwritePolicy.ABORT) {
-				dataSet = getDataSet(name);
-				
-			} else if (policy == Hdf5OverwritePolicy.KEEP_BOTH) {
-				String oldName = name;
-				int i = 1;
-				
-				if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
-					oldName = oldName.substring(0, oldName.lastIndexOf("("));
-					i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
-				}
-				
-				String newName;
-				List<String> dataSetNames = loadDataSetNames();
-				do {
-					 newName = oldName + "(" + i + ")";
-					 i++;
-					 System.out.print(newName + ", ");
-				} while (dataSetNames.contains(newName));
-				
-				dataSet = Hdf5DataSet.getInstance(this, newName, dimensions, stringLength, type, true);
+		int objectType = -1;
+		try {
+			objectType = getObjectTypeByName(name);
+			
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			NodeLogger.getLogger("HDF5 Files").error("Existence of object could not be checked", hlnpe);
+			/* dataSet stays null */
+		}
+		
+		if (objectType == HDF5Constants.H5I_GROUP) {
+			NodeLogger.getLogger("HDF5 Files").error("There is already a group with the name \"" + name + "\"", new IllegalArgumentException());
+			/* dataSet stays null */
+			
+		} else if (objectType == OBJECT_NOT_EXISTS) {
+			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, stringLength, type, true);
+			
+		} else if (policy == Hdf5OverwritePolicy.OVERWRITE && objectType == HDF5Constants.H5I_DATASET) {
+			// TODO implement possibility to overwrite if necessary
+			NodeLogger.getLogger("HDF5 Files").error("A dataSet cannot be overwritten", new UnsupportedOperationException());
+			/* dataSet stays null */
+			
+		} else if (policy == Hdf5OverwritePolicy.ABORT && objectType == HDF5Constants.H5I_DATASET) {
+			dataSet = getDataSet(name);
+			
+		} else if (policy == Hdf5OverwritePolicy.KEEP_BOTH && objectType == HDF5Constants.H5I_DATASET) {
+			String oldName = name;
+			int i = 1;
+			
+			if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
+				oldName = oldName.substring(0, oldName.lastIndexOf("("));
+				i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
 			}
-		} else {
-			NodeLogger.getLogger("HDF5 Files").error("There is already a group with the name " + name, new IllegalArgumentException());
+			
+			String newName;
+			List<String> dataSetNames = loadDataSetNames();
+			do {
+				 newName = oldName + "(" + i + ")";
+				 i++;
+			} while (dataSetNames.contains(newName));
+			
+			dataSet = Hdf5DataSet.getInstance(this, newName, dimensions, stringLength, type, true);
 		}
 		
 		return dataSet;
@@ -174,8 +198,9 @@ public class Hdf5Group extends Hdf5TreeElement {
 		if (!found) {
 			try {
 				group = new Hdf5Group(this, getFilePath(), name, false);
-			} catch (NullPointerException | IllegalArgumentException npiae) {
-				group = null;
+			} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException hlnpiae) {
+				NodeLogger.getLogger("HDF5 Files").error(hlnpiae.getMessage(), hlnpiae);
+				/* group stays null */
 			}
 		}
 		
@@ -213,17 +238,22 @@ public class Hdf5Group extends Hdf5TreeElement {
 			}
 		}
 		
-		if (!found && existsDataSet(name)) {
+		int objectType = -1;
+		try {
+			objectType = getObjectTypeByName(name);
+			
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			NodeLogger.getLogger("HDF5 Files").error("Existence of object could not be checked", hlnpe);
+			/* dataSet stays null */
+		}
+		
+		if (!found && objectType == HDF5Constants.H5I_DATASET) {
 			long dataSetId = -1;
 			long dataspaceId = -1;
 			long[] dimensions = null;
-			Hdf5DataType type = findDataSetType(name);
-			
-			if (type == null) {
-				return null;
-			}
 			
 			try {
+				Hdf5DataType type = findDataSetType(name);
 				dataSetId = H5.H5Dopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 				dataspaceId = H5.H5Dget_space(dataSetId);
 
@@ -242,16 +272,22 @@ public class Hdf5Group extends Hdf5TreeElement {
                 	H5.H5Sclose(dataspaceId);
                 }
 
-                // Terminate access to the datset.
+                // Terminate access to the dataSet.
                 H5.H5Dclose(dataSetId);
 				
 				dimensions = dims;
-			} catch (HDF5LibraryException | NullPointerException lnpe) {
-				lnpe.printStackTrace();
+				
+				// TODO do it without stringLength
+				long stringLength = type.getHdfType().getStringLength();
+				dataSet = Hdf5DataSet.getInstance(this, name, dimensions, stringLength, type, false);
+				
+			} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException hlnpiae) {
+				NodeLogger.getLogger("HDF5 Files").error(hlnpiae.getMessage(), hlnpiae);
+				
+			} catch (UnsupportedDataTypeException udte) {
+				NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
 			}
 			
-			long stringLength = type.getHdfType().getStringLength();
-			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, stringLength, type, false);
 		}
 	
 		return dataSet;
@@ -274,32 +310,13 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return dataSet;
 	}
 	
-	public boolean existsGroup(final String name) {
-		List<String> groupNames = loadGroupNames();
-		
-		if (groupNames != null) {
-			for (String n: groupNames) {
-				if (n.equals(name)) {
-					return true;
-				}
-			}
+	private int getObjectTypeByName(final String name) throws HDF5LibraryException, NullPointerException {
+		if (H5.H5Oexists_by_name(getElementId(), name, HDF5Constants.H5P_DEFAULT)) {
+			long elementId = H5.H5Oopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
+			return H5.H5Iget_type(elementId); 
 		}
 		
-		return false;
-	}
-	
-	public boolean existsDataSet(final String name) {
-		List<String> dataSetNames = loadDataSetNames();
-		
-		if (dataSetNames != null) {
-			for (String n: dataSetNames) {
-				if (n.equals(name)) {
-					return true;
-				}
-			}
-		}
-		
-		return false;
+		return OBJECT_NOT_EXISTS;
 	}
 	
 	private void addGroup(Hdf5Group group) {
@@ -314,72 +331,47 @@ public class Hdf5Group extends Hdf5TreeElement {
 		dataSet.setParent(this);
 	}
 
-	/**
-	 *
-	 * @param object only GROUP and DATASET allowed
-	 * @return
-	 */
-	private String[] loadObjectNames(Hdf5Object object) {
-		if (object != Hdf5Object.GROUP && object != Hdf5Object.DATASET) {
-			NodeLogger.getLogger("HDF5 Files").error("Inappropriate object type " + object, new InvalidTargetObjectTypeException());
-		}
-		
-		String[] names = null;
-		int index = 0;
+	private List<String> loadObjectNames(int objectId) {
+		List<String> names = new ArrayList<>();
 		Hdf5Group group = this instanceof Hdf5File ? this : getParent();
 		String name = this instanceof Hdf5File ? "/" : getName();
 		
-		// Begin iteration.
 		try {
 			if (group.isOpen()) {
-				long count = H5.H5Gn_members(group.getElementId(), name);
+				int count = (int) H5.H5Gn_members(group.getElementId(), name);
 				
 				if (count > 0) {
-					String[] oname = new String[(int) count];
-					int[] otype = new int[(int) count];
-					long[] orefs = new long[(int) count];
-					H5.H5Gget_obj_info_all(group.getElementId(), name, oname, otype, new int[(int) count], orefs, HDF5Constants.H5_INDEX_NAME);
+					String[] oname = new String[count];
+					int[] otype = new int[count];
+					H5.H5Gget_obj_info_all(group.getElementId(), name, oname, otype, new int[count], new long[count], HDF5Constants.H5_INDEX_NAME);
 					
-					// Get type of the object and add it to the array
-					names = new String[(int) count];
+					// Get type of the object and add it to the list
 					for (int i = 0; i < otype.length; i++) {
-						if (Hdf5Object.get(otype[i]) == object) {
-							names[index] = oname[i];
-							index++;
+						if (otype[i] == objectId) {
+							names.add(oname[i]);
 						}
 					}
 				}
 			} else {
 				NodeLogger.getLogger("HDF5 Files").error("The parent " + group.getPathFromFile() + group.getName() + " is not open!", new IllegalStateException());
 			}
-		}
-		catch (Exception e) {
-			e.printStackTrace();
-		}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("List of objects could not be loaded", hlnpe);
+        }
 		
-		return names != null ? Arrays.copyOf(names, index) : null;
+		return names;
 	}
 	
 	public List<String> loadGroupNames() {
-		List<String> names = new LinkedList<>();
-		String[] groupNames = loadObjectNames(Hdf5Object.GROUP);
-		if (groupNames != null) {
-			Collections.addAll(names, groupNames);
-		}
-		return names;
+		return loadObjectNames(HDF5Constants.H5O_TYPE_GROUP);
 	}
 	
 	public List<String> loadDataSetNames() {
-		List<String> names = new LinkedList<>();
-		String[] dataSetNames = loadObjectNames(Hdf5Object.DATASET);
-		if (dataSetNames != null) {
-			Collections.addAll(names, dataSetNames);
-		}
-		return names;
+		return loadObjectNames(HDF5Constants.H5O_TYPE_DATASET);
 	}
 	
 	public List<String> getAllDataSetPaths() {
-		List<String> paths = new LinkedList<>();
+		List<String> paths = new ArrayList<>();
 		String path = getPathFromFileWithName(false);
 		
 		Iterator<String> iterDS = loadDataSetNames().iterator();
@@ -399,24 +391,27 @@ public class Hdf5Group extends Hdf5TreeElement {
 
 	/**
 	 *
-	 * @param object only ATTRIBUTE and DATASET allowed
+	 * @param object only useful for HDF5Constants.ATTR and HDF5Constants.DATASET
 	 * @return
 	 */
-	private Map<String, Hdf5DataType> getAllObjectsInfoOfType(Hdf5Object object) {
+	private Map<String, Hdf5DataType> getAllObjectsInfoOfType(int objectId) {
 		Map<String, Hdf5DataType> paths = new LinkedHashMap<>();
 		String path = getPathFromFileWithName(false);
 		
-		if (object != Hdf5Object.DATASET && object != Hdf5Object.ATTRIBUTE) {
-			NodeLogger.getLogger("HDF5 Files").error("Inappropriate object type " + object, new InvalidTargetObjectTypeException());
-		}
-		
-		if (object == Hdf5Object.ATTRIBUTE) {
+		if (objectId == HDF5Constants.H5I_ATTR) {
 			Iterator<String> iterAttr = loadAttributeNames().iterator();
 			while (iterAttr.hasNext()) {
 				String name = iterAttr.next();
-				Hdf5DataType dataType = findAttributeType(name);
-				if (dataType != null) {
+				
+				try {
+					Hdf5DataType dataType = findAttributeType(name);
 					paths.put(path + name, dataType);
+					
+				} catch (IllegalArgumentException iae) {
+					NodeLogger.getLogger("HDF5 Files").error(iae.getMessage(), iae);
+					
+				} catch (UnsupportedDataTypeException udte) {
+					NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
 				}
 			}
 			
@@ -428,13 +423,20 @@ public class Hdf5Group extends Hdf5TreeElement {
 					dataSet.close();
 				}
 			}
-		} else {
+		} else if (objectId == HDF5Constants.H5I_DATASET) {
 			Iterator<String> iterDS = loadDataSetNames().iterator();
 			while (iterDS.hasNext()) {
 				String name = iterDS.next();
-				Hdf5DataType dataType = findDataSetType(name);
-				if (dataType != null) {
+				
+				try {
+					Hdf5DataType dataType = findDataSetType(name);
 					paths.put(path + name, dataType);
+
+				} catch (IllegalArgumentException iae) {
+					NodeLogger.getLogger("HDF5 Files").error(iae.getMessage(), iae);
+					
+				} catch (UnsupportedDataTypeException udte) {
+					NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
 				}
 			}
 		}
@@ -442,7 +444,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		Iterator<String> iterG = loadGroupNames().iterator();
 		while (iterG.hasNext()) {
 			Hdf5Group group = getGroup(iterG.next());
-			paths.putAll(group.getAllObjectsInfoOfType(object));
+			paths.putAll(group.getAllObjectsInfoOfType(objectId));
 			group.close();
 		}
 		
@@ -450,11 +452,11 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 	
 	public Map<String, Hdf5DataType> getAllDataSetsInfo() {
-		return getAllObjectsInfoOfType(Hdf5Object.DATASET);
+		return getAllObjectsInfoOfType(HDF5Constants.H5I_DATASET);
 	}
 	
 	public Map<String, Hdf5DataType> getAllAttributesInfo() {
-		return getAllObjectsInfoOfType(Hdf5Object.ATTRIBUTE);
+		return getAllObjectsInfoOfType(HDF5Constants.H5I_ATTR);
 	}
 	
 	/**
@@ -462,22 +464,22 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * @param object only ATTRIBUTE and DATASET allowed
 	 * @return
 	 */
-	private DataTableSpec createSpecOfObjects(Hdf5Object object) {
-		if (object != Hdf5Object.ATTRIBUTE && object != Hdf5Object.DATASET) {
-			NodeLogger.getLogger("HDF5 Files").error("Inappropriate object type " + object, new InvalidTargetObjectTypeException());
-		}
+	private DataTableSpec createSpecOfObjects(int objectId) {
+		List<DataColumnSpec> colSpecList = new ArrayList<>();
 		
-		List<DataColumnSpec> colSpecList = new LinkedList<>();
-		
-		Map<String, Hdf5DataType> objInfo = getAllObjectsInfoOfType(object);
+		Map<String, Hdf5DataType> objInfo = getAllObjectsInfoOfType(objectId);
 		Iterator<String> iter = objInfo.keySet().iterator();
 		while (iter.hasNext()) {
 			String objPath = iter.next();
 			Hdf5DataType dataType = objInfo.get(objPath);
 			if (dataType != null) {
-				DataType objType = dataType.getKnimeType().getColumnType();
-				
-				colSpecList.add(new DataColumnSpecCreator(objPath, objType).createSpec());
+				try {
+					DataType objType = dataType.getKnimeType().getColumnDataType();
+					colSpecList.add(new DataColumnSpecCreator(objPath, objType).createSpec());
+					
+				} catch (UnsupportedDataTypeException udte) {
+					NodeLogger.getLogger("HDF5 Files").error(udte.getMessage(), udte);
+				}
 			}	
 		}
 		
@@ -485,22 +487,31 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 
 	public DataTableSpec createSpecOfDataSets() {
-		return createSpecOfObjects(Hdf5Object.DATASET);
+		return createSpecOfObjects(HDF5Constants.H5I_DATASET);
 	}
 	
 	public DataTableSpec createSpecOfAttributes() {
-		return createSpecOfObjects(Hdf5Object.ATTRIBUTE);
+		return createSpecOfObjects(HDF5Constants.H5I_ATTR);
 	}
 
 	/**
 	 * 
 	 * @param name name of the attribute in this treeElement
 	 * @return dataType of the attribute (TODO doesn't work for {@code H5T_VLEN} and {@code H5T_REFERENCE} at the moment)
+	 * @throws UnsupportedDataTypeException 
 	 */
-	Hdf5DataType findDataSetType(String name) {
+	Hdf5DataType findDataSetType(String name) throws UnsupportedDataTypeException, IllegalArgumentException {
 		Hdf5DataType dataType = null;
 		
-		if (existsDataSet(name)) {
+		int objectType = -1;
+		try {
+			objectType = getObjectTypeByName(name);
+			
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			NodeLogger.getLogger("HDF5 Files").error("Existence of object could not be checked", hlnpe);
+		}
+		
+		if (objectType == HDF5Constants.H5I_DATASET) {
 			long dataSetId = -1;
 			long classId = -1;
 			int size = 0;
@@ -520,17 +531,15 @@ public class Hdf5Group extends Hdf5TreeElement {
 				
 				if (classId == HDF5Constants.H5T_VLEN) {
 					// TODO find correct real dataType
-					NodeLogger.getLogger("HDF5 Files").warn("DataType H5T_VLEN of dataSet \""
-							+ getPathFromFileWithName() + name + "\" is not supported");
 					H5.H5Dclose(dataSetId);
-					return null;
+					throw new UnsupportedDataTypeException("DataType H5T_VLEN of dataSet \""
+							+ getPathFromFileWithName() + name + "\" is not supported");
 				}
 				
 				if (classId == HDF5Constants.H5T_REFERENCE) {
-					NodeLogger.getLogger("HDF5 Files").warn("DataType H5T_REFERENCE of dataSet \""
-							+ getPathFromFileWithName() + name + "\" is not supported");
 					H5.H5Dclose(dataSetId);
-					return null;
+					throw new UnsupportedDataTypeException("DataType H5T_REFERENCE of dataSet \""
+							+ getPathFromFileWithName() + name + "\" is not supported");
 				}
 				
 				dataType = new Hdf5DataType(classId, size, unsigned, vlen, true);
@@ -539,15 +548,14 @@ public class Hdf5Group extends Hdf5TreeElement {
 				}
 				H5.H5Dclose(dataSetId);
 				
-			} catch (HDF5LibraryException | NullPointerException lnpe) {
-				lnpe.printStackTrace();
+			} catch (HDF5LibraryException | NullPointerException hlnpe) {
+				NodeLogger.getLogger("Hdf5 Files").error("DataType for \"" + name + "\" could not be created", hlnpe);	
 			}
 
 			return dataType;
 		} else {
-			NodeLogger.getLogger("HDF5 Files").error("There isn't a dataSet \"" + name + "\" in group"
-					+ getPathFromFile() + getName(), new IllegalArgumentException());
-			return null;
+			throw new IllegalArgumentException("There isn't a dataSet \"" + name + "\" in group"
+					+ getPathFromFile() + getName());
 		}
 	}
 	
@@ -562,9 +570,9 @@ public class Hdf5Group extends Hdf5TreeElement {
 						HDF5Constants.H5P_DEFAULT));
 				setOpen(true);
 			}
-		} catch (HDF5LibraryException | NullPointerException e) {
-			e.printStackTrace();
-		}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("Group could not be opened", hlnpe);
+        }
 	}
 	
 	/**
@@ -592,8 +600,8 @@ public class Hdf5Group extends Hdf5TreeElement {
 	    		H5.H5Gclose(getElementId());
 		        setOpen(false);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (HDF5LibraryException hle) {
+            NodeLogger.getLogger("HDF5 Files").error("Group could not be closed", hle);
         }
 	}
 }

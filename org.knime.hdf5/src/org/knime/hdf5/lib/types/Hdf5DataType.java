@@ -1,5 +1,7 @@
 package org.knime.hdf5.lib.types;
 
+import javax.activation.UnsupportedDataTypeException;
+
 import org.knime.hdf5.lib.Hdf5Attribute;
 
 import hdf.hdf5lib.HDF5Constants;
@@ -135,7 +137,7 @@ public class Hdf5DataType {
 		}
 	}
 	
-	public Hdf5Attribute<?> createAttribute(String name, Object[] data) {
+	public Hdf5Attribute<?> createAttribute(String name, Object[] data) throws UnsupportedDataTypeException {
 		switch (m_knimeType) {
 		case INTEGER:
 			return new Hdf5Attribute<Integer>(name, (Integer[]) data);
@@ -144,11 +146,11 @@ public class Hdf5DataType {
 		case STRING:
 			return new Hdf5Attribute<String>(name, (String[]) data);
 		default:
-			return null;
+			throw new UnsupportedDataTypeException("Unsupported dataType for attribute");
 		}
 	}
 	
-	public Object hdfToKnime(Object in) {
+	public Object hdfToKnime(Object in) throws UnsupportedDataTypeException {
 		switch(m_hdfType.getTypeId()) {
 		case Hdf5HdfDataType.BYTE:
 			return (int) (byte) in;
@@ -186,7 +188,7 @@ public class Hdf5DataType {
 		case Hdf5HdfDataType.STRING:
 			return in;
 		default:
-			return null;
+			throw new UnsupportedDataTypeException("Unknown dataType");
 		}
 	}
 	
