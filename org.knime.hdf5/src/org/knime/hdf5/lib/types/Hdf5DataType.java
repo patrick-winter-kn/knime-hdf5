@@ -84,7 +84,7 @@ public class Hdf5DataType {
 		}
 	}
 	
-	public static Hdf5DataType getTypeByArray(Object[] objects) {
+	public static Hdf5DataType getTypeByArray(Object[] objects) throws UnsupportedDataTypeException {
 		Object type = objects.getClass().getComponentType();
 		if (type.equals(Integer.class)) {
 			return new Hdf5DataType(HDF5Constants.H5T_INTEGER, 4, false, false, false);
@@ -95,7 +95,7 @@ public class Hdf5DataType {
 		} else if (type.equals(String.class)) {
 			return new Hdf5DataType(HDF5Constants.H5T_STRING, DEFAULT_STRING_TYPE_SIZE, false, false, false);
 		}
-		return null;
+		throw new UnsupportedDataTypeException("Datatype of array is not supported");
 	}
 	
 	public Hdf5HdfDataType getHdfType() {

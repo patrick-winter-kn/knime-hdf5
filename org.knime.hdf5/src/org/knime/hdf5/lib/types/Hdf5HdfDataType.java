@@ -12,7 +12,6 @@ import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
-// TODO maybe change back to package visibility if possible
 public class Hdf5HdfDataType {
 
 	public static final int BYTE = 110;
@@ -152,70 +151,75 @@ public class Hdf5HdfDataType {
 	}
 	
 	public synchronized void createInstanceString(final long elementId, final long stringLength) throws AlreadyBoundException {
-		if (LOOKUP_STRING.containsKey(elementId)) {
-			throw new AlreadyBoundException("cannot create String dataType (already exists)");
-		}
-		
-		long filetypeId = -1;
-		long memtypeId = -1;
-		
-    	// Create file and memory datatypes. For this example we will save
-		// the strings as FORTRAN strings, therefore they do not need space
-		// for the null terminator in the file.
-		try {
-			filetypeId = H5.H5Tcopy(HDF5Constants.H5T_FORTRAN_S1);
-			if (filetypeId >= 0) {
-				H5.H5Tset_size(filetypeId, stringLength);
+		if (m_typeId == STRING) {
+			if (LOOKUP_STRING.containsKey(elementId)) {
+				throw new AlreadyBoundException("Cannot create String dataType (already exists)");
 			}
 			
-			memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-			if (memtypeId >= 0) {
-				H5.H5Tset_size(memtypeId, stringLength + 1);
-			}
-			
-			updateInstanceString(elementId, filetypeId, memtypeId, stringLength);
-		} catch (HDF5LibraryException hle) {
-			NodeLogger.getLogger("HDF Files").error("String dataType could not be created", hle);
-		}
-	}
-	
-	// TODO exception in case the dataType is not a string
-	public synchronized void initInstanceString(final long elementId) {
-		if (LOOKUP_STRING.containsKey(elementId)) {
-			equalizeTo(LOOKUP_STRING.get(elementId));
-			
-		} else {
-			long stringLength = -1;
-		
 			long filetypeId = -1;
 			long memtypeId = -1;
+			
+	    	// Create file and memory datatypes. For this example we will save
+			// the strings as FORTRAN strings, therefore they do not need space
+			// for the null terminator in the file.
 			try {
-	    		// Get the datatype and its size.
-	    		if (elementId >= 0) {
-	    			int elementTypeId = H5.H5Iget_type(elementId);
-					filetypeId = elementTypeId == HDF5Constants.H5I_DATASET ? H5.H5Dget_type(elementId)
-							: (elementTypeId == HDF5Constants.H5I_ATTR ? H5.H5Aget_type(elementId) : -1);
-				}
+				filetypeId = H5.H5Tcopy(HDF5Constants.H5T_FORTRAN_S1);
 				if (filetypeId >= 0) {
-					stringLength = H5.H5Tget_size(filetypeId);
-					// (+1) for: Make room for null terminator
+					H5.H5Tset_size(filetypeId, stringLength);
 				}
-	    		
-	    		// Create the memory datatype.
-	    		memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+				
+				memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
 				if (memtypeId >= 0) {
 					H5.H5Tset_size(memtypeId, stringLength + 1);
 				}
-
+				
 				updateInstanceString(elementId, filetypeId, memtypeId, stringLength);
 			} catch (HDF5LibraryException hle) {
-				NodeLogger.getLogger("HDF Files").error("String dataType could not be initialized", hle);
+				NodeLogger.getLogger("HDF Files").error("String dataType could not be created", hle);
+			}
+		}
+	}
+	
+	public synchronized void initInstanceString(final long elementId) {
+		if (m_typeId == STRING) {
+			if (LOOKUP_STRING.containsKey(elementId)) {
+				equalizeTo(LOOKUP_STRING.get(elementId));
+				
+			} else {
+				long stringLength = -1;
+			
+				long filetypeId = -1;
+				long memtypeId = -1;
+				try {
+		    		// Get the dataType and its size.
+		    		if (elementId >= 0) {
+		    			int elementTypeId = H5.H5Iget_type(elementId);
+						filetypeId = elementTypeId == HDF5Constants.H5I_DATASET ? H5.H5Dget_type(elementId)
+								: (elementTypeId == HDF5Constants.H5I_ATTR ? H5.H5Aget_type(elementId) : -1);
+					}
+					if (filetypeId >= 0) {
+						stringLength = H5.H5Tget_size(filetypeId);
+						// (+1) for: Make room for null terminator
+					}
+		    		
+		    		// Create the memory datatype.
+		    		memtypeId = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+					if (memtypeId >= 0) {
+						H5.H5Tset_size(memtypeId, stringLength + 1);
+					}
+	
+					updateInstanceString(elementId, filetypeId, memtypeId, stringLength);
+				} catch (HDF5LibraryException hle) {
+					NodeLogger.getLogger("HDF Files").error("String dataType could not be initialized", hle);
+				}
 			}
 		}
 	}
 
 	public void closeIfString() throws HDF5LibraryException {
 		if (m_typeId == STRING) {
+			LOOKUP_STRING.remove(this);
+			
 	 		// Terminate access to the file and mem type.
 			for (int i = 0; i < 2; i++) {
 				if (getConstants()[i] >= 0) {

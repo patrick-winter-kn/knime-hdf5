@@ -56,7 +56,7 @@ public enum Hdf5KnimeDataType {
 		case STRING:
 			return "String";
 		default:
-			return null;
+			return "Unknown dataType";
 		}
 	}
 }

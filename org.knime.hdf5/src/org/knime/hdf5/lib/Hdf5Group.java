@@ -30,12 +30,13 @@ public class Hdf5Group extends Hdf5TreeElement {
 	protected Hdf5Group(final Hdf5Group parent, final String filePath, final String name, boolean create)
 			throws HDF5LibraryException, NullPointerException, IllegalArgumentException {
 		super(name, filePath);
+		
 		if (!(this instanceof Hdf5File)) {
 			if (parent == null) {
-				throw new NullPointerException("parent of group " + name + " cannot be null");
+				throw new NullPointerException("Parent of group " + name + " cannot be null");
 				
 			} else if (!parent.isOpen()) {
-				throw new IllegalStateException("parent group " + parent.getName() + " is not open!");
+				throw new IllegalStateException("Parent group " + parent.getName() + " is not open!");
 				
 			} else if (!create) {
 				parent.addGroup(this);
@@ -132,7 +133,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 	
 	public Hdf5DataSet<?> createDataSet(final String name, long[] dimensions, 
-			long stringLength, Hdf5DataType type, Hdf5OverwritePolicy policy) {
+			Hdf5DataType type, Hdf5OverwritePolicy policy) {
 		Hdf5DataSet<?> dataSet = null;
 		
 		int objectType = -1;
@@ -149,7 +150,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 			/* dataSet stays null */
 			
 		} else if (objectType == OBJECT_NOT_EXISTS) {
-			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, stringLength, type, true);
+			dataSet = Hdf5DataSet.getInstance(this, name, dimensions, type, true);
 			
 		} else if (policy == Hdf5OverwritePolicy.OVERWRITE && objectType == HDF5Constants.H5I_DATASET) {
 			// TODO implement possibility to overwrite if necessary
@@ -175,7 +176,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				 i++;
 			} while (dataSetNames.contains(newName));
 			
-			dataSet = Hdf5DataSet.getInstance(this, newName, dimensions, stringLength, type, true);
+			dataSet = Hdf5DataSet.getInstance(this, newName, dimensions, type, true);
 		}
 		
 		return dataSet;
@@ -257,29 +258,16 @@ public class Hdf5Group extends Hdf5TreeElement {
 				dataSetId = H5.H5Dopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 				dataspaceId = H5.H5Dget_space(dataSetId);
 
-				int ndims = -1;
-				if (dataspaceId >= 0) {
-					ndims = H5.H5Sget_simple_extent_ndims(dataspaceId);
-				}
-				
+				int ndims = H5.H5Sget_simple_extent_ndims(dataspaceId);
 				long[] dims = new long[ndims];
-				if (dataspaceId >= 0) {
-					H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
-				}
+				H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
 				
-                // Terminate access to the data space.
-                if (dataspaceId >= 0) {
-                	H5.H5Sclose(dataspaceId);
-                }
-
-                // Terminate access to the dataSet.
+                H5.H5Sclose(dataspaceId);
                 H5.H5Dclose(dataSetId);
 				
 				dimensions = dims;
 				
-				// TODO do it without stringLength
-				long stringLength = type.getHdfType().getStringLength();
-				dataSet = Hdf5DataSet.getInstance(this, name, dimensions, stringLength, type, false);
+				dataSet = Hdf5DataSet.getInstance(this, name, dimensions, type, false);
 				
 			} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException hlnpiae) {
 				NodeLogger.getLogger("HDF5 Files").error(hlnpiae.getMessage(), hlnpiae);

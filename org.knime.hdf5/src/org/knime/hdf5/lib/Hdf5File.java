@@ -2,32 +2,45 @@ package org.knime.hdf5.lib;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import org.knime.core.node.NodeLogger;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
-import hdf.hdf5lib.exceptions.HDF5FileInterfaceException;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5File extends Hdf5Group {
 	
+	public static final int READ_ONLY_ACCESS = 0;
+	
+	public static final int WRITE_ACCESS = 1;
+	
 	private static final List<Hdf5File> ALL_FILES = new ArrayList<>();
+
+	// private static int readersAmount;
+	
+	// private int m_access;
 
 	/* TODO when opening the file: make a backup of the file because sometimes there were some things wrong with datasets/groups in it
 	 * it happened when ...
 	 * - creating dataset/group with the same name directly after deleting it in HDFView (not always, only when there were (x is a name) x, x(1), x(2), x(3) and deleted and readded x(2))
 	 * - TODO has to be checked if or when it also happens with the method getDataSet() in Hdf5Group
 	 */
-	private Hdf5File(final String filePath) throws HDF5LibraryException, NullPointerException, IllegalArgumentException {
+	private Hdf5File(final String filePath, final boolean create)
+			throws HDF5LibraryException, NullPointerException, IllegalArgumentException {
 		super(null, filePath, filePath.substring(filePath.lastIndexOf(File.separator) + 1), true);
 		
 		ALL_FILES.add(this);
         setPathFromFile("");
-		open();
+        
+        if (create) {
+        	create();
+        } else {
+    		open();
+        }
 	}
 	
 	/**
@@ -37,20 +50,14 @@ public class Hdf5File extends Hdf5Group {
 	 * 
 	 * @param filePath The path to the file from the src directory.
 	 */
-	public static Hdf5File createFile(final String filePath) {
-		Iterator<Hdf5File> iter = ALL_FILES.iterator();
-		while (iter.hasNext()) {
-			Hdf5File file = iter.next();
-			if (file.getFilePath().equals(filePath)) {
-				file.open();
-				return file;
-			}
+	public static Hdf5File createFile(final String filePath) throws IOException {
+		if (new File(filePath).exists()) {
+			throw new IOException("The file \"" + filePath + "\" does already exist");
 		}
 		
 		Hdf5File file = null;
-		
 		try {
-			file = new Hdf5File(filePath);
+			file = new Hdf5File(filePath, true);
 			
 		} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException hlnpiae) {
 			NodeLogger.getLogger("HDF5 Files").error(hlnpiae.getMessage(), hlnpiae);
@@ -59,16 +66,41 @@ public class Hdf5File extends Hdf5Group {
 		return file;
 	}
 	
-	public static Hdf5File openFile(final String filePath) throws IOException {
+	public static Hdf5File openFile(final String filePath, final int access) throws IOException {
 		if (!new File(filePath).exists()) {
 			throw new IOException("The file \"" + filePath + "\" does not exist");
 		}
-		return createFile(filePath);
+		
+		Iterator<Hdf5File> iter = ALL_FILES.iterator();
+		while (iter.hasNext()) {
+			Hdf5File file = iter.next();
+			if (file.getFilePath().equals(filePath)) {
+				file.open();
+				return file;
+			}
+		}
+
+		Hdf5File file = null;
+		try {
+			file = new Hdf5File(filePath, false);
+			
+		} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException hlnpiae) {
+			NodeLogger.getLogger("HDF5 Files").error(hlnpiae.getMessage(), hlnpiae);
+		}
+		
+		return file;
 	}
 	
-	/**
-	 * 
-	 */
+	private void create() {
+		try {
+			setElementId(H5.H5Fcreate(getFilePath(), HDF5Constants.H5F_ACC_TRUNC, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
+            setOpen(true);
+            
+        } catch (HDF5LibraryException | NullPointerException hlnpe) {
+            NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be created", hlnpe);
+		}
+	}
+	
 	public void open() {
 		try {
 			if (!isOpen()) {
@@ -76,16 +108,8 @@ public class Hdf5File extends Hdf5Group {
 						HDF5Constants.H5P_DEFAULT));
 				setOpen(true);
 			}
-		} catch (HDF5FileInterfaceException fie) {
-	    	try {
-				setElementId(H5.H5Fcreate(getFilePath(), HDF5Constants.H5F_ACC_TRUNC, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
-                setOpen(true);
-                
-            } catch (Exception e) {
-                NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be created", e);
-			}
-        } catch (Exception e) {
-            NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be opened", e);
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+            NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be opened", hlnpe);
         }
 	}
 	

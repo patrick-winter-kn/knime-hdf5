@@ -65,7 +65,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		BufferedDataContainer outContainer = null;
 
 		try {
-			file = Hdf5File.openFile(m_filePathSettings.getStringValue());
+			file = Hdf5File.openFile(m_filePathSettings.getStringValue(), Hdf5File.READ_ONLY_ACCESS);
 			outContainer = exec.createDataContainer(createOutSpec());
 			String[] dataSetPaths = m_dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
 
@@ -137,12 +137,12 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		if (filePath != null) {
 			Hdf5File file = null;
 			try {
-				file = Hdf5File.openFile(filePath);
-			} catch (IOException e) {
-				throw new InvalidSettingsException(e.getMessage(), e);
+				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+			} catch (IOException ioe) {
+				throw new InvalidSettingsException(ioe.getMessage(), ioe);
 			}
 			String[] dataSetPaths = m_dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
-			file = Hdf5File.createFile(filePath);
+			
 			for (String dsPath : dataSetPaths) {
 				Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPath);
 				Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
@@ -187,12 +187,15 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		if (!new File(filePath).exists()) {
 			throw new InvalidSettingsException("The selected file \"" + filePath + "\" does not exist");
 		}
+		
 		Hdf5File file = null;
 		try {
-			file = Hdf5File.openFile(filePath);
+			file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+			
 		} catch (Exception e) {
 			throw new InvalidSettingsException(e.getMessage(), e);
 		}
+		
 		if (failIfRowSizeDiffersSettings.getBooleanValue()) {
 			String[] dataSetPaths = dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
 			Set<Long> rowSizes = new TreeSet<>();

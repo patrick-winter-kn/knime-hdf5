@@ -43,13 +43,13 @@ abstract public class Hdf5TreeElement {
 	protected Hdf5TreeElement(final String name, final String filePath)
 			throws NullPointerException, IllegalArgumentException {
 		if (name == null) {
-			throw new NullPointerException("name is null");
+			throw new NullPointerException("Name is null");
 			
 		} else if (name.equals("")) {
-			throw new IllegalArgumentException("name may not be the empty String!");
+			throw new IllegalArgumentException("Name may not be the empty String");
 			
 		} else if (name.contains("/")) {
-			throw new IllegalArgumentException("name " + name + " contains '/'");
+			throw new IllegalArgumentException("Name " + name + " contains '/'");
 		}
 		
 		m_name = name;
@@ -114,6 +114,40 @@ abstract public class Hdf5TreeElement {
 	
 	public String getPathFromFileWithName() {
 		return getPathFromFileWithName(true);
+	}
+	
+	public void createAttribute(Hdf5Attribute<?> attribute) {
+		if (attribute.getType().isHdfType(Hdf5HdfDataType.STRING)) {
+    		try {
+    			// TODO the value of the stringLength defined in the HDF5Writer is needed here
+				attribute.getType().getHdfType().createInstanceString(attribute.getAttributeId(),
+						attribute.getType().getHdfType().getStringLength());
+				
+			} catch (AlreadyBoundException abe) {
+				NodeLogger.getLogger("HDF5 Files").error(abe.getMessage(), abe);
+			}
+    	}
+    	
+        try {
+        	// Create the data space for the attribute.
+        	long[] dims = { attribute.getDimension() };
+        	attribute.setDataspaceId(H5.H5Screate_simple(1, dims, null));
+
+            // Create the attribute and write the data of the Hdf5Attribute into it.
+            if (getElementId() >= 0 && attribute.getDataspaceId() >= 0 && attribute.getType().getConstants()[0] >= 0) {
+            	attribute.setAttributeId(H5.H5Acreate(getElementId(), attribute.getName(),
+                		attribute.getType().getConstants()[0], attribute.getDataspaceId(),
+                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
+            	attribute.setOpen(true);
+                
+                if (attribute.getAttributeId() >= 0 && attribute.getType().getConstants()[1] >= 0) {
+                    H5.H5Awrite(attribute.getAttributeId(), attribute.getType().getConstants()[1], attribute.getValue());
+            		getAttributes().add(attribute);
+                }
+            }
+        } catch (HDF5Exception | NullPointerException hnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("Attribute could not be created", hnpe);
+        }
 	}
 	
 	public Hdf5Attribute<?> getAttribute(final String name) {
@@ -281,7 +315,6 @@ abstract public class Hdf5TreeElement {
 				}
 				
 				dataType = new Hdf5DataType(classId, size, unsigned, vlen, false);
-				
 				if (classId == HDF5Constants.H5T_STRING) {
 					dataType.getHdfType().initInstanceString(attributeId);
 				}
@@ -297,47 +330,5 @@ abstract public class Hdf5TreeElement {
 			throw new IllegalArgumentException("There isn't an attribute \"" + name + "\" in treeElement \""
 					+ getPathFromFile() + getName() + "\"");
 		}
-	}
-	
-	public void addAttribute(Hdf5Attribute<?> attribute) {
-		try {
-            if (getElementId() >= 0) {
-            	attribute.setAttributeId(H5.H5Aopen(getElementId(), attribute.getName(), HDF5Constants.H5P_DEFAULT));
-        		getAttributes().add(attribute);
-        		attribute.loadDimension();
-            	attribute.setOpen(true);
-            }
-        } catch (HDF5LibraryException le) {
-        	// TODO makes no sense at the moment, but will be changed when the HDF5WriterDialog has been implemented
-        	if (attribute.getType().isHdfType(Hdf5HdfDataType.STRING)) {
-        		try {
-					attribute.getType().getHdfType().createInstanceString(attribute.getAttributeId(),
-							attribute.getType().getHdfType().getStringLength());
-				} catch (AlreadyBoundException e) {
-					// TODO Auto-generated catch block
-				}
-        	}
-        	
-            try {
-            	// Create the data space for the attribute.
-            	long[] dims = { attribute.getDimension() };
-            	attribute.setDataspaceId(H5.H5Screate_simple(1, dims, null));
-
-                // Create the attribute and write the data of the Hdf5Attribute into it.
-                if (getElementId() >= 0 && attribute.getDataspaceId() >= 0 && attribute.getType().getConstants()[0] >= 0) {
-                	attribute.setAttributeId(H5.H5Acreate(getElementId(), attribute.getName(),
-                    		attribute.getType().getConstants()[0], attribute.getDataspaceId(),
-                            HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
-                	attribute.setOpen(true);
-                    
-                    if (attribute.getAttributeId() >= 0 && attribute.getType().getConstants()[1] >= 0) {
-                        H5.H5Awrite(attribute.getAttributeId(), attribute.getType().getConstants()[1], attribute.getValue());
-                		getAttributes().add(attribute);
-                    }
-                }
-            } catch (HDF5Exception | NullPointerException hnpe) {
-                NodeLogger.getLogger("HDF5 Files").error("Attribute could not be created", hnpe);
-            }
-        }
 	}
 }

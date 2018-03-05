@@ -1,5 +1,7 @@
 package org.knime.hdf5.nodes.reader;
 
+import java.io.IOException;
+
 import javax.swing.BorderFactory;
 import javax.swing.JFileChooser;
 import javax.swing.event.ChangeEvent;
@@ -80,14 +82,17 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 			config.saveConfiguration(tempSettings);
 			settings = tempSettings;
 		}
+		
 		DataTableSpec spec = null;
 		try {
-			Hdf5File file = Hdf5File.openFile(filePath);
+			Hdf5File file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
 			spec = file.createSpecOfDataSets();
 			file.close();
-		} catch (Exception e) {
+			
+		} catch (IOException ioe) {
 			spec = new DataTableSpec();
 		}
+		
 		config.loadConfigurationInDialog(settings, spec);
 		m_dataSetFilterPanel.loadConfiguration(config, spec);
 	}
@@ -100,14 +105,17 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 			config.saveConfiguration(tempSettings);
 			settings = tempSettings;
 		}
+		
 		DataTableSpec spec = null;
 		try {
-			Hdf5File file = Hdf5File.openFile(filePath);
+			Hdf5File file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
 			spec = file.createSpecOfAttributes();
 			file.close();
-		} catch (Exception e) {
+			
+		} catch (IOException ioe) {
 			spec = new DataTableSpec();
 		}
+		
 		config.loadConfigurationInDialog(settings, spec);
 		m_attributeFilterPanel.loadConfiguration(config, spec);
 	}
