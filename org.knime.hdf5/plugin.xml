@@ -27,4 +27,16 @@
 			category-path="/community/hdf5">
 		</node>
 	</extension>
+	<extension
+	      point="org.knime.workbench.repository.registeredFileExtensions">
+	      <FileExtensionMapping
+             NodeFactory="org.knime.hdf5.nodes.reader.HDF5ReaderNodeFactory">
+          <FileExtension
+                extension=".h5">
+          </FileExtension>
+          <FileExtension
+                extension=".hdf5">
+          </FileExtension>
+	      </FileExtensionMapping>
+	</extension>
 </plugin>

@@ -22,6 +22,7 @@ import org.knime.core.node.CanceledExecutionException;
 import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.ExecutionMonitor;
 import org.knime.core.node.InvalidSettingsException;
+import org.knime.core.node.NodeCreationContext;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeModel;
 import org.knime.core.node.NodeSettingsRO;
@@ -48,6 +49,13 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		super(0, 1);
 		m_filePathSettings = SettingsFactory.createFilePathSettings();
 		m_failIfRowSizeDiffersSettings = SettingsFactory.createFailIfRowSizeDiffersSettings();
+		m_dataSetFilterConfig = SettingsFactory.createDataSetFilterConfiguration();
+		m_attributeFilterConfig = SettingsFactory.createAttributeFilterConfiguration();
+	}
+	
+	protected HDF5ReaderNodeModel(NodeCreationContext context) {
+		this();
+		m_filePathSettings.setStringValue(context.getUrl().getPath());
 	}
 
 	@Override

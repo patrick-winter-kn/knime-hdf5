@@ -56,7 +56,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		m_filePathSettings = SettingsFactory.createFilePathSettings();
 		FlowVariableModel filePathFvm = super.createFlowVariableModel(m_filePathSettings);
 		DialogComponentFileChooser fileChooser = new DialogComponentFileChooser(m_filePathSettings, "filePathHistory",
-				JFileChooser.OPEN_DIALOG, false, filePathFvm, ".h5");
+				JFileChooser.OPEN_DIALOG, false, filePathFvm, ".h5|.hdf5");
 		fileChooser.setBorderTitle("Input file:");
 		addDialogComponent(fileChooser);
 		fileChooser.getModel().addChangeListener(new ChangeListener() {
