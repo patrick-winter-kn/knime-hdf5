@@ -149,7 +149,8 @@ public class Hdf5DataType {
 			throw new UnsupportedDataTypeException("Unsupported dataType for attribute");
 		}
 	}
-	
+
+	//public <T, S extends Number, S extends String> S hdfToKnime(T in) throws UnsupportedDataTypeException {
 	public Object hdfToKnime(Object in) throws UnsupportedDataTypeException {
 		switch(m_hdfType.getTypeId()) {
 		case Hdf5HdfDataType.BYTE:

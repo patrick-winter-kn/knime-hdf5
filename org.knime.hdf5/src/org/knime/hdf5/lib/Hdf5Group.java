@@ -301,7 +301,10 @@ public class Hdf5Group extends Hdf5TreeElement {
 	private int getObjectTypeByName(final String name) throws HDF5LibraryException, NullPointerException {
 		if (H5.H5Oexists_by_name(getElementId(), name, HDF5Constants.H5P_DEFAULT)) {
 			long elementId = H5.H5Oopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
-			return H5.H5Iget_type(elementId); 
+			int typeId = H5.H5Iget_type(elementId); 
+			H5.H5Oclose(elementId);
+			
+			return typeId;
 		}
 		
 		return OBJECT_NOT_EXISTS;
@@ -548,6 +551,9 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 	
 	public void open() {
+		if (this instanceof Hdf5File) {
+			throw new IllegalStateException("Wrong method used for Hdf5File");
+		}
 		try {
 			if (!isOpen()) {
 				if (!getParent().isOpen()) {

@@ -77,10 +77,16 @@ abstract public class Hdf5TreeElement {
 	}
 
 	protected boolean isOpen() {
+		if (this instanceof Hdf5File) {
+			throw new IllegalStateException("Wrong method used for Hdf5File");
+		}
 		return m_open;
 	}
 
 	protected void setOpen(boolean open) {
+		if (this instanceof Hdf5File) {
+			throw new IllegalStateException("Wrong method used for Hdf5File");
+		}
 		m_open = open;
 	}
 
