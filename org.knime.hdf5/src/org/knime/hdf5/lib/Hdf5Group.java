@@ -33,10 +33,10 @@ public class Hdf5Group extends Hdf5TreeElement {
 		
 		if (!(this instanceof Hdf5File)) {
 			if (parent == null) {
-				throw new NullPointerException("Parent of group " + name + " cannot be null");
+				throw new NullPointerException("Parent of group \"" + name + "\" cannot be null");
 				
 			} else if (!parent.isOpen()) {
-				throw new IllegalStateException("Parent group " + parent.getName() + " is not open!");
+				throw new IllegalStateException("Parent group \"" + parent.getName() + "\" is not open!");
 				
 			} else if (!create) {
 				parent.addGroup(this);
@@ -344,7 +344,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 					}
 				}
 			} else {
-				NodeLogger.getLogger("HDF5 Files").error("The parent " + group.getPathFromFile() + group.getName() + " is not open!", new IllegalStateException());
+				NodeLogger.getLogger("HDF5 Files").error("The parent \"" + group.getPathFromFile() + group.getName() + "\" is not open!", new IllegalStateException());
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
             NodeLogger.getLogger("HDF5 Files").error("List of objects could not be loaded", hlnpe);
@@ -545,8 +545,8 @@ public class Hdf5Group extends Hdf5TreeElement {
 
 			return dataType;
 		} else {
-			throw new IllegalArgumentException("There isn't a dataSet \"" + name + "\" in group"
-					+ getPathFromFile() + getName());
+			throw new IllegalArgumentException("There isn't a dataSet \"" + name + "\" in group \""
+					+ getPathFromFile() + getName() + "\"");
 		}
 	}
 	

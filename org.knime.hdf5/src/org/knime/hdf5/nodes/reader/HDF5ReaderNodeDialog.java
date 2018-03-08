@@ -86,8 +86,11 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		DataTableSpec spec = null;
 		try {
 			Hdf5File file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-			spec = file.createSpecOfDataSets();
-			file.close();
+			try {
+				spec = file.createSpecOfDataSets();
+			} finally {
+				file.close();
+			}
 			
 		} catch (IOException ioe) {
 			spec = new DataTableSpec();
@@ -109,8 +112,11 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		DataTableSpec spec = null;
 		try {
 			Hdf5File file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-			spec = file.createSpecOfAttributes();
-			file.close();
+			try {
+				spec = file.createSpecOfAttributes();
+			} finally {
+				file.close();
+			}
 			
 		} catch (IOException ioe) {
 			spec = new DataTableSpec();

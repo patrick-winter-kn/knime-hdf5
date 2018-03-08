@@ -141,30 +141,35 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			} catch (IOException ioe) {
 				throw new InvalidSettingsException(ioe.getMessage(), ioe);
 			}
-			String[] dataSetPaths = m_dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
 			
-			for (String dsPath : dataSetPaths) {
-				Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPath);
-				Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
-				
-				try {
-					DataType type = dataType.getColumnDataType();
-	
-					if (dataSet.getDimensions().length > 1) {
-						long[] colDims = new long[dataSet.getDimensions().length - 1];
-						Arrays.fill(colDims, 0);
-	
-						do {
-							colSpecList
-									.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
-						} while (dataSet.nextColumnDims(colDims));
-	
-					} else {
-						colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
+			try {
+				String[] dataSetPaths = m_dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
+			
+				for (String dsPath : dataSetPaths) {
+					Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPath);
+					Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
+					
+					try {
+						DataType type = dataType.getColumnDataType();
+		
+						if (dataSet.getDimensions().length > 1) {
+							long[] colDims = new long[dataSet.getDimensions().length - 1];
+							Arrays.fill(colDims, 0);
+		
+							do {
+								colSpecList
+										.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
+							} while (dataSet.nextColumnDims(colDims));
+		
+						} else {
+							colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
+						}
+					} catch (UnsupportedDataTypeException udte) {
+						NodeLogger.getLogger("HDF5 Files").warn("Unknown dataType of columns in \"" + dsPath + "\"");
 					}
-				} catch (UnsupportedDataTypeException udte) {
-					NodeLogger.getLogger("HDF5 Files").warn("Unknown dataType of columns in \"" + dsPath + "\"");
 				}
+			} finally {
+				file.close();
 			}
 		}
 
@@ -196,16 +201,20 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			throw new InvalidSettingsException(e.getMessage(), e);
 		}
 		
-		if (failIfRowSizeDiffersSettings.getBooleanValue()) {
-			String[] dataSetPaths = dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
-			Set<Long> rowSizes = new TreeSet<>();
-			for (String dataSetPath : dataSetPaths) {
-				Hdf5DataSet<?> dataSet = file.getDataSetByPath(dataSetPath);
-				rowSizes.add(dataSet.getDimensions()[0]);
+		try {
+			if (failIfRowSizeDiffersSettings.getBooleanValue()) {
+				String[] dataSetPaths = dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
+				Set<Long> rowSizes = new TreeSet<>();
+				for (String dataSetPath : dataSetPaths) {
+					Hdf5DataSet<?> dataSet = file.getDataSetByPath(dataSetPath);
+					rowSizes.add(dataSet.getDimensions()[0]);
+				}
+				if (rowSizes.size() > 1) {
+					throw new InvalidSettingsException("Found unequal row sizes " + rowSizes);
+				}
 			}
-			if (rowSizes.size() > 1) {
-				throw new InvalidSettingsException("Found unequal row sizes " + rowSizes);
-			}
+		} finally {
+			file.close();
 		}
 	}
 
