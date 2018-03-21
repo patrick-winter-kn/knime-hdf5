@@ -149,8 +149,25 @@ public class Hdf5DataType {
 			throw new UnsupportedDataTypeException("Unsupported dataType for attribute");
 		}
 	}
-
-	//public <T, S extends Number, S extends String> S hdfToKnime(T in) throws UnsupportedDataTypeException {
+	
+//	public Class<Byte> getHdfClass() {
+//		return Byte.class;
+//	}
+//	
+//	public Class<Integer> getKnimeClass() {
+//		return Integer.class;
+//	}
+//	
+//	public <T, S> S hdfToKnime(Class<T> hdfClass, T in, Class<S> knimeClass) throws UnsupportedDataTypeException {
+//		/* check if the parameters are the correct classes according to this object of Hdf5DataType */
+//		if (hdfClass == Byte.class) {
+//			int byteValue = (int) (byte) in;
+//			return knimeClass.cast(byteValue + (isHdfType(Hdf5HdfDataType.UBYTE) && byteValue < 0 ? POW_2_8 : 0));
+//		}
+//		
+//		return null;
+//	}
+	
 	public Object hdfToKnime(Object in) throws UnsupportedDataTypeException {
 		switch(m_hdfType.getTypeId()) {
 		case Hdf5HdfDataType.BYTE:

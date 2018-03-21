@@ -374,7 +374,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 		while (iterG.hasNext()) {
 			Hdf5Group group = getGroup(iterG.next());
 			paths.addAll(group.getAllDataSetPaths());
-			group.close();
 		}
 		
 		return paths;
@@ -385,58 +384,61 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * @param object only useful for HDF5Constants.ATTR and HDF5Constants.DATASET
 	 * @return
 	 */
-	private Map<String, Hdf5DataType> getAllObjectsInfoOfType(int objectId) {
+	private Map<String, Hdf5DataType> getAllObjectsInfoOfType(int objectId) throws IllegalStateException {
 		Map<String, Hdf5DataType> paths = new LinkedHashMap<>();
-		String path = getPathFromFileWithName(false);
 		
-		if (objectId == HDF5Constants.H5I_ATTR) {
-			Iterator<String> iterAttr = loadAttributeNames().iterator();
-			while (iterAttr.hasNext()) {
-				String name = iterAttr.next();
+		if (isOpen()) {
+			String path = getPathFromFileWithName(false);
+			
+			if (objectId == HDF5Constants.H5I_ATTR) {
+				Iterator<String> iterAttr = loadAttributeNames().iterator();
+				while (iterAttr.hasNext()) {
+					String name = iterAttr.next();
+					
+					try {
+						Hdf5DataType dataType = findAttributeType(name);
+						paths.put(path + name, dataType);
+						
+					} catch (IllegalArgumentException iae) {
+						NodeLogger.getLogger("HDF5 Files").error(iae.getMessage(), iae);
+						
+					} catch (UnsupportedDataTypeException udte) {
+						NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
+					}
+				}
 				
-				try {
-					Hdf5DataType dataType = findAttributeType(name);
-					paths.put(path + name, dataType);
+				Iterator<String> iterDS = loadDataSetNames().iterator();
+				while (iterDS.hasNext()) {
+					Hdf5DataSet<?> dataSet = getDataSet(iterDS.next());
+					if (dataSet != null) {
+						paths.putAll(dataSet.getDirectAttributesInfo());
+					}
+				}
+			} else if (objectId == HDF5Constants.H5I_DATASET) {
+				Iterator<String> iterDS = loadDataSetNames().iterator();
+				while (iterDS.hasNext()) {
+					String name = iterDS.next();
 					
-				} catch (IllegalArgumentException iae) {
-					NodeLogger.getLogger("HDF5 Files").error(iae.getMessage(), iae);
-					
-				} catch (UnsupportedDataTypeException udte) {
-					NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
+					try {
+						Hdf5DataType dataType = findDataSetType(name);
+						paths.put(path + name, dataType);
+
+					} catch (IllegalArgumentException iae) {
+						NodeLogger.getLogger("HDF5 Files").error(iae.getMessage(), iae);
+						
+					} catch (UnsupportedDataTypeException udte) {
+						NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
+					}
 				}
 			}
 			
-			Iterator<String> iterDS = loadDataSetNames().iterator();
-			while (iterDS.hasNext()) {
-				Hdf5DataSet<?> dataSet = getDataSet(iterDS.next());
-				if (dataSet != null) {
-					paths.putAll(dataSet.getDirectAttributesInfo());
-					dataSet.close();
-				}
+			Iterator<String> iterG = loadGroupNames().iterator();
+			while (iterG.hasNext()) {
+				Hdf5Group group = getGroup(iterG.next());
+				paths.putAll(group.getAllObjectsInfoOfType(objectId));
 			}
-		} else if (objectId == HDF5Constants.H5I_DATASET) {
-			Iterator<String> iterDS = loadDataSetNames().iterator();
-			while (iterDS.hasNext()) {
-				String name = iterDS.next();
-				
-				try {
-					Hdf5DataType dataType = findDataSetType(name);
-					paths.put(path + name, dataType);
-
-				} catch (IllegalArgumentException iae) {
-					NodeLogger.getLogger("HDF5 Files").error(iae.getMessage(), iae);
-					
-				} catch (UnsupportedDataTypeException udte) {
-					NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
-				}
-			}
-		}
-		
-		Iterator<String> iterG = loadGroupNames().iterator();
-		while (iterG.hasNext()) {
-			Hdf5Group group = getGroup(iterG.next());
-			paths.putAll(group.getAllObjectsInfoOfType(objectId));
-			group.close();
+		} else {
+			throw new IllegalStateException("\"" + getPathFromFileWithName() + "\" is not open");
 		}
 		
 		return paths;

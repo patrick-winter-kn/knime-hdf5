@@ -291,12 +291,15 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 					Object[] dataRead = (Object[]) dataType.getHdfType().createArray((int) numberOfValuesFrom(1));
 		            H5.H5Dread(getElementId(), dataType.getConstants()[1],
 		            		memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, dataRead);
+//					Class<Type> hdfClass = (Class<Type>) ((Type) dataRead[0]).getClass();
+//					Class<Type> knimeClass = (Class<Type>) ((Type) dataRead[0]).getClass();
 					for (int i = 0; i < dataRead.length; i++) {
+//						dataOut[i] = (Type) dataType.hdfToKnime(dataType.getHdfClass(), dataType.getHdfClass().cast(dataRead[i]), knimeClass);
 						dataOut[i] = (Type) dataType.hdfToKnime(dataRead[i]);
 					}
 				}
 			}
-	    }  catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException | IllegalArgumentException hludtnpiae) {
+	    } catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException | IllegalArgumentException hludtnpiae) {
             NodeLogger.getLogger("HDF5 Files").error(hludtnpiae.getMessage(), hludtnpiae);
         }
 		
