@@ -43,13 +43,13 @@ abstract public class Hdf5TreeElement {
 	protected Hdf5TreeElement(final String name, final String filePath)
 			throws NullPointerException, IllegalArgumentException {
 		if (name == null) {
-			throw new NullPointerException("Name is null");
+			throw new NullPointerException("name cannot be null");
 			
 		} else if (name.equals("")) {
-			throw new IllegalArgumentException("Name may not be the empty String");
+			throw new IllegalArgumentException("name cannot be the Empty String");
 			
 		} else if (name.contains("/")) {
-			throw new IllegalArgumentException("Name " + name + " contains '/'");
+			throw new IllegalArgumentException("name \"" + name + "\" cannot contain '/'");
 		}
 		
 		m_name = name;
@@ -156,7 +156,7 @@ abstract public class Hdf5TreeElement {
         }
 	}
 	
-	public Hdf5Attribute<?> getAttribute(final String name) {
+	public synchronized Hdf5Attribute<?> getAttribute(final String name) {
 		Hdf5Attribute<?> attribute = null;
 		
 		Iterator<Hdf5Attribute<?>> iter = getAttributes().iterator();

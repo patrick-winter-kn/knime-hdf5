@@ -44,17 +44,16 @@ public class Hdf5HdfDataType {
 	 * 
 	 * TODO {@code VLEN} and {@code REFERENCE} are not implemented
 	 * 
-	 * @param typeId
+	 * @param typeId - 
 	 * 				This is the code for the {@code Hdf5HdfDataType}
 	 * 				and has the following structure: <br>
 	 * 				<br>
 	 * 				{@code typeId = 100 * a + 10 * b + 1 * c} <br>
 	 * 				<br>
-	 * 				{@code a} is its size (in bytes) <br>
-	 * 				{@code b} is its base dataType ({@code b == 1} for int, {@code b == 2} for float, {@code b == 3} for char) <br>
+	 * 				{@code a} is its size in bytes (only for numbers) <br>
+	 * 				{@code b} is its base dataType ({@code b == 1} for int, {@code b == 2} for float, {@code b == 3} for char,
+	 * 						{@code b == 4} for String, {@code b == 5} for reference) <br>
 	 * 				{@code c} is its sign ({@code c == 0} for signed, {@code c == 1} for unsigned) <br>
-	 * 				<br>
-	 * 				{@code typeId == 0} if it isn't a int, float or char
 	 * 
 	 */
 	private Hdf5HdfDataType(final int typeId) {

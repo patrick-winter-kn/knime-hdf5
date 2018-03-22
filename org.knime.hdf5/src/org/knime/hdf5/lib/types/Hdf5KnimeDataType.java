@@ -26,7 +26,7 @@ public enum Hdf5KnimeDataType {
 		case STRING:
 			return StringCell.TYPE;
 		default:
-			throw new UnsupportedDataTypeException("");
+			throw new UnsupportedDataTypeException("Unknown dataType");
 		}
 	}
 

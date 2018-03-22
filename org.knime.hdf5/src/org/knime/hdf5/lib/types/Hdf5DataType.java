@@ -88,14 +88,12 @@ public class Hdf5DataType {
 		Object type = objects.getClass().getComponentType();
 		if (type.equals(Integer.class)) {
 			return new Hdf5DataType(HDF5Constants.H5T_INTEGER, 4, false, false, false);
-		} else if (type.equals(Long.class)) {
-			return new Hdf5DataType(HDF5Constants.H5T_INTEGER, 8, false, false, false);
 		} else if (type.equals(Double.class)) {
 			return new Hdf5DataType(HDF5Constants.H5T_FLOAT, 8, false, false, false);
 		} else if (type.equals(String.class)) {
 			return new Hdf5DataType(HDF5Constants.H5T_STRING, DEFAULT_STRING_TYPE_SIZE, false, false, false);
 		}
-		throw new UnsupportedDataTypeException("Datatype of array is not supported");
+		throw new UnsupportedDataTypeException("KnimeDataType of array is not supported");
 	}
 	
 	public Hdf5HdfDataType getHdfType() {
@@ -146,68 +144,96 @@ public class Hdf5DataType {
 		case STRING:
 			return new Hdf5Attribute<String>(name, (String[]) data);
 		default:
-			throw new UnsupportedDataTypeException("Unsupported dataType for attribute");
+			throw new UnsupportedDataTypeException("Unsupported knimeDataType for attribute");
 		}
 	}
 	
-//	public Class<Byte> getHdfClass() {
-//		return Byte.class;
-//	}
-//	
-//	public Class<Integer> getKnimeClass() {
-//		return Integer.class;
-//	}
-//	
-//	public <T, S> S hdfToKnime(Class<T> hdfClass, T in, Class<S> knimeClass) throws UnsupportedDataTypeException {
-//		/* check if the parameters are the correct classes according to this object of Hdf5DataType */
-//		if (hdfClass == Byte.class) {
-//			int byteValue = (int) (byte) in;
-//			return knimeClass.cast(byteValue + (isHdfType(Hdf5HdfDataType.UBYTE) && byteValue < 0 ? POW_2_8 : 0));
-//		}
-//		
-//		return null;
-//	}
-	
-	public Object hdfToKnime(Object in) throws UnsupportedDataTypeException {
+	public Class<?> getHdfClass() throws UnsupportedDataTypeException {
 		switch(m_hdfType.getTypeId()) {
 		case Hdf5HdfDataType.BYTE:
-			return (int) (byte) in;
 		case Hdf5HdfDataType.UBYTE:
-			int ubyteValue = (int) (byte) in;
-			return ubyteValue + (ubyteValue < 0 ? POW_2_8 : 0);
+			return Byte.class;
 		case Hdf5HdfDataType.SHORT:
-			return (int) (short) in;
 		case Hdf5HdfDataType.USHORT:
-			int ushortValue = (int) (short) in;
-			return ushortValue + (ushortValue < 0 ? POW_2_16 : 0);
+			return Short.class;
 		case Hdf5HdfDataType.UINTEGER:
-			long uintegerValue = (long) (int) in;
-			uintegerValue = uintegerValue + (uintegerValue < 0 ? POW_2_32 : 0);
-			if (m_fromDS) {
-				return uintegerValue;
-			} else {
-				return (double) uintegerValue;
-			}
-		case Hdf5HdfDataType.LONG:
-			if (m_fromDS) {
-				return in;
-			} else {
-				return (double) (long) in;
-			}
-		case Hdf5HdfDataType.ULONG:
-			double ulongValue = (double) (long) in;
-			return ulongValue + (ulongValue < 0 ? POW_2_64 : 0);
-		case Hdf5HdfDataType.FLOAT:
-			return (double) (float) in;
 		case Hdf5HdfDataType.INTEGER:
+			return Integer.class;
+		case Hdf5HdfDataType.LONG:
+		case Hdf5HdfDataType.ULONG:
+			return Long.class;
+		case Hdf5HdfDataType.FLOAT:
+			return Float.class;
 		case Hdf5HdfDataType.DOUBLE:
+			return Double.class;
 		case Hdf5HdfDataType.CHAR:
 		case Hdf5HdfDataType.UCHAR:
+			return Character.class;
 		case Hdf5HdfDataType.STRING:
-			return in;
+			return String.class;
 		default:
-			throw new UnsupportedDataTypeException("Unknown dataType");
+			throw new UnsupportedDataTypeException("Unknown hdfDataType");
 		}
+	}
+	
+	public Class<?> getKnimeClass() throws UnsupportedDataTypeException {
+		switch (m_knimeType) {
+		case INTEGER:
+			return Integer.class;
+		case DOUBLE:
+			return Double.class;
+		case LONG:
+			return Long.class;
+		case STRING:
+			return String.class;
+		default:
+			throw new UnsupportedDataTypeException("Unknown knimeDataType");
+		}
+	}
+	
+	public <T, S> S hdfToKnime(Class<T> hdfClass, T in, Class<S> knimeClass) throws UnsupportedDataTypeException {
+		if (hdfClass == in.getClass() && hdfClass == getHdfClass()) {
+			if (isHdfType(Hdf5HdfDataType.INTEGER) || isHdfType(Hdf5HdfDataType.DOUBLE) || isHdfType(Hdf5HdfDataType.CHAR)
+					|| isHdfType(Hdf5HdfDataType.UCHAR) || isHdfType(Hdf5HdfDataType.STRING)) {
+				return knimeClass.cast(in);
+			}
+			
+			if (hdfClass == Byte.class) {
+				int byteValue = (int) (byte) in;
+				return knimeClass.cast(byteValue + (isHdfType(Hdf5HdfDataType.UBYTE) && byteValue < 0 ? POW_2_8 : 0));
+				
+			} else if (hdfClass == Short.class) {
+				int shortValue = (int) (short) in;
+				return knimeClass.cast(shortValue + (isHdfType(Hdf5HdfDataType.USHORT) && shortValue < 0 ? POW_2_16 : 0));
+				
+			} else if (hdfClass == Integer.class) {
+				long uintegerValue = (long) (int) in;
+				uintegerValue = uintegerValue + (uintegerValue < 0 ? POW_2_32 : 0);
+				if (m_fromDS) {
+					return knimeClass.cast(uintegerValue);
+				} else {
+					return knimeClass.cast((double) uintegerValue);
+				}
+			} else if (hdfClass == Long.class) {
+				if (isHdfType(Hdf5HdfDataType.LONG)) {
+					if (m_fromDS) {
+						return knimeClass.cast(in);
+					} else {
+						return knimeClass.cast((double) (long) in);
+					}
+				} else {
+					double ulongValue = (double) (long) in;
+					return knimeClass.cast(ulongValue + (ulongValue < 0 ? POW_2_64 : 0));
+				}
+			} else if (hdfClass == Float.class) {
+				return knimeClass.cast((double) (float) in);
+				
+			} else {
+				throw new UnsupportedDataTypeException("Unknown hdfDataType");
+			}
+		}
+		
+		throw new UnsupportedDataTypeException("Incorrect hdfClass or input class");
 	}
 	
 	@Override

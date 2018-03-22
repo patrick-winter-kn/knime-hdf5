@@ -182,7 +182,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return dataSet;
 	}
 	
-	public Hdf5Group getGroup(final String name) {
+	public synchronized Hdf5Group getGroup(final String name) {
 		Hdf5Group group = null;
 		
 		Iterator<Hdf5Group> iter = getGroups().iterator();
@@ -225,7 +225,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return group;
 	}
 	
-	public Hdf5DataSet<?> getDataSet(final String name) {
+	public synchronized Hdf5DataSet<?> getDataSet(final String name) {
 		Hdf5DataSet<?> dataSet = null;
 		Iterator<Hdf5DataSet<?>> iter = getDataSets().iterator();
 		boolean found = false;
