@@ -108,8 +108,11 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				Hdf5Attribute<?> attr = file.getAttributeByPath(attrPath);
 				
 				if (attr != null) {
-					int attrNum = attr.getValue().length;
+					if (attr.getValue() == null) {
+						attr.read();
+					}
 					
+					int attrNum = attr.getValue().length;
 					if (attrNum == 1) {
 						if (attr.getType().isKnimeType(Hdf5KnimeDataType.INTEGER)) {
 							pushFlowVariableInt(attrPath, (Integer) attr.getValue()[0]);

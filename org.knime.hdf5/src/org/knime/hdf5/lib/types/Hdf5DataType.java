@@ -2,9 +2,9 @@ package org.knime.hdf5.lib.types;
 
 import javax.activation.UnsupportedDataTypeException;
 
-import org.knime.hdf5.lib.Hdf5Attribute;
-
+import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
+import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5DataType {
 	
@@ -33,10 +33,16 @@ public class Hdf5DataType {
 	 * @param unsigned true if the dataType is unsigned
 	 * @param vlen true if dataType has a variable length
 	 * @param fromDS true if the dataType is from a dataSet
+	 * @throws HDF5LibraryException 
 	 */
-	public Hdf5DataType(long classId, int size, boolean unsigned, boolean vlen, boolean fromDS) {
-		m_fromDS = fromDS;
+	public Hdf5DataType(long elementId, long classId, int size, boolean unsigned, boolean vlen, long stringLength, boolean create) throws HDF5LibraryException {
 		m_vlen = vlen;
+		
+		int elementTypeId = H5.H5Iget_type(elementId);
+		if (elementTypeId != HDF5Constants.H5I_DATASET && elementTypeId != HDF5Constants.H5I_ATTR) {
+			throw new IllegalStateException("DataType can only be for a DataSet or Attribute");
+		}
+		m_fromDS = elementTypeId == HDF5Constants.H5I_DATASET;
 		
 		// see Hdf5HdfDataType for the structure of the typeId
 		// if typeId cannot be defined differently, it will stay a STRING
@@ -52,7 +58,7 @@ public class Hdf5DataType {
 			typeId = 30 + (unsigned ? 1 : 0);
 		}*/
 		
-		m_hdfType = Hdf5HdfDataType.getInstance(typeId);
+		m_hdfType = Hdf5HdfDataType.getInstance(elementId, typeId, stringLength, create);
 		
 		switch (m_hdfType.getTypeId()) {
 		case Hdf5HdfDataType.BYTE:
@@ -64,7 +70,7 @@ public class Hdf5DataType {
 			break;
 		case Hdf5HdfDataType.UINTEGER:
 		case Hdf5HdfDataType.LONG:
-			if (fromDS) {
+			if (m_fromDS) {
 				m_knimeType = Hdf5KnimeDataType.LONG;
 				break;
 			}
@@ -82,18 +88,6 @@ public class Hdf5DataType {
 			m_knimeType = Hdf5KnimeDataType.UNKNOWN;
 			break;
 		}
-	}
-	
-	public static Hdf5DataType getTypeByArray(Object[] objects) throws UnsupportedDataTypeException {
-		Object type = objects.getClass().getComponentType();
-		if (type.equals(Integer.class)) {
-			return new Hdf5DataType(HDF5Constants.H5T_INTEGER, 4, false, false, false);
-		} else if (type.equals(Double.class)) {
-			return new Hdf5DataType(HDF5Constants.H5T_FLOAT, 8, false, false, false);
-		} else if (type.equals(String.class)) {
-			return new Hdf5DataType(HDF5Constants.H5T_STRING, DEFAULT_STRING_TYPE_SIZE, false, false, false);
-		}
-		throw new UnsupportedDataTypeException("KnimeDataType of array is not supported");
 	}
 	
 	public Hdf5HdfDataType getHdfType() {
@@ -120,7 +114,7 @@ public class Hdf5DataType {
 		return m_knimeType == knimeType;
 	}
 	
-	public boolean equalTypes() {
+	public boolean equalTypes() throws UnsupportedDataTypeException {
 		switch (m_knimeType) {
 		case INTEGER:
 			return isHdfType(Hdf5HdfDataType.INTEGER);
@@ -131,20 +125,7 @@ public class Hdf5DataType {
 		case STRING:
 			return isHdfType(Hdf5HdfDataType.STRING);
 		default:
-			return false;
-		}
-	}
-	
-	public Hdf5Attribute<?> createAttribute(String name, Object[] data) throws UnsupportedDataTypeException {
-		switch (m_knimeType) {
-		case INTEGER:
-			return new Hdf5Attribute<Integer>(name, (Integer[]) data);
-		case DOUBLE:
-			return new Hdf5Attribute<Double>(name, (Double[]) data);
-		case STRING:
-			return new Hdf5Attribute<String>(name, (String[]) data);
-		default:
-			throw new UnsupportedDataTypeException("Unsupported knimeDataType for attribute");
+			throw new UnsupportedDataTypeException("Unknown knimeDataType");
 		}
 	}
 	

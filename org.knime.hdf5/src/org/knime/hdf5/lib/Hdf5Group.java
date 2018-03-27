@@ -27,7 +27,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	
 	private final List<Hdf5DataSet<?>> m_dataSets = new ArrayList<>();
 
-	protected Hdf5Group(final Hdf5Group parent, final String filePath, final String name, boolean create)
+	protected Hdf5Group(final Hdf5Group parent, final String filePath, final String name, final boolean create)
 			throws HDF5LibraryException, NullPointerException, IllegalArgumentException {
 		super(name, filePath);
 		
@@ -311,13 +311,13 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 	
 	private void addGroup(Hdf5Group group) {
-		getGroups().add(group);
+		m_groups.add(group);
 		group.setPathFromFile(getPathFromFileWithName(false));
 		group.setParent(this);
 	}
 
 	void addDataSet(Hdf5DataSet<?> dataSet) {
-		getDataSets().add(dataSet);
+		m_dataSets.add(dataSet);
 		dataSet.setPathFromFile(getPathFromFileWithName(false));
 		dataSet.setParent(this);
 	}
@@ -535,10 +535,8 @@ public class Hdf5Group extends Hdf5TreeElement {
 							+ getPathFromFileWithName() + name + "\" is not supported");
 				}
 				
-				dataType = new Hdf5DataType(classId, size, unsigned, vlen, true);
-				if (classId == HDF5Constants.H5T_STRING) {
-					dataType.getHdfType().initInstanceString(dataSetId);
-				}
+				dataType = new Hdf5DataType(dataSetId, classId, size, unsigned, vlen, /* TODO stringLength 0L */ 0L, false);
+				
 				H5.H5Dclose(dataSetId);
 				
 			} catch (HDF5LibraryException | NullPointerException hlnpe) {

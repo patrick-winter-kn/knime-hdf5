@@ -8,7 +8,6 @@ import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
-import hdf.hdf5lib.exceptions.HDF5DatatypeInterfaceException;
 import hdf.hdf5lib.exceptions.HDF5Exception;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
@@ -16,17 +15,21 @@ public class Hdf5Attribute<Type> {
 
 	private final String m_name;
 	
-	private final Type[] m_value;
+	private Type[] m_value;
 	
 	private long m_dataspaceId = -1;
 	
 	private long m_attributeId = -1;
+
+	private final Hdf5DataType m_type;
 	
 	private long m_dimension;
 	
 	private boolean m_open;
 	
-	private final Hdf5DataType m_dataType;
+	private String m_pathFromFile = "";
+	
+	private Hdf5TreeElement m_parent;
 	
 	/**
 	 * Creates an attribute with the generic type defined by parameter {@code value}. <br>
@@ -36,7 +39,8 @@ public class Hdf5Attribute<Type> {
 	 * @param value - the final data array of the attribute; its type defines the generic type of the attribute
 	 * @throws UnsupportedDataTypeException if the type of {@code value} is neither {@code Integer} nor {@code Double} nor {@code String}
 	 */
-	public Hdf5Attribute(final String name, final Type[] value) throws UnsupportedDataTypeException {
+	private Hdf5Attribute(final Hdf5TreeElement parent, final String name, final long dimension,
+			final Hdf5DataType type, final boolean create) throws UnsupportedDataTypeException {
 		if (name == null) {
 			throw new IllegalArgumentException("name cannot be null");
 			
@@ -45,118 +49,57 @@ public class Hdf5Attribute<Type> {
 			
 		} else if (name.contains("/")) {
 			throw new IllegalArgumentException("name \"" + name + "\" cannot contain '/'");
-		
-		} else if (value == null) {
-			throw new IllegalArgumentException("value cannot be null");
 		}
 		
 		m_name = name;
-		m_value = value;
-		m_dataType = Hdf5DataType.getTypeByArray(value);
+		m_type = type;
+		
+		if (create) {
+	        try {
+	        	createDimension(dimension);
+				
+	        	// Create the attribute and write the data of the Hdf5Attribute into it.
+	            if (parent.getElementId() >= 0 && m_dataspaceId >= 0 && m_type.getConstants()[0] >= 0) {
+	            	m_attributeId = H5.H5Acreate(parent.getElementId(), m_name,
+	                		m_type.getConstants()[0], m_dataspaceId,
+	                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
+	            	parent.addAttribute(this);
+	            	setOpen(true);
+	            }	            
+	        } catch (HDF5Exception | NullPointerException hnpe) {
+	            NodeLogger.getLogger("HDF5 Files").error("Attribute could not be created", hnpe);
+	        }
+		} else {
+        	parent.addAttribute(this);
+        	open();
+		}
 	}
 	
-	@SuppressWarnings({ "unchecked", "rawtypes" })
-	static Hdf5Attribute<?> getInstance(final Hdf5TreeElement treeElement, final String name) {
+	static Hdf5Attribute<?> getInstance(final Hdf5TreeElement parent, final String name, final long dimension,
+			final Hdf5DataType type, final boolean create) {
 		Hdf5Attribute<?> attribute = null;
-		long attributeId = -1;
-		long dataspaceId = -1;
-		int lsize = 1;
 		
 		try {
-			Hdf5DataType dataType = treeElement.findAttributeType(name);
-			
-			try {
-				attributeId = H5.H5Aopen(treeElement.getElementId(), name, HDF5Constants.H5P_DEFAULT);
-				dataspaceId = H5.H5Aget_space(attributeId);
-				
-				if (dataspaceId >= 0) {
-					int ndims = H5.H5Sget_simple_extent_ndims(dataspaceId);
-					if (ndims > 0) {
-						long[] dims = new long[ndims];
-						H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
-	                    for (int j = 0; j < dims.length; j++) {
-	                        lsize *= dims[j];
-	                    }
-	                }
-				}
-				
-				Object[] dataOut = (Object[]) dataType.getKnimeType().createArray(lsize);
-				
-				if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
-	                if (dataType.isVlen()) {
-	    				long typeId = H5.H5Tget_native_type(dataType.getConstants()[0]);
-	                	String[] strs = new String[lsize];
-	                    H5.H5AreadVL(attributeId, typeId, strs);
-	                    dataOut = strs;
-	    				H5.H5Tclose(typeId);
-	                    
-	                } else {
-	                	long stringLength = dataType.getHdfType().getStringLength();
-						byte[] dataRead = new byte[lsize * ((int) stringLength + 1)];
-						H5.H5Aread(attributeId, dataType.getConstants()[1], dataRead);
-						
-						dataOut = new String[lsize];
-						char[][] dataChar = new char[lsize][(int) stringLength + 1];
-						for (int i = 0; i < dataChar.length; i++) {
-							for (int j = 0; j < dataChar[0].length; j++) {
-								dataChar[i][j] = (char) dataRead[i * ((int) stringLength + 1) + j];
-							}
-							
-							dataOut[i] = String.copyValueOf(dataChar[i]);
-						}
-					}
-					
-				} else if (dataType.equalTypes()) {
-					H5.H5Aread(attributeId, dataType.getConstants()[1], dataOut);
-					
-				} else {
-					Object[] dataRead = (Object[]) dataType.getHdfType().createArray(lsize);
-	                H5.H5Aread(attributeId, dataType.getConstants()[1], dataRead);
-
-					Class hdfClass = dataType.getHdfClass();
-					Class knimeClass = dataType.getKnimeClass();
-					for (int i = 0; i < dataRead.length; i++) {
-						dataOut[i] = /* (Type) TODO this will be possible later */ dataType.hdfToKnime(hdfClass, hdfClass.cast(dataRead[i]), knimeClass);
-					}
-				}
-				
-				attribute = dataType.createAttribute(name, dataOut);
-				
-				attribute.setDataspaceId(dataspaceId);
-				attribute.setAttributeId(attributeId);
-				attribute.setDimension(lsize);
-	    		treeElement.getAttributes().add(attribute);
-	        	attribute.setOpen(true);
-	        	
-			} catch (HDF5DatatypeInterfaceException hdtie) {
-				NodeLogger.getLogger("HDF5 Files").error("DataType of attribute \"" 
-						+ treeElement.getPathFromFileWithName(true) + name + "\" is not supported", hdtie);
-				closeInstance(attributeId, dataspaceId, dataType);
-				
-			} catch (HDF5Exception | NullPointerException | IllegalArgumentException hnpiae) {
-				NodeLogger.getLogger("HDF5 Files").error(hnpiae.getMessage(), hnpiae);
-				closeInstance(attributeId, dataspaceId, dataType);
+			switch (type.getKnimeType()) {
+			case INTEGER:
+				attribute = new Hdf5Attribute<Integer>(parent, name, dimension, type, create);
+				break;
+			case DOUBLE:
+				attribute = new Hdf5Attribute<Double>(parent, name, dimension, type, create);
+				break;
+			case STRING:
+				attribute = new Hdf5Attribute<String>(parent, name, dimension, type, create);
+				break;
+			default:
+				NodeLogger.getLogger("HDF5 Files").warn("Attribute \""
+						+ parent.getPathFromFileWithName() + name + "\" has an unknown dataType");
+				/* attribute stays null */
 			}
 		} catch (UnsupportedDataTypeException udte) {
 			NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
 		}
 		
 		return attribute;
-	}
-	
-	private static void closeInstance(final long attributeId, final long dataspaceId, Hdf5DataType dataType) {
-		try {
-			dataType.getHdfType().closeIfString();
-
-	        if (dataspaceId >= 0) {
-	            H5.H5Sclose(dataspaceId);
-	        }
-	        
-	        H5.H5Aclose(attributeId);
-	        
-		} catch (HDF5LibraryException hle) {
-			NodeLogger.getLogger("HDF5 Files").error("Attribute could not be closed", hle);
-		}
 	}
 	
 	/**
@@ -190,6 +133,14 @@ public class Hdf5Attribute<Type> {
 	void setAttributeId(long attributeId) {
 		m_attributeId = attributeId;
 	}
+	
+	/**
+	 * 
+	 * @return the dataType of the this attribute
+	 */
+	public Hdf5DataType getType() {
+		return m_type;
+	}
 
 	/**
 	 * 
@@ -197,10 +148,6 @@ public class Hdf5Attribute<Type> {
 	 */
 	public long getDimension() {
 		return m_dimension;
-	}
-
-	private void setDimension(long dimension) {
-		m_dimension = dimension;
 	}
 
 	boolean isOpen() {
@@ -211,12 +158,149 @@ public class Hdf5Attribute<Type> {
 		m_open = open;
 	}
 	
+	public String getPathFromFile() {
+		return m_pathFromFile;
+	}
+
+	protected void setPathFromFile(String pathFromFile) {
+		m_pathFromFile = pathFromFile;
+	}
+
+	public Hdf5TreeElement getParent() {
+		return m_parent;
+	}
+
+	protected void setParent(Hdf5TreeElement parent) {
+		m_parent = parent;
+	}
+	
+	public String getPathFromFileWithName() {
+		return getPathFromFile() + getName();
+	}
+	
+	public boolean write(final Type[] value) {
+        try {
+			H5.H5Awrite(m_attributeId, m_type.getConstants()[1], value);
+			m_value = value;
+			return true;
+			
+		} catch (HDF5Exception | NullPointerException hnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + getName() + "\" could not be written", hnpe);
+		}
+        
+        return false;
+	}
+	
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public Type[] read() {
+		Type[] dataOut = null;
+		
+		try {
+			// TODO long to int cast
+			int dim = (int) m_dimension;
+			dataOut = (Type[]) m_type.getKnimeType().createArray(dim);
+			
+			if (m_type.isKnimeType(Hdf5KnimeDataType.STRING)) {
+	            if (m_type.isVlen()) {
+					long typeId = H5.H5Tget_native_type(m_type.getConstants()[0]);
+	                H5.H5AreadVL(m_attributeId, typeId, (String[]) dataOut);
+					H5.H5Tclose(typeId);
+	                
+	            } else {
+	            	long stringLength = m_type.getHdfType().getStringLength();
+					byte[] dataRead = new byte[dim * ((int) stringLength + 1)];
+					H5.H5Aread(m_attributeId, m_type.getConstants()[1], dataRead);
+					
+					dataOut = (Type[]) new String[dim];
+					char[][] dataChar = new char[dim][(int) stringLength + 1];
+					for (int i = 0; i < dataChar.length; i++) {
+						for (int j = 0; j < dataChar[0].length; j++) {
+							dataChar[i][j] = (char) dataRead[i * ((int) stringLength + 1) + j];
+						}
+						
+						dataOut[i] = (Type) String.copyValueOf(dataChar[i]);
+					}
+				}
+				
+			} else if (m_type.equalTypes()) {
+				H5.H5Aread(m_attributeId, m_type.getConstants()[1], dataOut);
+				
+			} else {
+				Object[] dataRead = (Object[]) m_type.getHdfType().createArray(dim);
+	            H5.H5Aread(m_attributeId, m_type.getConstants()[1], dataRead);
+	
+				Class hdfClass = m_type.getHdfClass();
+				Class knimeClass = m_type.getKnimeClass();
+				for (int i = 0; i < dataRead.length; i++) {
+					dataOut[i] = (Type) m_type.hdfToKnime(hdfClass, hdfClass.cast(dataRead[i]), knimeClass);
+				}
+			}
+		} catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException hludtnpe) {
+            NodeLogger.getLogger("HDF5 Files").error(hludtnpe.getMessage(), hludtnpe);
+        }
+		
+		m_value = dataOut;
+		return dataOut;
+	}
+	
+	public void open() {
+		try {
+			if (!isOpen()) {
+				if (!getParent().isOpen()) {
+					getParent().open();
+				}
+				
+				m_attributeId = H5.H5Aopen(getParent().getElementId(), getName(),
+						HDF5Constants.H5P_DEFAULT);
+				setOpen(true);
+				loadDimension();
+			}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened", hlnpe);
+        }
+	}
+	
+	private void createDimension(long dimension) {
+		m_dimension = dimension;
+		
+    	// Create the dataSpace for the dataSet.
+        try {
+        	long[] dims = { m_dimension };
+        	m_dataspaceId = H5.H5Screate_simple(1, dims, null);
+            
+        } catch (HDF5Exception | NullPointerException hnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSpace could not be created", hnpe);
+        }
+	}
+	
 	/**
-	 * 
-	 * @return the dataType of the this attribute
+	 * Updates the dimensions array after opening a dataSet to ensure that the
+	 * dimensions array is correct.
 	 */
-	public Hdf5DataType getType() {
-		return m_dataType;
+	private void loadDimension() {
+		// Get dataSpace and allocate memory for read buffer.
+		try {
+			if (isOpen()) {
+				m_dataspaceId = H5.H5Aget_space(m_attributeId);
+				
+				long dimension = 1;
+				int ndims = H5.H5Sget_simple_extent_ndims(m_dataspaceId);
+				if (ndims > 0) {
+					long[] dims = new long[ndims];
+					H5.H5Sget_simple_extent_dims(m_dataspaceId, dims, null);
+	                for (int j = 0; j < dims.length; j++) {
+	                    dimension *= dims[j];
+	                }
+	            }
+				
+				m_dimension = dimension;
+				
+			} else {
+				throw new IllegalStateException("Attribute is not open");
+			}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+            NodeLogger.getLogger("HDF5 Files").error("Dimensions could not be loaded", hlnpe);
+        }
 	}
 	
 	public void close() {
@@ -227,7 +311,7 @@ public class Hdf5Attribute<Type> {
 		 */
         try {
             if (isOpen()) {
-                m_dataType.getHdfType().closeIfString();
+                //m_type.getHdfType().closeIfString();
 
                 H5.H5Sclose(m_dataspaceId);
                 m_dataspaceId = -1;
