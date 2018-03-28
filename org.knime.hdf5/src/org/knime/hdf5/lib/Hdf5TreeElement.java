@@ -13,7 +13,6 @@ import org.knime.hdf5.lib.types.Hdf5DataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
-import hdf.hdf5lib.exceptions.HDF5Exception;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 abstract public class Hdf5TreeElement {
@@ -120,27 +119,24 @@ abstract public class Hdf5TreeElement {
 		return getPathFromFileWithName(true);
 	}
 	
-	public void createAttribute(Hdf5Attribute<?> attribute) {
+	public synchronized Hdf5Attribute<?> createAttribute(final String name, final long dimension, final Hdf5DataType type) {
+		Hdf5Attribute<?> attribute = null;
+		
 		try {
-        	// Create the data space for the attribute.
-        	long[] dims = { attribute.getDimension() };
-        	attribute.setDataspaceId(H5.H5Screate_simple(1, dims, null));
-
-            // Create the attribute and write the data of the Hdf5Attribute into it.
-            if (getElementId() >= 0 && attribute.getDataspaceId() >= 0 && attribute.getType().getConstants()[0] >= 0) {
-            	attribute.setAttributeId(H5.H5Acreate(getElementId(), attribute.getName(),
-                		attribute.getType().getConstants()[0], attribute.getDataspaceId(),
-                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
-            	attribute.setOpen(true);
-                
-                if (attribute.getAttributeId() >= 0 && attribute.getType().getConstants()[1] >= 0) {
-                    H5.H5Awrite(attribute.getAttributeId(), attribute.getType().getConstants()[1], attribute.getValue());
-            		getAttributes().add(attribute);
-                }
-            }
-        } catch (HDF5Exception | NullPointerException hnpe) {
-            NodeLogger.getLogger("HDF5 Files").error("Attribute could not be created", hnpe);
-        }
+			if (!existsAttribute(name)) {
+				attribute = Hdf5Attribute.createAttribute(this, name, dimension, type);
+				
+			} else {
+				NodeLogger.getLogger("HDF5 Files").error("There is already an attribute with the name \""
+						+ name + "\" in this treeElement", new IllegalArgumentException());
+				/* attribute stays null */
+			}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			NodeLogger.getLogger("HDF5 Files").error("Existence of attribute could not be checked", hlnpe);
+			/* attribute stays null */
+		}
+		
+		return attribute;
 	}
 	
 	public synchronized Hdf5Attribute<?> getAttribute(final String name) {
@@ -158,14 +154,7 @@ abstract public class Hdf5TreeElement {
 		
 		try {
 			if (!found && existsAttribute(name)) {
-				try {
-					Hdf5DataType type = findAttributeType(name);
-					
-					attribute = Hdf5Attribute.getInstance(this, name, /* TODO dimension 0L */ 0L, type, false);
-						
-				} catch (UnsupportedDataTypeException udte) {
-					NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
-				}
+				attribute = Hdf5Attribute.openAttribute(this, name);
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			NodeLogger.getLogger("HDF5 Files").error("Existence of attribute could not be checked", hlnpe);
@@ -265,7 +254,15 @@ abstract public class Hdf5TreeElement {
 	Hdf5DataType findAttributeType(String name) throws UnsupportedDataTypeException, IllegalArgumentException {
 		Hdf5DataType dataType = null;
 		
-		if (loadAttributeNames().contains(name)) {
+		boolean attrExists = false;
+		try {
+			attrExists = existsAttribute(name);
+			
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			NodeLogger.getLogger("HDF5 Files").error("Existence of attribute could not be checked", hlnpe);
+		}
+		
+		if (attrExists) {
 			long attributeId = -1;
 			long dataspaceId = -1;
 			long classId = -1;
@@ -319,7 +316,7 @@ abstract public class Hdf5TreeElement {
 							+ getPathFromFile() + getName() + "\" is not supported");
 				}
 				
-				dataType = new Hdf5DataType(attributeId, classId, size, unsigned, vlen, /* TODO stringLength 0L */ 0L, false);
+				dataType = Hdf5DataType.openDataType(attributeId, classId, size, unsigned, vlen);
 				H5.H5Aclose(attributeId);
 				
 			} catch (HDF5LibraryException | NullPointerException hlnpe) {

@@ -14,7 +14,6 @@ import org.knime.core.data.def.LongCell;
 import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
-import org.knime.hdf5.lib.types.Hdf5HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 import hdf.hdf5lib.H5;
@@ -32,83 +31,89 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	private final Hdf5DataType m_type;
 	
-	private Hdf5DataSet(final Hdf5Group parent, final String name, long[] dimensions,
-			final Hdf5DataType type, final boolean create) 
-					throws NullPointerException, IllegalArgumentException {
+	private Hdf5DataSet(final Hdf5Group parent, final String name, final Hdf5DataType type) 
+			throws NullPointerException, IllegalArgumentException {
 		super(name, parent.getFilePath());
+		
 		m_type = type;
-
-		if (create) {
-			createDimensions(dimensions);
-	        
-	        // Create the dataSet.
-	        try {
-	            setElementId(H5.H5Dcreate(parent.getElementId(), getName(),
-                        getType().getConstants()[0], m_dataspaceId,
-                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
-        		parent.addDataSet(this);
-                setOpen(true);
-	        } catch (HDF5LibraryException | NullPointerException hlnpe) {
-	            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be created", hlnpe);
-	        }
-		} else {
-			parent.addDataSet(this);
-			open();
+	}
+	
+	private static Hdf5DataSet<?> getInstance(final Hdf5Group parent, final String name, Hdf5DataType type) {
+		if (parent == null) {
+			throw new IllegalArgumentException("Parent group of dataSet \"" + name + "\" cannot be null");
+			
+		} else if (!parent.isOpen()) {
+			throw new IllegalStateException("Parent group \"" + parent.getPathFromFileWithName() + "\" is not open");
+		}
+		
+		switch (type.getKnimeType()) {
+		case INTEGER:
+			return new Hdf5DataSet<Integer>(parent, name, type);
+		case LONG:
+			return new Hdf5DataSet<Long>(parent, name, type);
+		case DOUBLE:
+			return new Hdf5DataSet<Double>(parent, name, type);
+		case STRING:
+			return new Hdf5DataSet<String>(parent, name, type);
+		default:
+			NodeLogger.getLogger("HDF5 Files").warn("DataSet \""
+					+ parent.getPathFromFileWithName() + name + "\" has an unknown dataType");
+			return null;
 		}
 	}
 	
-	/**
-	 * Creates the new instance of the dataSet.
-	 * 
-	 * @param parent group
-	 * @param name
-	 * @param dimensions
-	 * @param stringLength only matters for String dataSets
-	 * @param type
-	 * @param create {@code true} if the dataSet should also be created physically in the .h5 file
-	 * @return dataSet
-	 */
-	static Hdf5DataSet<?> getInstance(final Hdf5Group parent, final String name,
-			long[] dimensions, Hdf5DataType type, boolean create) {
+	static Hdf5DataSet<?> createDataSet(final Hdf5Group parent, final String name,
+			long[] dimensions, Hdf5DataType type) {
 		Hdf5DataSet<?> dataSet = null;
 		
-		if (parent == null) {
-			NodeLogger.getLogger("HDF5 Files").error("Parent group of dataSet \"" + name + "\" cannot be null",
-					new NullPointerException());
-			
-		} else if (!parent.isOpen()) {
-			NodeLogger.getLogger("HDF5 Files").error("Parent group " + parent.getPathFromFileWithName()
-					+ " is not open", new IllegalStateException());
+		try {
+			dataSet = getInstance(parent, name, type);
+			dataSet.createDimensions(dimensions);
+	        dataSet.setElementId(H5.H5Dcreate(parent.getElementId(), dataSet.getName(),
+            		dataSet.getType().getConstants()[0], dataSet.getDataspaceId(),
+                    HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
+	        
+    		parent.addDataSet(dataSet);
+    		dataSet.setOpen(true);
+    		
+		} catch (HDF5LibraryException hle) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet or group with that name and filePath already exists", hle);
+			/* dataSet stays null */
+            
+		} catch (NullPointerException | IllegalArgumentException npiae) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be created: " + npiae.getMessage(), npiae);
+			/* dataSet stays null */
+        }
 		
-		} else {
-			try {
-				switch (type.getKnimeType()) {
-				case INTEGER:
-					dataSet = new Hdf5DataSet<Integer>(parent, name, dimensions, type, create);
-					break;
-				case LONG:
-					dataSet = new Hdf5DataSet<Long>(parent, name, dimensions, type, create);
-					break;
-				case DOUBLE:
-					dataSet = new Hdf5DataSet<Double>(parent, name, dimensions, type, create);
-					break;
-				case STRING:
-					dataSet = new Hdf5DataSet<String>(parent, name, dimensions, type, create);
-					break;
-				default:
-					NodeLogger.getLogger("HDF5 Files").warn("DataSet \""
-							+ parent.getPathFromFileWithName() + name + "\" has an unknown dataType");
-					/* dataSet stays null */
-				}
-			} catch (NullPointerException | IllegalArgumentException npiae) {
-				NodeLogger.getLogger("HDF5 Files").error(npiae.getMessage(), npiae);
-				/* dataSet stays null */
-			}
-		}
+		return dataSet;
+	}
+	
+	static Hdf5DataSet<?> openDataSet(final Hdf5Group parent, final String name) {
+		Hdf5DataSet<?> dataSet = null;
+		
+		try {
+			Hdf5DataType type = parent.findDataSetType(name);
+			dataSet = getInstance(parent, name, type);
+			
+	    	parent.addDataSet(dataSet);
+	    	dataSet.open();
+        	
+        } catch (NullPointerException | IllegalArgumentException npiae) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened: " + npiae.getMessage(), npiae);
+			/* dataSet stays null */
+            
+        } catch (UnsupportedDataTypeException udte) {
+			NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
+			/* dataSet stays null */
+        } 
 		
 		return dataSet;
 	}
 
+	private long getDataspaceId() {
+		return m_dataspaceId;
+	}
+	
 	public long[] getDimensions() {
 		return m_dimensions;
 	}
@@ -192,29 +197,26 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * 
 	 * @param dataIn
 	 * @return {@code true} if the dataSet was written otherwise {@code false}
+	 * @throws NullPointerException 
+	 * @throws  
 	 */
-	public boolean write(Type[] dataIn) {
-		// Write the data to the dataSet.
-        try {
-			if (getType().isHdfType(Hdf5HdfDataType.STRING)) {
-	        	if (isOpen() && (getType().getConstants()[1] >= 0)) {
-					H5.H5Dwrite_string(getElementId(), getType().getConstants()[1],
-							HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-							HDF5Constants.H5P_DEFAULT, (String[]) dataIn);
-					return true;
-				}
+	public boolean write(Type[] dataIn) throws HDF5Exception, NullPointerException {
+		if (isOpen()) {
+			if (getType().isKnimeType(Hdf5KnimeDataType.STRING)) {
+				H5.H5Dwrite_string(getElementId(), getType().getConstants()[1],
+						HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+						HDF5Constants.H5P_DEFAULT, (String[]) dataIn);
+				
         	} else {
-	            if (isOpen()) {
-	                H5.H5Dwrite(getElementId(), getType().getConstants()[1],
-	                        HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-	                        HDF5Constants.H5P_DEFAULT, dataIn);
-	    			return true;
-	            }
+                H5.H5Dwrite(getElementId(), getType().getConstants()[1],
+                        HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+                        HDF5Constants.H5P_DEFAULT, dataIn);
             }
-        } catch (HDF5Exception | NullPointerException hnpe) {
-            NodeLogger.getLogger("HDF5 Files").error("DataSet \"" + getPathFromFileWithName() + "\" could not be written", hnpe);
-        }
-		return false;
+			return true;
+			
+    	} else {
+            throw new IllegalStateException("DataSet \"" + getPathFromFileWithName() + "\" is not open: data could not be written into it");
+    	}
 	}
 	
 	public Type[] readRow(long rowId) {
@@ -339,6 +341,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				
 				setElementId(H5.H5Dopen(getParent().getElementId(), getName(),
 						HDF5Constants.H5P_DEFAULT));
+				
 				setOpen(true);
 				loadDimensions();
 			}
@@ -400,7 +403,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         			iter.next().close();
         		}
 
-                //m_type.getHdfType().closeIfString();
+                // TODO m_type.getHdfType().closeIfString();
         		
                 // Terminate access to the dataSpace.
             	H5.H5Sclose(m_dataspaceId);
