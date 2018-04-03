@@ -1,5 +1,6 @@
 package org.knime.hdf5.lib;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -119,7 +120,7 @@ abstract public class Hdf5TreeElement {
 		return getPathFromFileWithName(true);
 	}
 	
-	public synchronized Hdf5Attribute<?> createAttribute(final String name, final long dimension, final Hdf5DataType type) {
+	public synchronized Hdf5Attribute<?> createAttribute(final String name, final long dimension, final Hdf5DataType type) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
 		try {
@@ -127,9 +128,8 @@ abstract public class Hdf5TreeElement {
 				attribute = Hdf5Attribute.createAttribute(this, name, dimension, type);
 				
 			} else {
-				NodeLogger.getLogger("HDF5 Files").error("There is already an attribute with the name \""
-						+ name + "\" in this treeElement", new IllegalArgumentException());
-				/* attribute stays null */
+				throw new IOException("There is already an attribute with the name \""
+						+ name + "\" in this treeElement");
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			NodeLogger.getLogger("HDF5 Files").error("Existence of attribute could not be checked", hlnpe);

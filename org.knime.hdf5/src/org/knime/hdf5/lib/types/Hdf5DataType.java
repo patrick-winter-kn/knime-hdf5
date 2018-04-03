@@ -19,8 +19,6 @@ public class Hdf5DataType {
 	
 	private static final double POW_2_64 = Math.pow(2, 64);
 	
-	public static final int DEFAULT_STRING_TYPE_SIZE = 0;
-	
 	private final Hdf5HdfDataType m_hdfType;
 
 	private final Hdf5KnimeDataType m_knimeType;
@@ -28,6 +26,21 @@ public class Hdf5DataType {
 	private final boolean m_vlen; // variable length
 	
 	private final boolean m_fromDS;
+	
+	protected Hdf5DataType(Hdf5HdfDataType hdfType, Hdf5KnimeDataType knimeType, 
+			boolean vlen, boolean fromDS) {
+		m_hdfType = hdfType;
+		m_knimeType = knimeType;
+		m_vlen = vlen;
+		m_fromDS = fromDS;
+	}
+	
+	protected Hdf5DataType(long elementId, Hdf5DataTypeTemplate templ) {
+		m_hdfType = templ.getHdfTypeTemplate().getInstance(elementId);
+		m_knimeType = templ.getKnimeType();
+		m_vlen = templ.isVlen();
+		m_fromDS = templ.isFromDS();
+	}
 	
 	/**
 	 * 
@@ -88,14 +101,23 @@ public class Hdf5DataType {
 		}
 	}
 	
-	private static Hdf5DataType getInstance(long elementId, long classId, int size, boolean unsigned, boolean vlen)
-			throws HDF5LibraryException {
-		int elementTypeId = H5.H5Iget_type(elementId);
-		if (elementTypeId != HDF5Constants.H5I_DATASET && elementTypeId != HDF5Constants.H5I_ATTR) {
-			throw new IllegalStateException("DataType can only be for a DataSet or Attribute");
-		}
+	private static Hdf5DataType getInstance(long elementId, long classId, int size, boolean unsigned, boolean vlen) {
+		Hdf5DataType dataType = null;
 		
-		return new Hdf5DataType(elementId, classId, size, unsigned, vlen);
+		try {
+			int elementTypeId = H5.H5Iget_type(elementId);
+			if (elementTypeId != HDF5Constants.H5I_DATASET && elementTypeId != HDF5Constants.H5I_ATTR) {
+				throw new IllegalStateException("DataType can only be for a DataSet or Attribute");
+			}
+			
+			dataType = new Hdf5DataType(elementId, classId, size, unsigned, vlen);
+		
+		} catch (HDF5LibraryException hle) {
+            NodeLogger.getLogger("HDF5 Files").error("Invalid elementId", hle);
+			/* dataType stays null */            
+		} 
+		
+		return dataType;
 	}
 	
 	public static Hdf5DataType createDataType(long elementId, long classId, int size, boolean unsigned, boolean vlen, long stringLength) {
@@ -103,13 +125,8 @@ public class Hdf5DataType {
 		
 		try {
 			dataType = getInstance(elementId, classId, size, unsigned, vlen);
-
 			dataType.getHdfType().createHdfDataType(elementId, stringLength);
     		
-		} catch (HDF5LibraryException hle) {
-            NodeLogger.getLogger("HDF5 Files").error("Invalid elementId", hle);
-			/* dataType stays null */
-            
 		} catch (NullPointerException | IllegalArgumentException npiae) {
             NodeLogger.getLogger("HDF5 Files").error("DataType could not be created: " + npiae.getMessage(), npiae);
 			/* dataType stays null */
@@ -123,14 +140,9 @@ public class Hdf5DataType {
 		
 		try {
 			dataType = getInstance(elementId, classId, size, unsigned, vlen);
-			
 			dataType.getHdfType().openHdfDataType(elementId);
 			
-		} catch (HDF5LibraryException hle) {
-            NodeLogger.getLogger("HDF5 Files").error("Invalid elementId", hle);
-			/* dataType stays null */
-           
-        } catch (NullPointerException | IllegalArgumentException npiae) {
+		} catch (NullPointerException | IllegalArgumentException npiae) {
             NodeLogger.getLogger("HDF5 Files").error("DataType could not be created: " + npiae.getMessage(), npiae);
 			/* dataType stays null */
         }
@@ -148,6 +160,10 @@ public class Hdf5DataType {
 	
 	public boolean isVlen() {
 		return m_vlen;
+	}
+	
+	protected boolean isFromDS() {
+		return m_fromDS;
 	}
 
 	public long[] getConstants() {

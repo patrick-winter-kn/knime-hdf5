@@ -14,7 +14,7 @@ import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5HdfDataType {
 
-	static enum HdfDataType {
+	public static enum HdfDataType {
 		BYTE(110),
 		UBYTE(111),
 		SHORT(210),
@@ -50,8 +50,11 @@ public class Hdf5HdfDataType {
 			return LOOKUP.get(typeId);
 		}
 	}
+	
+	public static final long DEFAULT_STRING_LENGTH = 0L;
 
 	private static final Map<HdfDataType, Hdf5HdfDataType> LOOKUP = new HashMap<>();
+	
 	private static final Map<Long, Hdf5HdfDataType> LOOKUP_STRING = new HashMap<>();
 	
 	private final HdfDataType m_type;
@@ -60,9 +63,11 @@ public class Hdf5HdfDataType {
 	
 	private long m_stringLength;
 	
-	private Hdf5HdfDataType(final HdfDataType type) {
+	protected Hdf5HdfDataType(final HdfDataType type) {
 		m_type = type;
-		LOOKUP.put(m_type, this);
+		if (!(this instanceof Hdf5HdfDataTypeTemplate)) {
+			LOOKUP.put(m_type, this);
+		}
 		
 		switch (m_type) {
 		case BYTE:

@@ -4,6 +4,7 @@ import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
+import org.knime.hdf5.lib.types.Hdf5DataTypeTemplate;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 import hdf.hdf5lib.H5;
@@ -26,7 +27,7 @@ public class Hdf5Attribute<Type> {
 	
 	private Type[] m_value;
 
-	private final Hdf5DataType m_type;
+	private Hdf5DataType m_type;
 	
 	private long m_dataspaceId = -1;
 	
@@ -54,6 +55,16 @@ public class Hdf5Attribute<Type> {
 	
 	private static Hdf5Attribute<?> getInstance(final Hdf5TreeElement parent, final String name,
 			final Hdf5DataType type) {
+		if (parent == null) {
+			throw new IllegalArgumentException("Parent group of dataSet \"" + name + "\" cannot be null");
+			
+		} else if (!parent.isOpen()) {
+			throw new IllegalStateException("Parent group \"" + parent.getPathFromFileWithName() + "\" is not open");
+		
+		} else if (type == null) {
+			throw new IllegalArgumentException("DataType for dataSet \"" + parent.getPathFromFileWithName() + name + "\" cannot be null");
+		}
+		
 		switch (type.getKnimeType()) {
 		case INTEGER:
 			return new Hdf5Attribute<Integer>(parent, name, type);
@@ -82,6 +93,10 @@ public class Hdf5Attribute<Type> {
         	parent.addAttribute(attribute);
         	attribute.setOpen(true);
         	
+        	if (type instanceof Hdf5DataTypeTemplate) {
+	    		attribute.setType(((Hdf5DataTypeTemplate) type).createDataType(attribute.getAttributeId(), type.getHdfType().getStringLength()));
+	    	}
+        	
         } catch (HDF5Exception | NullPointerException | IllegalArgumentException hnpiae) {
             NodeLogger.getLogger("HDF5 Files").error("Attribute \""
 					+ parent.getPathFromFileWithName() + name + "\" could not be created: "
@@ -101,6 +116,10 @@ public class Hdf5Attribute<Type> {
 			
 	    	parent.addAttribute(attribute);
 	    	attribute.open();
+	    	
+	    	if (type instanceof Hdf5DataTypeTemplate) {
+	    		attribute.setType(((Hdf5DataTypeTemplate) type).openDataType(attribute.getAttributeId()));
+	    	}
         	
         } catch (UnsupportedDataTypeException | NullPointerException
         		| IllegalArgumentException udtnpiae) {
@@ -154,6 +173,10 @@ public class Hdf5Attribute<Type> {
 	 */
 	public Hdf5DataType getType() {
 		return m_type;
+	}
+	
+	private void setType(Hdf5DataType type) {
+		m_type = type;
 	}
 
 	long getDataspaceId() {

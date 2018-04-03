@@ -14,6 +14,7 @@ import org.knime.core.data.def.LongCell;
 import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
+import org.knime.hdf5.lib.types.Hdf5DataTypeTemplate;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 import hdf.hdf5lib.H5;
@@ -29,7 +30,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	private boolean m_dimsAvailable;
 	
-	private final Hdf5DataType m_type;
+	private Hdf5DataType m_type;
 	
 	private Hdf5DataSet(final Hdf5Group parent, final String name, final Hdf5DataType type) 
 			throws NullPointerException, IllegalArgumentException {
@@ -44,6 +45,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			
 		} else if (!parent.isOpen()) {
 			throw new IllegalStateException("Parent group \"" + parent.getPathFromFileWithName() + "\" is not open");
+		
+		} else if (type == null) {
+			throw new IllegalArgumentException("DataType for dataSet \"" + parent.getPathFromFileWithName() + name + "\" cannot be null");
 		}
 		
 		switch (type.getKnimeType()) {
@@ -76,6 +80,10 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
     		parent.addDataSet(dataSet);
     		dataSet.setOpen(true);
     		
+    		if (type instanceof Hdf5DataTypeTemplate) {
+	    		dataSet.setType(((Hdf5DataTypeTemplate) type).createDataType(dataSet.getElementId(), type.getHdfType().getStringLength()));
+	    	}
+    		
 		} catch (HDF5LibraryException hle) {
             NodeLogger.getLogger("HDF5 Files").error("DataSet or group with that name and filePath already exists", hle);
 			/* dataSet stays null */
@@ -97,6 +105,10 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			
 	    	parent.addDataSet(dataSet);
 	    	dataSet.open();
+	    	
+	    	if (type instanceof Hdf5DataTypeTemplate) {
+	    		dataSet.setType(((Hdf5DataTypeTemplate) type).openDataType(dataSet.getElementId()));
+	    	}
         	
         } catch (NullPointerException | IllegalArgumentException npiae) {
             NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened: " + npiae.getMessage(), npiae);
@@ -120,6 +132,10 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	public Hdf5DataType getType() {
 		return m_type;
+	}
+	
+	private void setType(Hdf5DataType type) {
+		m_type = type;
 	}
 	
 	/**

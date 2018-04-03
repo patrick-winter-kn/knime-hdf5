@@ -1,5 +1,6 @@
 package org.knime.hdf5.lib;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -107,8 +108,9 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * @param name the name of the new group
 	 * 
 	 * @return the new group 
+	 * @throws IOException 
 	 */
-	public synchronized Hdf5Group createGroup(final String name) {
+	public synchronized Hdf5Group createGroup(final String name) throws IOException {
 		Hdf5Group group = null;
 		
 		int objectType = -1;
@@ -119,11 +121,10 @@ public class Hdf5Group extends Hdf5TreeElement {
 				group = createGroup(this, name);
 				
 			} else if (objectType == HDF5Constants.H5I_GROUP || objectType == HDF5Constants.H5I_DATASET) {
-				NodeLogger.getLogger("HDF5 Files").error("There is already "
+				throw new IOException("There is already "
 						+ (objectType == HDF5Constants.H5I_GROUP ? "a group" 
 							: (objectType == HDF5Constants.H5I_DATASET ? "a dataSet" : "an object"))
-						+ " with the name \"" + name + "\" in this group", new IllegalArgumentException());
-				/* group stays null */
+						+ " with the name \"" + name + "\" in this group");
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			NodeLogger.getLogger("HDF5 Files").error("Existence of object could not be checked", hlnpe);
@@ -133,7 +134,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return group;
 	}
 	
-	public synchronized Hdf5DataSet<?> createDataSet(final String name, long[] dimensions, Hdf5DataType type) {
+	public synchronized Hdf5DataSet<?> createDataSet(final String name, long[] dimensions, Hdf5DataType type) throws IOException {
 		Hdf5DataSet<?> dataSet = null;
 		
 		int objectType = -1;
@@ -144,11 +145,10 @@ public class Hdf5Group extends Hdf5TreeElement {
 				dataSet = Hdf5DataSet.createDataSet(this, name, dimensions, type);
 				
 			} else if (objectType == HDF5Constants.H5I_DATASET || objectType == HDF5Constants.H5I_GROUP) {
-				NodeLogger.getLogger("HDF5 Files").error("There is already "
+				throw new IOException("There is already "
 						+ (objectType == HDF5Constants.H5I_DATASET ? "a dataSet" 
 							: (objectType == HDF5Constants.H5I_GROUP ? "a group" : "an object"))
-						+ " with the name \"" + name + "\" in this group", new IllegalArgumentException());
-				/* dataSet stays null */
+						+ " with the name \"" + name + "\" in this group");
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			NodeLogger.getLogger("HDF5 Files").error("Existence of object could not be checked", hlnpe);
@@ -250,7 +250,8 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 	
 	private int getObjectTypeByName(final String name) throws HDF5LibraryException, NullPointerException {
-		if (H5.H5Oexists_by_name(getElementId(), name, HDF5Constants.H5P_DEFAULT)) {
+		if (H5.H5Lexists(getElementId(), name, HDF5Constants.H5P_DEFAULT)
+				&& H5.H5Oexists_by_name(getElementId(), name, HDF5Constants.H5P_DEFAULT)) {
 			long elementId = H5.H5Oopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 			int typeId = H5.H5Iget_type(elementId); 
 			H5.H5Oclose(elementId);
