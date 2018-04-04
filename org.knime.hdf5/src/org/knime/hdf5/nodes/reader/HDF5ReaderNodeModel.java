@@ -101,7 +101,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		return new BufferedDataTable[] { outContainer.getTable() };
 	}
 
-	private void pushFlowVariables(Hdf5File file) {
+	private void pushFlowVariables(Hdf5File file) throws IOException {
 		String[] attributePaths = m_attributeFilterConfig.applyTo(file.createSpecOfAttributes()).getIncludes();
 		if (attributePaths != null) {
 			for (String attrPath: attributePaths) {
@@ -123,7 +123,6 @@ public class HDF5ReaderNodeModel extends NodeModel {
 						} else if (attr.getType().isKnimeType(Hdf5KnimeDataType.STRING)) {
 							pushFlowVariableString(attrPath, "" + attr.getValue()[0]);
 						}
-						
 					} else {
 						pushFlowVariableString(attrPath, Arrays.toString(attr.getValue()) + " ("
 								+ attr.getType().getKnimeType().getArrayType() + ")");
@@ -149,7 +148,13 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				String[] dataSetPaths = m_dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
 			
 				for (String dsPath : dataSetPaths) {
-					Hdf5DataSet<?> dataSet = file.getDataSetByPath(dsPath);
+					Hdf5DataSet<?> dataSet = null;
+					try {
+						dataSet = file.getDataSetByPath(dsPath);
+					} catch (IOException ioe) {
+						throw new InvalidSettingsException(ioe.getMessage(), ioe);
+					}
+					
 					Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
 					
 					try {
@@ -199,9 +204,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		Hdf5File file = null;
 		try {
 			file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-			
-		} catch (Exception e) {
-			throw new InvalidSettingsException(e.getMessage(), e);
+		} catch (IOException ioe) {
+			throw new InvalidSettingsException(ioe.getMessage(), ioe);
 		}
 		
 		try {
@@ -209,7 +213,13 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				String[] dataSetPaths = dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
 				Set<Long> rowSizes = new TreeSet<>();
 				for (String dataSetPath : dataSetPaths) {
-					Hdf5DataSet<?> dataSet = file.getDataSetByPath(dataSetPath);
+					Hdf5DataSet<?> dataSet = null;
+					try {
+						dataSet = file.getDataSetByPath(dataSetPath);
+					} catch (IOException ioe) {
+						throw new InvalidSettingsException(ioe.getMessage(), ioe);
+					}
+					
 					rowSizes.add(dataSet.getDimensions()[0]);
 				}
 				if (rowSizes.size() > 1) {
@@ -244,11 +254,14 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		SettingsModelString filePathSettings = SettingsFactory.createFilePathSettings();
 		filePathSettings.validateSettings(settings);
 		filePathSettings.loadSettingsFrom(settings);
+		
 		SettingsModelBoolean failIfRowSizeDiffersSettings = SettingsFactory.createFailIfRowSizeDiffersSettings();
 		failIfRowSizeDiffersSettings.validateSettings(settings);
 		failIfRowSizeDiffersSettings.loadSettingsFrom(settings);
+		
 		DataColumnSpecFilterConfiguration dataSetFilterConfig = SettingsFactory.createDataSetFilterConfiguration();
 		dataSetFilterConfig.loadConfigurationInModel(settings);
+		
 		checkForErrors(filePathSettings, failIfRowSizeDiffersSettings, dataSetFilterConfig);
 		
 		DataColumnSpecFilterConfiguration attributeFilterConfig = SettingsFactory.createAttributeFilterConfiguration();
@@ -258,7 +271,9 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	@Override
 	protected void loadValidatedSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
 		m_filePathSettings.loadSettingsFrom(settings);
+		
 		m_failIfRowSizeDiffersSettings.loadSettingsFrom(settings);
+		
 		DataColumnSpecFilterConfiguration dataSetFilterConfig = SettingsFactory.createDataSetFilterConfiguration();
 		dataSetFilterConfig.loadConfigurationInModel(settings);
 		m_dataSetFilterConfig = dataSetFilterConfig;

@@ -28,7 +28,7 @@ public class Hdf5DataTypeTemplate extends Hdf5DataType {
 				throw new IllegalStateException("DataType can only be for a DataSet or Attribute");
 			}
 			
-			dataType = new Hdf5DataType(elementId, this);
+			dataType = new Hdf5DataType(this);
 		
 		} catch (HDF5LibraryException hle) {
             NodeLogger.getLogger("HDF5 Files").error("Invalid elementId", hle);
@@ -39,20 +39,20 @@ public class Hdf5DataTypeTemplate extends Hdf5DataType {
 	}
 	
 	public Hdf5DataType createDataType(long elementId, long stringLength) {
-		Hdf5DataType dataType = null;
-		
-		dataType = getDataType(elementId);
-		dataType.getHdfType().createHdfDataType(elementId, stringLength);
-		
-		return dataType;
+		return getDataType(elementId);
 	}
 	
 	public Hdf5DataType openDataType(long elementId) {
 		Hdf5DataType dataType = null;
 		
 		dataType = getDataType(elementId);
-		dataType.getHdfType().openHdfDataType(elementId);
+		dataType.getHdfType().openHdfDataTypeString(elementId);
 		
 		return dataType;
+	}
+	
+	public boolean isSimilarTo(Hdf5DataType dataType) {
+		return getHdfTypeTemplate().isSimilarTo(dataType.getHdfType()) && isKnimeType(dataType.getKnimeType())
+				&& isVlen() == dataType.isVlen() && isFromDS() == dataType.isFromDS();
 	}
 }

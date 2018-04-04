@@ -2,77 +2,110 @@ package org.knime.hdf5.nodes.writer;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.List;
 
 import org.knime.core.data.DataRow;
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.container.CloseableRowIterator;
-import org.knime.core.data.def.IntCell;
 import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.CanceledExecutionException;
 import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.ExecutionMonitor;
 import org.knime.core.node.InvalidSettingsException;
+import org.knime.core.node.NodeCreationContext;
 import org.knime.core.node.NodeModel;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
+import org.knime.core.node.defaultnodesettings.SettingsModelString;
+import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
-import org.knime.hdf5.lib.types.Hdf5DataTypeTemplate;
-import org.knime.hdf5.lib.types.Hdf5HdfDataType;
-import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
-import org.knime.hdf5.lib.types.Hdf5HdfDataTypeTemplate;
-import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 public class HDF5WriterNodeModel extends NodeModel {
 
+	private SettingsModelString m_filePathSettings;
+	
+	private SettingsModelString m_groupPathSettings;
+	
+	private SettingsModelString m_groupNameSettings;
+	
 	protected HDF5WriterNodeModel() {
 		super(1, 0);
+		m_filePathSettings = SettingsFactory.createFilePathSettings();
+		m_groupPathSettings = SettingsFactory.createGroupPathSettings();
+		m_groupNameSettings = SettingsFactory.createGroupNameSettings();
+	}
+	
+	protected HDF5WriterNodeModel(NodeCreationContext context) {
+		this();
+		m_filePathSettings.setStringValue(context.getUrl().getPath());
 	}
 
-	@SuppressWarnings("unchecked")
+	private static String removeBeginAndEndSlashes(String path) {
+		int begin = path.startsWith("/") ? 1 : 0;
+		int end = path.length() - (path.endsWith("/") ?  1 : 0);
+		
+		return path.substring(begin, end);
+	}
+
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		String fname = "C:\\Program Files\\KNIME_SDK\\Data\\writer\\testwriter.h5";
-		String gname = "intTests";
-		String dname = "int_02";
-		long[] dims = new long[]{ 4, 3 };
-		
-		Hdf5File file = Hdf5File.openFile(fname, Hdf5File.READ_WRITE_ACCESS);
-		Hdf5Group group = null;
+		String filePath = m_filePathSettings.getStringValue();
+		String groupPath = removeBeginAndEndSlashes(m_groupPathSettings.getStringValue());
+		String groupName = m_groupNameSettings.getStringValue();
+
+		Hdf5File file = null;
 		try {
-			group = file.createGroup(gname);
+			file = Hdf5File.openFile(filePath, Hdf5File.READ_WRITE_ACCESS);
 		} catch (IOException ioe) {
-			group = file.getGroup(gname);
-		}
-		Hdf5DataTypeTemplate dataTypeTempl = new Hdf5DataTypeTemplate(
-				new Hdf5HdfDataTypeTemplate(HdfDataType.INTEGER, Hdf5HdfDataType.DEFAULT_STRING_LENGTH), 
-				Hdf5KnimeDataType.INTEGER, false, true);
-		Hdf5DataSet<Integer> dataSet = null;
-		try {
-			dataSet = (Hdf5DataSet<Integer>) group.createDataSet(dname, dims, dataTypeTempl);
-		} catch (IOException ioe) {
-			dataSet = (Hdf5DataSet<Integer>) group.getDataSet(dname);
+			throw new InvalidSettingsException(ioe.getMessage(), ioe);
 		}
 		
-		Integer[] outData = new Integer[(int) (dims[0] * dims[1])];
-		
-		CloseableRowIterator iter = inData[0].iterator();
-		int i = 0;
-		while (iter.hasNext()) {
-			DataRow row = iter.next();
-			for (int j = 0; j < dims[1]; j++) {
-				IntCell cell = (IntCell) row.getCell(j);
-				outData[i * (int) dims[1] + j] = cell.getIntValue();
+		try {
+			Hdf5Group parentGroup = file.getGroupByPath(groupPath);
+			Hdf5Group group = null;
+			try {
+				group = parentGroup.createGroup(groupName);
+				
+			} catch (IOException ioe) {
+				group = parentGroup.getGroup(groupName);
 			}
-			i++;
+			
+			List<Hdf5DataSet<?>> dataSets = group.createDataSetsFromSpec(groupName, inData[0].size(), inData[0].getDataTableSpec());
+			
+			CloseableRowIterator iter = inData[0].iterator();
+			int rowId = 0;
+			while (iter.hasNext()) {
+				exec.checkCanceled();
+				exec.setProgress((double) rowId / inData[0].size());
+				
+				DataRow row = iter.next();
+				int specIndex = 0;
+				for (int i = 0; i < dataSets.size(); i++) {
+					Hdf5DataSet<?> dataSet = dataSets.get(i);
+					dataSet.writeRowToDataSet(row, specIndex, rowId);
+					specIndex += dataSet.numberOfValuesFrom(1);
+				}
+				
+				rowId++;
+			}
+			
+			peekFlowVariables(group);
+			
+		} finally {
+			file.close();
 		}
-		
-		dataSet.write(outData);
-		
-		file.close();
 		
 		return null;
+	}
+	
+	private void peekFlowVariables(Hdf5Group group) throws IOException {
+		Iterator<FlowVariable> iter = getAvailableFlowVariables().values().iterator();
+		while (iter.hasNext()) {
+			group.createAndWriteAttributeFromFlowVariable(iter.next());
+		}
 	}
 	
 	@Override
@@ -89,13 +122,33 @@ public class HDF5WriterNodeModel extends NodeModel {
 			throws IOException, CanceledExecutionException {}
 
 	@Override
-	protected void saveSettingsTo(NodeSettingsWO settings) {}
+	protected void saveSettingsTo(NodeSettingsWO settings) {
+		m_filePathSettings.saveSettingsTo(settings);
+		m_groupPathSettings.saveSettingsTo(settings);
+		m_groupNameSettings.saveSettingsTo(settings);
+	}
 
 	@Override
-	protected void validateSettings(NodeSettingsRO settings) throws InvalidSettingsException {}
+	protected void validateSettings(NodeSettingsRO settings) throws InvalidSettingsException {
+		SettingsModelString filePathSettings = SettingsFactory.createFilePathSettings();
+		filePathSettings.validateSettings(settings);
+		filePathSettings.loadSettingsFrom(settings);
+		
+		SettingsModelString groupPathSettings = SettingsFactory.createGroupPathSettings();
+		groupPathSettings.validateSettings(settings);
+		groupPathSettings.loadSettingsFrom(settings);
+		
+		SettingsModelString groupNameSettings = SettingsFactory.createGroupNameSettings();
+		groupNameSettings.validateSettings(settings);
+		groupNameSettings.loadSettingsFrom(settings);
+	}
 
 	@Override
-	protected void loadValidatedSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {}
+	protected void loadValidatedSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
+		m_filePathSettings.loadSettingsFrom(settings);
+		m_groupPathSettings.loadSettingsFrom(settings);
+		m_groupNameSettings.loadSettingsFrom(settings);
+	}
 
 	@Override
 	protected void reset() {}

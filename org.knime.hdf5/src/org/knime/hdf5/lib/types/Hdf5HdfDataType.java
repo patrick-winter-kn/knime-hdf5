@@ -6,6 +6,11 @@ import java.util.Map;
 
 import javax.activation.UnsupportedDataTypeException;
 
+import org.knime.core.data.DataType;
+import org.knime.core.data.def.DoubleCell;
+import org.knime.core.data.def.IntCell;
+import org.knime.core.data.def.LongCell;
+import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
 
 import hdf.hdf5lib.H5;
@@ -41,27 +46,45 @@ public class Hdf5HdfDataType {
 		private HdfDataType(int typeId) {
 			m_typeId = typeId;
 		}
-		
-		int getTypeId() {
-			return m_typeId;
-		}
 
 		static HdfDataType get(int typeId) {
 			return LOOKUP.get(typeId);
 		}
+		
+		public static HdfDataType getHdfDataType(DataType type) throws UnsupportedDataTypeException {
+			if (type.equals(IntCell.TYPE)) {	
+				return INTEGER;
+			} else if (type.equals(LongCell.TYPE)) {	
+				return LONG;
+			} else if (type.equals(DoubleCell.TYPE)) {	
+				return DOUBLE;
+			} else if (type.equals(StringCell.TYPE)) {	
+				return STRING;
+			}
+			throw new UnsupportedDataTypeException("Unknown dataType");
+		}
+		
+		int getTypeId() {
+			return m_typeId;
+		}
 	}
 	
-	public static final long DEFAULT_STRING_LENGTH = 0L;
+	public static final long DEFAULT_STRING_LENGTH = 63L;
 
 	private static final Map<HdfDataType, Hdf5HdfDataType> LOOKUP = new HashMap<>();
-	
-	private static final Map<Long, Hdf5HdfDataType> LOOKUP_STRING = new HashMap<>();
 	
 	private final HdfDataType m_type;
 	
 	private final long[] m_constants = { -1, -1 };
 	
 	private long m_stringLength;
+	
+	private Hdf5HdfDataType(Hdf5HdfDataTypeTemplate templ) {
+		m_type = templ.getType();
+		m_constants[0] = templ.getConstants()[0];
+		m_constants[1] = templ.getConstants()[1];
+		m_stringLength = templ.getStringLength();
+	}
 	
 	protected Hdf5HdfDataType(final HdfDataType type) {
 		m_type = type;
@@ -119,16 +142,20 @@ public class Hdf5HdfDataType {
 			m_constants[1] = HDF5Constants.H5T_NATIVE_UCHAR;
 			break;
 		case STRING:
-			/* other constructor used */
 			break;
 		case REFERENCE:
 			m_constants[0] = HDF5Constants.H5T_REFERENCE;
 		}
 	}
 	
-	private Hdf5HdfDataType(final long elementId) {
-		m_type = HdfDataType.STRING;
-		LOOKUP_STRING.put(elementId, this);
+	static synchronized Hdf5HdfDataType getInstance(Hdf5HdfDataTypeTemplate templ) {
+		if (templ.getType() != HdfDataType.STRING) {
+			if (LOOKUP.containsKey(templ.getType())) {
+				return LOOKUP.get(templ.getType());
+			}
+		}
+		
+		return new Hdf5HdfDataType(templ);
 	}
 
 	/**
@@ -150,21 +177,15 @@ public class Hdf5HdfDataType {
 	 * @param stringLength
 	 * 
 	 */
-	static synchronized Hdf5HdfDataType getInstance(final HdfDataType type, final long elementId) {
-		if (type != HdfDataType.STRING) {
-			if (LOOKUP.containsKey(type)) {
-				return LOOKUP.get(type);
-			}
-			return new Hdf5HdfDataType(type);
-			
-		} else if (LOOKUP_STRING.containsKey(elementId)) {
-			return LOOKUP_STRING.get(elementId);
+	static synchronized Hdf5HdfDataType getInstance(final HdfDataType type) {
+		if (type != HdfDataType.STRING && LOOKUP.containsKey(type)) {
+			return LOOKUP.get(type);
 		}
 		
-		return new Hdf5HdfDataType(elementId);
+		return new Hdf5HdfDataType(type);
 	}
 	
-	void createHdfDataType(final long elementId, final long stringLength) {
+	void createHdfDataTypeString(final long stringLength) {
 		if (m_type == HdfDataType.STRING) {
 			try {
 				// Create file and memory datatypes. For this example we will save
@@ -187,7 +208,7 @@ public class Hdf5HdfDataType {
 		}
 	}
 	
-	void openHdfDataType(final long elementId) {
+	void openHdfDataTypeString(final long elementId) {
 		if (m_type == HdfDataType.STRING) {
 			try {
 				long fileTypeId = H5.H5Iget_type(elementId) == HDF5Constants.H5I_DATASET ? H5.H5Dget_type(elementId) : H5.H5Aget_type(elementId);

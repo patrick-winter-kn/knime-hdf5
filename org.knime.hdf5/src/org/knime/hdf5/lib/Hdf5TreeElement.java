@@ -9,8 +9,18 @@ import java.util.Map;
 
 import javax.activation.UnsupportedDataTypeException;
 
+import org.knime.core.data.DataColumnSpec;
+import org.knime.core.data.DataColumnSpecCreator;
+import org.knime.core.data.DataTableSpec;
+import org.knime.core.data.DataType;
 import org.knime.core.node.NodeLogger;
+import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.types.Hdf5DataType;
+import org.knime.hdf5.lib.types.Hdf5DataTypeTemplate;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataTypeTemplate;
+import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -139,7 +149,7 @@ abstract public class Hdf5TreeElement {
 		return attribute;
 	}
 	
-	public synchronized Hdf5Attribute<?> getAttribute(final String name) {
+	public synchronized Hdf5Attribute<?> getAttribute(final String name) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
 		Iterator<Hdf5Attribute<?>> iter = getAttributes().iterator();
@@ -152,13 +162,18 @@ abstract public class Hdf5TreeElement {
 			}
 		}
 		
-		try {
-			if (!found && existsAttribute(name)) {
-				attribute = Hdf5Attribute.openAttribute(this, name);
+		if (!found) {
+			try {
+				if (existsAttribute(name)) {
+					attribute = Hdf5Attribute.openAttribute(this, name);
+					
+				} else {
+					throw new IOException("Attribute \"" + getPathFromFileWithName() + name + "\" does not exist");
+				}
+			} catch (HDF5LibraryException | NullPointerException hlnpe) {
+				NodeLogger.getLogger("HDF5 Files").error("Existence of attribute could not be checked", hlnpe);
+				/* attribute stays null */
 			}
-		} catch (HDF5LibraryException | NullPointerException hlnpe) {
-			NodeLogger.getLogger("HDF5 Files").error("Existence of attribute could not be checked", hlnpe);
-			/* attribute stays null */
 		}
 		
 		return attribute;
@@ -168,7 +183,7 @@ abstract public class Hdf5TreeElement {
 		return H5.H5Aexists(getElementId(), name);
 	}
 	
-	public Hdf5Attribute<?> getAttributeByPath(final String path) {
+	public Hdf5Attribute<?> getAttributeByPath(final String path) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
 		if (path.contains("/")) {
@@ -201,19 +216,19 @@ abstract public class Hdf5TreeElement {
 		List<String> attrNames = new ArrayList<>();
 		long numAttrs = -1;
 		Hdf5TreeElement treeElement = this instanceof Hdf5File ? this : getParent();
-		String path = this instanceof Hdf5File ? "/" : getName();
+		String name = this instanceof Hdf5File ? "/" : getName();
 		
 		try {
 			if (treeElement.isOpen()) {
 				numAttrs = H5.H5Oget_info(getElementId()).num_attrs;
 				for (int i = 0; i < numAttrs; i++) {
-					attrNames.add(H5.H5Aget_name_by_idx(treeElement.getElementId(), path,
+					attrNames.add(H5.H5Aget_name_by_idx(treeElement.getElementId(), name,
 							HDF5Constants.H5_INDEX_NAME, HDF5Constants.H5_ITER_INC, i,
 							HDF5Constants.H5P_DEFAULT));
 				}
 			} else {
 				NodeLogger.getLogger("HDF5 Files").error("The parent \"" + treeElement.getName()
-						+ "\" of \"" + path + "\" is not open!", new IllegalStateException());
+						+ "\" of \"" + name + "\" is not open!", new IllegalStateException());
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			NodeLogger.getLogger("HDF5 Files").error("List of attributes could not be loaded", hlnpe);
@@ -243,6 +258,125 @@ abstract public class Hdf5TreeElement {
 		}
 		
 		return paths;
+	}
+	
+	public Map<String, Hdf5DataType> getAllAttributesInfo() {
+		Map<String, Hdf5DataType> paths = new LinkedHashMap<>();
+		
+		if (isOpen()) {
+			String path = getPathFromFileWithName(false);
+			
+			Iterator<String> iterAttr = loadAttributeNames().iterator();
+			while (iterAttr.hasNext()) {
+				String name = iterAttr.next();
+				
+				try {
+					Hdf5DataType dataType = findAttributeType(name);
+					paths.put(path + name, dataType);
+					
+				} catch (IllegalArgumentException iae) {
+					NodeLogger.getLogger("HDF5 Files").error(iae.getMessage(), iae);
+					
+				} catch (UnsupportedDataTypeException udte) {
+					NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
+				}
+			}
+			
+			
+			
+			if (this instanceof Hdf5Group) {
+				Iterator<String> iterDS = ((Hdf5Group) this).loadDataSetNames().iterator();
+				while (iterDS.hasNext()) {
+					try {
+						Hdf5DataSet<?> dataSet = ((Hdf5Group) this).getDataSet(iterDS.next());
+						paths.putAll(dataSet.getAllAttributesInfo());
+						
+					} catch (IOException | NullPointerException ionpe) {
+						NodeLogger.getLogger("HDF5 Files").error(ionpe.getMessage(), ionpe);
+					}
+				}
+			
+				Iterator<String> iterG = ((Hdf5Group) this).loadGroupNames().iterator();
+				while (iterG.hasNext()) {
+					try {
+						Hdf5Group group = ((Hdf5Group) this).getGroup(iterG.next());
+						paths.putAll(group.getAllAttributesInfo());
+						
+					} catch (IOException | NullPointerException ionpe) {
+						NodeLogger.getLogger("HDF5 Files").error(ionpe.getMessage(), ionpe);
+					}
+				}
+			}
+		} else {
+			throw new IllegalStateException("\"" + getPathFromFileWithName() + "\" is not open");
+		}
+		
+		return paths;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public Hdf5Attribute<?> createAndWriteAttributeFromFlowVariable(FlowVariable flowVariable) throws IOException {
+		Hdf5DataTypeTemplate dataTypeTempl = null;
+		
+		switch (flowVariable.getType()) {
+		case INTEGER:
+			dataTypeTempl = new Hdf5DataTypeTemplate(
+					new Hdf5HdfDataTypeTemplate(HdfDataType.INTEGER, Hdf5HdfDataType.DEFAULT_STRING_LENGTH), 
+					Hdf5KnimeDataType.INTEGER, false, true);
+			Hdf5Attribute<Integer> attributeInteger = (Hdf5Attribute<Integer>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataTypeTempl);
+			attributeInteger.write(new Integer[] { flowVariable.getIntValue() });
+			return attributeInteger;
+			
+		case DOUBLE:
+			dataTypeTempl = new Hdf5DataTypeTemplate(
+					new Hdf5HdfDataTypeTemplate(HdfDataType.DOUBLE, Hdf5HdfDataType.DEFAULT_STRING_LENGTH), 
+					Hdf5KnimeDataType.DOUBLE, false, true);
+			Hdf5Attribute<Double> attributeDouble = (Hdf5Attribute<Double>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataTypeTempl);
+			attributeDouble.write(new Double[] { flowVariable.getDoubleValue() });
+			return attributeDouble;
+			
+		case STRING:
+			dataTypeTempl = new Hdf5DataTypeTemplate(
+					new Hdf5HdfDataTypeTemplate(HdfDataType.STRING, Hdf5HdfDataType.DEFAULT_STRING_LENGTH), 
+					Hdf5KnimeDataType.STRING, false, true);
+			Hdf5Attribute<String> attributeString = (Hdf5Attribute<String>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataTypeTempl);
+			attributeString.write(new String[] { flowVariable.getStringValue() });
+			return attributeString;
+			
+		default:
+			throw new UnsupportedDataTypeException("Unknown knimeDataType");
+		}
+	}
+	
+	/**
+	 *
+	 * @param object only ATTRIBUTE and DATASET allowed, DATASET only for instances of Hdf5Group
+	 * @return
+	 */
+	protected DataTableSpec createSpecOfObjects(int objectId) {
+		List<DataColumnSpec> colSpecList = new ArrayList<>();
+		
+		Map<String, Hdf5DataType> objInfo = objectId == HDF5Constants.H5I_ATTR ? getAllAttributesInfo() : ((Hdf5Group) this).getAllDataSetsInfo();
+		Iterator<String> iter = objInfo.keySet().iterator();
+		while (iter.hasNext()) {
+			String objPath = iter.next();
+			Hdf5DataType dataType = objInfo.get(objPath);
+			if (dataType != null) {
+				try {
+					DataType objType = dataType.getKnimeType().getColumnDataType();
+					colSpecList.add(new DataColumnSpecCreator(objPath, objType).createSpec());
+					
+				} catch (UnsupportedDataTypeException udte) {
+					NodeLogger.getLogger("HDF5 Files").error(udte.getMessage(), udte);
+				}
+			}	
+		}
+		
+		return new DataTableSpec(colSpecList.toArray(new DataColumnSpec[] {}));
+	}
+	
+	public DataTableSpec createSpecOfAttributes() {
+		return createSpecOfObjects(HDF5Constants.H5I_ATTR);
 	}
 	
 	/**

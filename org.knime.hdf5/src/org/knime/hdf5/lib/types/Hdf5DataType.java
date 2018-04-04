@@ -35,8 +35,8 @@ public class Hdf5DataType {
 		m_fromDS = fromDS;
 	}
 	
-	protected Hdf5DataType(long elementId, Hdf5DataTypeTemplate templ) {
-		m_hdfType = templ.getHdfTypeTemplate().getInstance(elementId);
+	protected Hdf5DataType(Hdf5DataTypeTemplate templ) {
+		m_hdfType = Hdf5HdfDataType.getInstance(templ.getHdfTypeTemplate());
 		m_knimeType = templ.getKnimeType();
 		m_vlen = templ.isVlen();
 		m_fromDS = templ.isFromDS();
@@ -69,7 +69,7 @@ public class Hdf5DataType {
 			typeId = 30 + (unsigned ? 1 : 0);
 		}*/
 		
-		m_hdfType = Hdf5HdfDataType.getInstance(HdfDataType.get(typeId), elementId);
+		m_hdfType = Hdf5HdfDataType.getInstance(HdfDataType.get(typeId));
 		
 		switch (m_hdfType.getType()) {
 		case BYTE:
@@ -125,7 +125,7 @@ public class Hdf5DataType {
 		
 		try {
 			dataType = getInstance(elementId, classId, size, unsigned, vlen);
-			dataType.getHdfType().createHdfDataType(elementId, stringLength);
+			dataType.getHdfType().createHdfDataTypeString(stringLength);
     		
 		} catch (NullPointerException | IllegalArgumentException npiae) {
             NodeLogger.getLogger("HDF5 Files").error("DataType could not be created: " + npiae.getMessage(), npiae);
@@ -140,7 +140,7 @@ public class Hdf5DataType {
 		
 		try {
 			dataType = getInstance(elementId, classId, size, unsigned, vlen);
-			dataType.getHdfType().openHdfDataType(elementId);
+			dataType.getHdfType().openHdfDataTypeString(elementId);
 			
 		} catch (NullPointerException | IllegalArgumentException npiae) {
             NodeLogger.getLogger("HDF5 Files").error("DataType could not be created: " + npiae.getMessage(), npiae);
@@ -178,7 +178,7 @@ public class Hdf5DataType {
 		return m_knimeType == knimeType;
 	}
 	
-	public boolean equalTypes() throws UnsupportedDataTypeException {
+	public boolean hdfTypeEqualsKnimeType() throws UnsupportedDataTypeException {
 		switch (m_knimeType) {
 		case INTEGER:
 			return isHdfType(HdfDataType.INTEGER);

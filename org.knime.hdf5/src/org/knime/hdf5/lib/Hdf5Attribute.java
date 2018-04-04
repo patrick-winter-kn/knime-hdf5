@@ -290,7 +290,7 @@ public class Hdf5Attribute<Type> {
 					}
 				}
 				
-			} else if (m_type.equalTypes()) {
+			} else if (m_type.hdfTypeEqualsKnimeType()) {
 				H5.H5Aread(m_attributeId, m_type.getConstants()[1], dataOut);
 				
 			} else {

@@ -6,9 +6,11 @@ import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 
 final class SettingsFactory {
 
-	static final String DATA_SET_FILTER_CONFIG_KEY = "dataSetFilter";
+	private static final String DATA_SET_FILTER_CONFIG_KEY = "dataSetFilter";
 
-	static final String ATTRIBUTE_FILTER_CONFIG_KEY = "attributeFilter";
+	private static final String ATTRIBUTE_FILTER_CONFIG_KEY = "attributeFilter";
+	
+	private static final String INPUT_CONFIG_KEY = "_Input";
 
 	private SettingsFactory() {
 		// Disables default constructor
@@ -21,7 +23,7 @@ final class SettingsFactory {
 	 * @return Source <code>SettingsModel</code>
 	 */
 	static SettingsModelString createFilePathSettings() {
-		return new SettingsModelString("filePath", "");
+		return new SettingsModelString("filePath" + INPUT_CONFIG_KEY, "");
 	}
 
 	/**
@@ -32,7 +34,7 @@ final class SettingsFactory {
 	 * @return Source <code>SettingsModel</code>
 	 */
 	static SettingsModelBoolean createFailIfRowSizeDiffersSettings() {
-		return new SettingsModelBoolean("failIfRowSizeDiffers", true);
+		return new SettingsModelBoolean("failIfRowSizeDiffers" + INPUT_CONFIG_KEY, true);
 	}
 
     /** A new configuration to store the settings of the dataSet filter. Also enables the type filter.

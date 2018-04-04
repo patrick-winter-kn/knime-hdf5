@@ -7,6 +7,7 @@ import java.util.List;
 import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.data.DataCell;
+import org.knime.core.data.DataRow;
 import org.knime.core.data.MissingCell;
 import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
@@ -84,12 +85,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	    		dataSet.setType(((Hdf5DataTypeTemplate) type).createDataType(dataSet.getElementId(), type.getHdfType().getStringLength()));
 	    	}
     		
-		} catch (HDF5LibraryException hle) {
-            NodeLogger.getLogger("HDF5 Files").error("DataSet or group with that name and filePath already exists", hle);
-			/* dataSet stays null */
-            
-		} catch (NullPointerException | IllegalArgumentException npiae) {
-            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be created: " + npiae.getMessage(), npiae);
+		} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException hlnpiae) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be created: " + hlnpiae.getMessage(), hlnpiae);
 			/* dataSet stays null */
         }
 		
@@ -209,30 +206,94 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		}
 	}
 	
+	private long selectChunkOfRows(long fromRow, long toRow) throws HDF5Exception, NullPointerException {
+		long memSpaceId = H5.H5Screate_simple(m_dimensions.length - 1,
+        		Arrays.copyOfRange(m_dimensions, 1, m_dimensions.length), null);
+        
+        /*
+         * using chunks for reading dataSets is only possible with available (more than 0) dimensions
+         * according to H5.H5Sget_simple_extent_dims() (method is used when dataSet is being read)
+         */
+        if (m_dimsAvailable) {
+        	long[] offset = new long[m_dimensions.length];
+			offset[0] = fromRow;
+			long[] count = m_dimensions.clone();
+			count[0] = toRow - fromRow;
+			
+			H5.H5Sselect_hyperslab(m_dataspaceId, HDF5Constants.H5S_SELECT_SET,
+					offset, null, count, null);
+        }
+        
+        return memSpaceId;
+	}
+	
+	public boolean writeRow(Type[] dataIn, long rowId) {
+		return writeRows(dataIn, rowId, rowId + 1);
+	}
+	
 	/**
 	 * 
-	 * @param dataIn
-	 * @return {@code true} if the dataSet was written otherwise {@code false}
-	 * @throws NullPointerException 
-	 * @throws  
+	 * @param fromRow inclusive row index
+	 * @param toRow exclusive row index
+	 * @return
 	 */
-	public boolean write(Type[] dataIn) throws HDF5Exception, NullPointerException {
-		if (isOpen()) {
-			if (getType().isKnimeType(Hdf5KnimeDataType.STRING)) {
-				H5.H5Dwrite_string(getElementId(), getType().getConstants()[1],
-						HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-						HDF5Constants.H5P_DEFAULT, (String[]) dataIn);
+	public boolean writeRows(Type[] dataIn, long fromRow, long toRow) {
+		try {
+	        if (isOpen()) {
+	        	long memSpaceId = selectChunkOfRows(fromRow, toRow);
 				
-        	} else {
-                H5.H5Dwrite(getElementId(), getType().getConstants()[1],
-                        HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-                        HDF5Constants.H5P_DEFAULT, dataIn);
-            }
-			return true;
-			
-    	} else {
-            throw new IllegalStateException("DataSet \"" + getPathFromFileWithName() + "\" is not open: data could not be written into it");
-    	}
+	            if (isOpen()) {
+	    			if (m_type.isKnimeType(Hdf5KnimeDataType.STRING)) {
+	    				H5.H5Dwrite_string(getElementId(), m_type.getConstants()[1],
+	    						memSpaceId, m_dataspaceId,
+	    						HDF5Constants.H5P_DEFAULT, (String[]) dataIn);
+	    				
+	            	} else {
+	                    H5.H5Dwrite(getElementId(), m_type.getConstants()[1],
+	                    		memSpaceId, m_dataspaceId,
+	                            HDF5Constants.H5P_DEFAULT, dataIn);
+	                }
+	    			
+					H5.H5Sclose(memSpaceId);
+					
+	    			return true;
+	    			
+	        	} else {
+	                throw new IllegalStateException("DataSet \"" + getPathFromFileWithName() + "\" is not open: data could not be written into it");
+	        	}
+			}
+	    } catch (HDF5Exception | NullPointerException | IllegalArgumentException hnpiae) {
+            NodeLogger.getLogger("HDF5 Files").error(hnpiae.getMessage(), hnpiae);
+        }
+		
+		return false;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public boolean writeRowToDataSet(DataRow row, int specIndex, long rowId) throws UnsupportedDataTypeException {
+		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfValuesFrom(1));
+		
+		for (int i = 0; i < dataIn.length; i++) {
+			dataIn[i] = getValueFromDataCell(row.getCell(specIndex + i));
+		}
+		
+		return writeRow(dataIn, rowId);
+	}
+	
+	@SuppressWarnings("unchecked")
+	private Type getValueFromDataCell(DataCell dataCell) throws UnsupportedDataTypeException {
+		switch (getType().getKnimeType()) {
+		case INTEGER:
+			return (Type) (Integer) ((IntCell) dataCell).getIntValue();
+		case LONG:
+			return (Type) (Long) ((LongCell) dataCell).getLongValue();
+		case DOUBLE:
+			return (Type) (Double) ((DoubleCell) dataCell).getDoubleValue();
+		case STRING:
+			return (Type) (String) ((StringCell) dataCell).getStringValue();
+		default:
+			throw new UnsupportedDataTypeException("Unknown knimeDataType");
+		}
 	}
 	
 	public Type[] readRow(long rowId) {
@@ -251,61 +312,47 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		
 		try {
 	        if (isOpen()) {
-	        	Hdf5DataType dataType = getType();
-	        	dataOut = (Type[]) dataType.getKnimeType().createArray((int) numberOfValuesFrom(1));
+	        	dataOut = (Type[]) m_type.getKnimeType().createArray((int) numberOfValuesFrom(1));
 
-	            long memSpaceId = H5.H5Screate_simple(m_dimensions.length - 1,
-	            		Arrays.copyOfRange(m_dimensions, 1, m_dimensions.length), null);
-	            
-	            /*
-	             * using chunks for reading dataSets is only possible with available (more than 0) dimensions
-	             * according to H5.H5Sget_simple_extent_dims()
-	             */
-	            if (m_dimsAvailable) {
-		        	long[] offset = new long[m_dimensions.length];
-					offset[0] = fromRow;
-					long[] count = m_dimensions.clone();
-					count[0] = toRow - fromRow;
-					
-					H5.H5Sselect_hyperslab(m_dataspaceId, HDF5Constants.H5S_SELECT_SET,
-							offset, null, count, null);
-	            }
+	            long memSpaceId = selectChunkOfRows(fromRow, toRow);
 				
-				if (dataType.isKnimeType(Hdf5KnimeDataType.STRING)) {
-	                if (dataType.isVlen()) {
-						long typeId = H5.H5Tget_native_type(dataType.getConstants()[0]);
+				if (m_type.isKnimeType(Hdf5KnimeDataType.STRING)) {
+	                if (m_type.isVlen()) {
+						long typeId = H5.H5Tget_native_type(m_type.getConstants()[0]);
 	                    H5.H5DreadVL(getElementId(), typeId,
 	                    		memSpaceId, m_dataspaceId,
 								HDF5Constants.H5P_DEFAULT, dataOut);
 	    				H5.H5Tclose(typeId);
 	                    
 	                } else {
-						H5.H5Dread_string(getElementId(), dataType.getConstants()[1],
+						H5.H5Dread_string(getElementId(), m_type.getConstants()[1],
 								memSpaceId, m_dataspaceId,
 								HDF5Constants.H5P_DEFAULT, (String[]) dataOut);
 					}
 					
-				} else if (dataType.equalTypes()) {
-		            H5.H5Dread(getElementId(), dataType.getConstants()[1],
+				} else if (m_type.hdfTypeEqualsKnimeType()) {
+		            H5.H5Dread(getElementId(), m_type.getConstants()[1],
 		            		memSpaceId, m_dataspaceId,
 		                    HDF5Constants.H5P_DEFAULT, dataOut);
 					
 				} else {
-					Object[] dataRead = (Object[]) dataType.getHdfType().createArray((int) numberOfValuesFrom(1));
-		            H5.H5Dread(getElementId(), dataType.getConstants()[1],
+					Object[] dataRead = (Object[]) m_type.getHdfType().createArray((int) numberOfValuesFrom(1));
+		            H5.H5Dread(getElementId(), m_type.getConstants()[1],
 		            		memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, dataRead);
 		            
-					Class hdfClass = dataType.getHdfClass();
-					Class knimeClass = dataType.getKnimeClass();
+					Class hdfClass = m_type.getHdfClass();
+					Class knimeClass = m_type.getKnimeClass();
 					for (int i = 0; i < dataRead.length; i++) {
-						dataOut[i] = (Type) dataType.hdfToKnime(hdfClass, hdfClass.cast(dataRead[i]), knimeClass);
+						dataOut[i] = (Type) m_type.hdfToKnime(hdfClass, hdfClass.cast(dataRead[i]), knimeClass);
 					}
 				}
 				
 				H5.H5Sclose(memSpaceId);
-			}
-	    } catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException | IllegalArgumentException hludtnpiae) {
-            NodeLogger.getLogger("HDF5 Files").error(hludtnpiae.getMessage(), hludtnpiae);
+			} else {
+                throw new IllegalStateException("DataSet \"" + getPathFromFileWithName() + "\" is not open: data could not be read");
+        	}
+	    } catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException | IllegalArgumentException hudtnpiae) {
+            NodeLogger.getLogger("HDF5 Files").error(hudtnpiae.getMessage(), hudtnpiae);
         }
 		
 		return dataOut;
@@ -373,6 +420,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         try {
             m_dataspaceId = H5.H5Screate_simple(m_dimensions.length,
             		m_dimensions, null);
+			m_dimsAvailable = m_dimensions.length != 0;
             
         } catch (HDF5Exception | NullPointerException hnpe) {
             NodeLogger.getLogger("HDF5 Files").error("DataSpace could not be created", hnpe);

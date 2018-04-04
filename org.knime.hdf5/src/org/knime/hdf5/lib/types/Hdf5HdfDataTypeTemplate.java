@@ -4,9 +4,10 @@ public class Hdf5HdfDataTypeTemplate extends Hdf5HdfDataType {
 
 	public Hdf5HdfDataTypeTemplate(HdfDataType type, long stringLength) {
 		super(type);
+		createHdfDataTypeString(stringLength);
 	}
-
-	Hdf5HdfDataType getInstance(final long elementId) {
-		return getInstance(getType(), elementId);
+	
+	boolean isSimilarTo(Hdf5HdfDataType hdfType) {
+		return getType() == hdfType.getType() && getStringLength() == hdfType.getStringLength();
 	}
 }

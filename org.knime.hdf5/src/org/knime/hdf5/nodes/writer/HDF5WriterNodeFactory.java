@@ -1,16 +1,22 @@
 package org.knime.hdf5.nodes.writer;
 
+import org.knime.core.node.ContextAwareNodeFactory;
+import org.knime.core.node.NodeCreationContext;
 import org.knime.core.node.NodeDialogPane;
-import org.knime.core.node.NodeFactory;
 import org.knime.core.node.NodeView;
 
-public class HDF5WriterNodeFactory extends NodeFactory<HDF5WriterNodeModel> {
+public class HDF5WriterNodeFactory extends ContextAwareNodeFactory<HDF5WriterNodeModel> {
 	/**
      * {@inheritDoc}
      */
 	@Override
 	public HDF5WriterNodeModel createNodeModel() {
 		return new HDF5WriterNodeModel();
+	}
+	
+	@Override
+	public HDF5WriterNodeModel createNodeModel(NodeCreationContext context) {
+		return new HDF5WriterNodeModel(context);
 	}
 
     /**
