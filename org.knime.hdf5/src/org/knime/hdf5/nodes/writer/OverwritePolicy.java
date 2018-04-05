@@ -32,7 +32,6 @@ enum OverwritePolicy {
      * @return Array of all overwrite policy settings
      */
     static String[] getAllSettings() {
-        return new String[]{OVERWRITE.getName(), ABORT.getName()};
+        return new String[] { OVERWRITE.getName(), ABORT.getName() };
     }
-
 }

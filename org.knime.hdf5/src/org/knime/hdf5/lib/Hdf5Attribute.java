@@ -5,7 +5,7 @@ import javax.activation.UnsupportedDataTypeException;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5DataTypeTemplate;
-import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -54,7 +54,7 @@ public class Hdf5Attribute<Type> {
 	}
 	
 	private static Hdf5Attribute<?> getInstance(final Hdf5TreeElement parent, final String name,
-			final Hdf5DataType type) {
+			final Hdf5DataType type) throws IllegalStateException {
 		if (parent == null) {
 			throw new IllegalArgumentException("Parent group of dataSet \"" + name + "\" cannot be null");
 			
@@ -97,10 +97,10 @@ public class Hdf5Attribute<Type> {
 	    		attribute.setType(((Hdf5DataTypeTemplate) type).createDataType(attribute.getAttributeId(), type.getHdfType().getStringLength()));
 	    	}
         	
-        } catch (HDF5Exception | NullPointerException | IllegalArgumentException hnpiae) {
+        } catch (HDF5Exception | NullPointerException | IllegalArgumentException | IllegalStateException hnpiaise) {
             NodeLogger.getLogger("HDF5 Files").error("Attribute \""
 					+ parent.getPathFromFileWithName() + name + "\" could not be created: "
-            		+ hnpiae.getMessage(), hnpiae);
+            		+ hnpiaise.getMessage(), hnpiaise);
 			/* attribute stays null */
         }
 		
@@ -122,10 +122,10 @@ public class Hdf5Attribute<Type> {
 	    	}
         	
         } catch (UnsupportedDataTypeException | NullPointerException
-        		| IllegalArgumentException udtnpiae) {
+        		| IllegalArgumentException | IllegalStateException udtnpiaise) {
             NodeLogger.getLogger("HDF5 Files").error("Attribute \""
 					+ parent.getPathFromFileWithName() + name + "\" could not be opened: "
-					+ udtnpiae.getMessage(), udtnpiae);
+					+ udtnpiaise.getMessage(), udtnpiaise);
 			/* attribute stays null */
         }
 		
@@ -238,7 +238,25 @@ public class Hdf5Attribute<Type> {
 	 */
 	public boolean write(final Type[] value) {
         try {
-			H5.H5Awrite(m_attributeId, m_type.getConstants()[1], value);
+        	if (m_type.isHdfType(HdfDataType.STRING)) {
+    			int dim = (int) m_dimension;
+	            long stringLength = m_type.getHdfType().getStringLength();
+				byte[] dataIn = new byte[dim * ((int) stringLength + 1)];
+				
+				for (int i = 0; i < dim; i++) {
+					char[] dataChar = ((String) value[i]).toCharArray();
+					
+					for (int j = 0; j < dataChar.length; j++) {
+						dataIn[i * ((int) stringLength + 1) + j] = (byte) dataChar[j];
+					}
+				}
+				
+				H5.H5Awrite(m_attributeId, m_type.getConstants()[1], dataIn);
+				
+			} else {
+				H5.H5Awrite(m_attributeId, m_type.getConstants()[1], value);
+        	}
+        	
 			m_value = value;
 			return true;
 			
@@ -268,7 +286,7 @@ public class Hdf5Attribute<Type> {
 			int dim = (int) m_dimension;
 			dataOut = (Type[]) m_type.getKnimeType().createArray(dim);
 			
-			if (m_type.isKnimeType(Hdf5KnimeDataType.STRING)) {
+			if (m_type.isHdfType(HdfDataType.STRING)) {
 	            if (m_type.isVlen()) {
 					long typeId = H5.H5Tget_native_type(m_type.getConstants()[0]);
 	                H5.H5AreadVL(m_attributeId, typeId, (String[]) dataOut);
@@ -289,7 +307,6 @@ public class Hdf5Attribute<Type> {
 						dataOut[i] = (Type) String.copyValueOf(dataChar[i]);
 					}
 				}
-				
 			} else if (m_type.hdfTypeEqualsKnimeType()) {
 				H5.H5Aread(m_attributeId, m_type.getConstants()[1], dataOut);
 				
@@ -322,7 +339,7 @@ public class Hdf5Attribute<Type> {
 	 * @return {@code true} if this attribute was not open before and is open now,
 	 * 			{@code false} otherwise
 	 */
-	public boolean open() {
+	public boolean open() throws IllegalStateException {
 		try {
 			if (!isOpen()) {
 				if (!getParent().isOpen()) {
@@ -359,7 +376,7 @@ public class Hdf5Attribute<Type> {
         }
 	}
 	
-	private void loadDimension() {
+	private void loadDimension() throws IllegalStateException {
 		// Get dataSpace and allocate memory for read buffer.
 		try {
 			if (isOpen()) {

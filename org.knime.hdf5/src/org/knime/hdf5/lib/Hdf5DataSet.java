@@ -16,7 +16,7 @@ import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5DataTypeTemplate;
-import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -40,7 +40,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		m_type = type;
 	}
 	
-	private static Hdf5DataSet<?> getInstance(final Hdf5Group parent, final String name, Hdf5DataType type) {
+	private static Hdf5DataSet<?> getInstance(final Hdf5Group parent, final String name, Hdf5DataType type) throws IllegalStateException {
 		if (parent == null) {
 			throw new IllegalArgumentException("Parent group of dataSet \"" + name + "\" cannot be null");
 			
@@ -85,8 +85,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	    		dataSet.setType(((Hdf5DataTypeTemplate) type).createDataType(dataSet.getElementId(), type.getHdfType().getStringLength()));
 	    	}
     		
-		} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException hlnpiae) {
-            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be created: " + hlnpiae.getMessage(), hlnpiae);
+		} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException | IllegalStateException hlnpiaise) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be created: " + hlnpiaise.getMessage(), hlnpiaise);
 			/* dataSet stays null */
         }
 		
@@ -107,8 +107,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	    		dataSet.setType(((Hdf5DataTypeTemplate) type).openDataType(dataSet.getElementId()));
 	    	}
         	
-        } catch (NullPointerException | IllegalArgumentException npiae) {
-            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened: " + npiae.getMessage(), npiae);
+        } catch (NullPointerException | IllegalArgumentException | IllegalStateException npiaise) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened: " + npiaise.getMessage(), npiaise);
 			/* dataSet stays null */
             
         } catch (UnsupportedDataTypeException udte) {
@@ -243,7 +243,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	        	long memSpaceId = selectChunkOfRows(fromRow, toRow);
 				
 	            if (isOpen()) {
-	    			if (m_type.isKnimeType(Hdf5KnimeDataType.STRING)) {
+	    			if (m_type.isHdfType(HdfDataType.STRING)) {
 	    				H5.H5Dwrite_string(getElementId(), m_type.getConstants()[1],
 	    						memSpaceId, m_dataspaceId,
 	    						HDF5Constants.H5P_DEFAULT, (String[]) dataIn);
@@ -262,8 +262,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	                throw new IllegalStateException("DataSet \"" + getPathFromFileWithName() + "\" is not open: data could not be written into it");
 	        	}
 			}
-	    } catch (HDF5Exception | NullPointerException | IllegalArgumentException hnpiae) {
-            NodeLogger.getLogger("HDF5 Files").error(hnpiae.getMessage(), hnpiae);
+	    } catch (HDF5Exception | NullPointerException | IllegalArgumentException | IllegalStateException hnpiaise) {
+            NodeLogger.getLogger("HDF5 Files").error(hnpiaise.getMessage(), hnpiaise);
         }
 		
 		return false;
@@ -307,7 +307,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * @return
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	public Type[] readRows(long fromRow, long toRow) {
+	public Type[] readRows(long fromRow, long toRow) throws IllegalStateException {
 		Type[] dataOut = null;
 		
 		try {
@@ -316,7 +316,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 
 	            long memSpaceId = selectChunkOfRows(fromRow, toRow);
 				
-				if (m_type.isKnimeType(Hdf5KnimeDataType.STRING)) {
+				if (m_type.isHdfType(HdfDataType.STRING)) {
 	                if (m_type.isVlen()) {
 						long typeId = H5.H5Tget_native_type(m_type.getConstants()[0]);
 	                    H5.H5DreadVL(getElementId(), typeId,
@@ -363,12 +363,15 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		int colNum = (int) numberOfValuesFrom(1);
 		
 		if (rowId < rowNum) {
-			Type[] dataRead = readRow(rowId);
-			
-			for (int c = 0; c < colNum; c++) {
-				row.add(getDataCell(dataRead[c]));
+			try {
+				Type[] dataRead = readRow(rowId);
+				
+				for (int c = 0; c < colNum; c++) {
+					row.add(getDataCell(dataRead[c]));
+				}
+			} catch (IllegalStateException ise) {
+				NodeLogger.getLogger("HDF5 Files").error(ise.getMessage(), ise);
 			}
-			
 		} else {
 			for (int c = 0; c < colNum; c++) {
 				row.add(getDataCell(null));
@@ -408,8 +411,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				setOpen(true);
 				loadDimensions();
 			}
-		} catch (HDF5LibraryException | NullPointerException hlnpe) {
-            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened", hlnpe);
+		} catch (HDF5LibraryException | NullPointerException | IllegalStateException hlnpise) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened", hlnpise);
         }
 	}
 	
@@ -431,7 +434,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * Updates the dimensions array after opening a dataSet to ensure that the
 	 * dimensions array is correct.
 	 */
-	private void loadDimensions() {
+	private void loadDimensions() throws IllegalStateException {
 		// Get dataSpace and allocate memory for read buffer.
 		try {
 			if (isOpen()) {

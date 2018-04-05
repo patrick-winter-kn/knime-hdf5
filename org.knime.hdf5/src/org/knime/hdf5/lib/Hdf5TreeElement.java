@@ -139,7 +139,7 @@ abstract public class Hdf5TreeElement {
 				
 			} else {
 				throw new IOException("There is already an attribute with the name \""
-						+ name + "\" in this treeElement");
+						+ name + "\" in the treeElement \"" + getPathFromFileWithName() + "\"");
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			NodeLogger.getLogger("HDF5 Files").error("Existence of attribute could not be checked", hlnpe);
@@ -212,7 +212,7 @@ abstract public class Hdf5TreeElement {
 		attribute.setParent(this);
 	}
 	
-	public List<String> loadAttributeNames() {
+	public List<String> loadAttributeNames() throws IllegalStateException {
 		List<String> attrNames = new ArrayList<>();
 		long numAttrs = -1;
 		Hdf5TreeElement treeElement = this instanceof Hdf5File ? this : getParent();
@@ -227,8 +227,8 @@ abstract public class Hdf5TreeElement {
 							HDF5Constants.H5P_DEFAULT));
 				}
 			} else {
-				NodeLogger.getLogger("HDF5 Files").error("The parent \"" + treeElement.getName()
-						+ "\" of \"" + name + "\" is not open!", new IllegalStateException());
+				throw new IllegalStateException("The parent \"" + treeElement.getName()
+						+ "\" of \"" + name + "\" is not open!");
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			NodeLogger.getLogger("HDF5 Files").error("List of attributes could not be loaded", hlnpe);
@@ -237,30 +237,7 @@ abstract public class Hdf5TreeElement {
 		return attrNames;
 	}
 	
-	Map<String, Hdf5DataType> getDirectAttributesInfo() {
-		Map<String, Hdf5DataType> paths = new LinkedHashMap<>();
-		String path = getPathFromFileWithName(false);
-		
-		Iterator<String> iterAttr = loadAttributeNames().iterator();
-		while (iterAttr.hasNext()) {
-			String name = iterAttr.next();
-			
-			try {
-				Hdf5DataType dataType = findAttributeType(name);
-				paths.put(path + name, dataType);
-				
-			} catch (IllegalArgumentException iae) {
-				NodeLogger.getLogger("HDF5 Files").error(iae.getMessage(), iae);
-				
-			} catch (UnsupportedDataTypeException udte) {
-				NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
-			}
-		}
-		
-		return paths;
-	}
-	
-	public Map<String, Hdf5DataType> getAllAttributesInfo() {
+	public Map<String, Hdf5DataType> getAllAttributesInfo() throws IllegalStateException {
 		Map<String, Hdf5DataType> paths = new LinkedHashMap<>();
 		
 		if (isOpen()) {
@@ -281,8 +258,6 @@ abstract public class Hdf5TreeElement {
 					NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
 				}
 			}
-			
-			
 			
 			if (this instanceof Hdf5Group) {
 				Iterator<String> iterDS = ((Hdf5Group) this).loadDataSetNames().iterator();
@@ -353,7 +328,7 @@ abstract public class Hdf5TreeElement {
 	 * @param object only ATTRIBUTE and DATASET allowed, DATASET only for instances of Hdf5Group
 	 * @return
 	 */
-	protected DataTableSpec createSpecOfObjects(int objectId) {
+	protected DataTableSpec createSpecOfObjects(int objectId) throws IllegalStateException {
 		List<DataColumnSpec> colSpecList = new ArrayList<>();
 		
 		Map<String, Hdf5DataType> objInfo = objectId == HDF5Constants.H5I_ATTR ? getAllAttributesInfo() : ((Hdf5Group) this).getAllDataSetsInfo();
@@ -375,7 +350,7 @@ abstract public class Hdf5TreeElement {
 		return new DataTableSpec(colSpecList.toArray(new DataColumnSpec[] {}));
 	}
 	
-	public DataTableSpec createSpecOfAttributes() {
+	public DataTableSpec createSpecOfAttributes() throws IllegalStateException {
 		return createSpecOfObjects(HDF5Constants.H5I_ATTR);
 	}
 	

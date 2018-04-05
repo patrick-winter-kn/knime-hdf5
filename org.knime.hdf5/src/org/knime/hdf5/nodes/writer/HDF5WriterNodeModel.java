@@ -44,36 +44,23 @@ public class HDF5WriterNodeModel extends NodeModel {
 	}
 
 	private static String removeBeginAndEndSlashes(String path) {
-		int begin = path.startsWith("/") ? 1 : 0;
-		int end = path.length() - (path.endsWith("/") ?  1 : 0);
+		int begin = path.startsWith("/") && path.length() > 1 ? 1 : 0;
+		int end = path.length() - (path.endsWith("/") ? 1 : 0);
 		
 		return path.substring(begin, end);
 	}
 
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		String filePath = m_filePathSettings.getStringValue();
-		String groupPath = removeBeginAndEndSlashes(m_groupPathSettings.getStringValue());
-		String groupName = m_groupNameSettings.getStringValue();
-
-		Hdf5File file = null;
-		try {
-			file = Hdf5File.openFile(filePath, Hdf5File.READ_WRITE_ACCESS);
-		} catch (IOException ioe) {
-			throw new InvalidSettingsException(ioe.getMessage(), ioe);
-		}
+		OverwritePolicy policy = OverwritePolicy.ABORT;
+		Hdf5File file = createFile(policy);
 		
 		try {
-			Hdf5Group parentGroup = file.getGroupByPath(groupPath);
-			Hdf5Group group = null;
-			try {
-				group = parentGroup.createGroup(groupName);
-				
-			} catch (IOException ioe) {
-				group = parentGroup.getGroup(groupName);
-			}
+			Hdf5Group group = createGroup(file, policy);
 			
-			List<Hdf5DataSet<?>> dataSets = group.createDataSetsFromSpec(groupName, inData[0].size(), inData[0].getDataTableSpec());
+			OverwritePolicy dsPolicy = OverwritePolicy.ABORT;
+			List<Hdf5DataSet<?>> dataSets = group.createDataSetsFromSpec(m_groupNameSettings.getStringValue(),
+					inData[0].size(), inData[0].getDataTableSpec(), dsPolicy == OverwritePolicy.ABORT);
 			
 			CloseableRowIterator iter = inData[0].iterator();
 			int rowId = 0;
@@ -99,6 +86,38 @@ public class HDF5WriterNodeModel extends NodeModel {
 		}
 		
 		return null;
+	}
+	
+	private Hdf5File createFile(OverwritePolicy policy) throws IOException {
+		String filePath = m_filePathSettings.getStringValue();
+		
+		try {
+			return Hdf5File.createFile(filePath);
+			
+		} catch (IOException ioe) {
+			if (policy == OverwritePolicy.ABORT) {
+				throw new IOException("Abort: " + ioe.getMessage());
+			} else {
+				return Hdf5File.openFile(filePath, Hdf5File.READ_WRITE_ACCESS);
+			}
+		}
+	}
+	
+	private Hdf5Group createGroup(Hdf5File file, OverwritePolicy policy) throws IOException {
+		String groupPath = removeBeginAndEndSlashes(m_groupPathSettings.getStringValue());
+		Hdf5Group parentGroup = groupPath.isEmpty() ? file : file.getGroupByPath(groupPath);
+		
+		String groupName = m_groupNameSettings.getStringValue();
+		try {
+			return parentGroup.createGroup(groupName);
+			
+		} catch (IOException ioe) {
+			if (policy == OverwritePolicy.ABORT) {
+				throw new IOException("Abort: " + ioe.getMessage());
+			} else {
+				return parentGroup.getGroup(groupName);
+			}
+		}
 	}
 	
 	private void peekFlowVariables(Hdf5Group group) throws IOException {

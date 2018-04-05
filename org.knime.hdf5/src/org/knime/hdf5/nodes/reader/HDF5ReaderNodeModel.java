@@ -73,7 +73,6 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			long maxRows = 0;
 			for (int i = 0; i < dataSetPaths.length; i++) {
 				dataSets[i] = file.getDataSetByPath(dataSetPaths[i]);
-				dataSets[i].open();
 
 				long rowSize = dataSets[i].getDimensions()[0];
 				maxRows = rowSize > maxRows ? rowSize : maxRows;
@@ -87,8 +86,10 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				for (Hdf5DataSet<?> dataSet : dataSets) {
 					dataSet.extendRow(row, i);
 				}
-
-				outContainer.addRowToTable(new DefaultRow("Row" + i, row));
+				
+				if (!row.isEmpty()) {
+					outContainer.addRowToTable(new DefaultRow("Row" + i, row));
+				}
 			}
 
 			pushFlowVariables(file);
