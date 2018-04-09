@@ -13,10 +13,8 @@ import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.DataType;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
-import org.knime.hdf5.lib.types.Hdf5DataTypeTemplate;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
-import org.knime.hdf5.lib.types.Hdf5HdfDataTypeTemplate;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 import hdf.hdf5lib.H5;
@@ -378,14 +376,13 @@ public class Hdf5Group extends Hdf5TreeElement {
 				Hdf5DataSet<?> dataSet = null;
 				
 				try {
-					Hdf5DataTypeTemplate dataTypeTempl = new Hdf5DataTypeTemplate(
-							new Hdf5HdfDataTypeTemplate(HdfDataType.getHdfDataType(type), Hdf5HdfDataType.DEFAULT_STRING_LENGTH), 
-							Hdf5KnimeDataType.getKnimeDataType(type), false, true);
+					Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.getHdfDataType(type)), 
+							Hdf5KnimeDataType.getKnimeDataType(type), false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
 					long[] dims = new long[] { rows, cols };
 					
 					try {
 						// TODO maybe add zeros in front of size for better ordering
-						dataSet = createDataSet(dname + "[" + dataSets.size() + "]", dims, dataTypeTempl);
+						dataSet = createDataSet(dname + "[" + dataSets.size() + "]", dims, dataType);
 						dataSets.add(dataSet);
 						
 					} catch (IOException ioe) {
@@ -395,7 +392,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 							} else {
 								dataSet = getDataSet(dname + "[" + dataSets.size() + "]");
 								
-								if (dataTypeTempl.isSimilarTo(dataSet.getType()) && dims.equals(dataSet.getDimensions())) {
+								if (dataType.isSimilarTo(dataSet.getType()) && dims.equals(dataSet.getDimensions())) {
 									dataSets.add(dataSet);
 									
 								} else {
@@ -453,7 +450,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				classId = H5.H5Tget_class(typeId);
 				size = (int) H5.H5Tget_size(typeId);
 				vlen = classId == HDF5Constants.H5T_VLEN || H5.H5Tis_variable_str(typeId);
-				if (classId == HDF5Constants.H5T_INTEGER /*TODO || classId == HDF5Constants.H5T_CHAR*/) {
+				if (classId == HDF5Constants.H5T_INTEGER) {
 					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(typeId);
 				}
 				H5.H5Tclose(typeId);

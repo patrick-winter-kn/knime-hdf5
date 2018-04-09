@@ -4,7 +4,6 @@ import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
-import org.knime.hdf5.lib.types.Hdf5DataTypeTemplate;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 import hdf.hdf5lib.H5;
@@ -93,10 +92,6 @@ public class Hdf5Attribute<Type> {
         	parent.addAttribute(attribute);
         	attribute.setOpen(true);
         	
-        	if (type instanceof Hdf5DataTypeTemplate) {
-	    		attribute.setType(((Hdf5DataTypeTemplate) type).createDataType(attribute.getAttributeId(), type.getHdfType().getStringLength()));
-	    	}
-        	
         } catch (HDF5Exception | NullPointerException | IllegalArgumentException | IllegalStateException hnpiaise) {
             NodeLogger.getLogger("HDF5 Files").error("Attribute \""
 					+ parent.getPathFromFileWithName() + name + "\" could not be created: "
@@ -116,10 +111,6 @@ public class Hdf5Attribute<Type> {
 			
 	    	parent.addAttribute(attribute);
 	    	attribute.open();
-	    	
-	    	if (type instanceof Hdf5DataTypeTemplate) {
-	    		attribute.setType(((Hdf5DataTypeTemplate) type).openDataType(attribute.getAttributeId()));
-	    	}
         	
         } catch (UnsupportedDataTypeException | NullPointerException
         		| IllegalArgumentException | IllegalStateException udtnpiaise) {
@@ -175,10 +166,6 @@ public class Hdf5Attribute<Type> {
 		return m_type;
 	}
 	
-	private void setType(Hdf5DataType type) {
-		m_type = type;
-	}
-
 	long getDataspaceId() {
 		return m_dataspaceId;
 	}
@@ -422,8 +409,6 @@ public class Hdf5Attribute<Type> {
 		 */
         try {
             if (isOpen()) {
-                // TODO m_type.getHdfType().closeIfString();
-
                 H5.H5Sclose(m_dataspaceId);
                 m_dataspaceId = -1;
 

@@ -52,7 +52,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		OverwritePolicy policy = OverwritePolicy.ABORT;
+		OverwritePolicy policy = OverwritePolicy.OVERWRITE;
 		Hdf5File file = createFile(policy);
 		
 		try {

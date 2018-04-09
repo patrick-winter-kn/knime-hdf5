@@ -38,10 +38,8 @@ public class Hdf5File extends Hdf5Group {
 	
 	private Map<Thread, Integer> m_accessors = new HashMap<>();
 	
-	/* TODO when opening the file: make a backup of the file because sometimes there were some things wrong with dataSets/groups in it
-	 * it happened when ...
-	 * - creating dataSet/group with the same name directly after deleting it in HDFView (not always, only when there were (x is a name) x, x(1), x(2), x(3) and deleted and readded x(2))
-	 * - TODO has to be checked if or when it also happens with the method Hdf5Group.getDataSet()
+	/* TODO check if there are problems when creating/deleting dataSets in HdfView at the same time as in the HdfWriter
+	 * (e.g. there are x, x(1), x(2) and x(3); delete and create x(2) again)
 	 */
 	private Hdf5File(final String filePath) throws HDF5LibraryException, NullPointerException,
 			IllegalArgumentException {
@@ -155,7 +153,7 @@ public class Hdf5File extends Hdf5Group {
 					// System.out.print(String.format("%,16d", // System.nanoTime() - START) + " " + Thread.currentThread() + " LOCK READ end of \"" + getFilePath() + "\" ... ");
 					m_r.lock();
 					// System.out.println("successful");
-					synchronized(this) {
+					synchronized (this) {
 						if (!isOpenInAnyThread()) {
 							setElementId(H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDONLY,
 									HDF5Constants.H5P_DEFAULT));
@@ -167,7 +165,7 @@ public class Hdf5File extends Hdf5Group {
 					// System.out.print(String.format("%,16d", // System.nanoTime() - START) + " " + Thread.currentThread() + " LOCK WRITE end of \"" + getFilePath() + "\" ... ");
 					m_w.lock();
 					// System.out.println("successful");
-					synchronized(this) {
+					synchronized (this) {
 						if (!isOpenInAnyThread()) {
 							setElementId(H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDWR,
 									HDF5Constants.H5P_DEFAULT));
@@ -281,7 +279,7 @@ public class Hdf5File extends Hdf5Group {
 	public void close() {
 		try {
             if (isOpenExactlyOnceInThisThread()) {
-	    		synchronized(this) {
+	    		synchronized (this) {
 		    		if (isOpenOnlyInThisThread()) {
 		    			Iterator<Hdf5DataSet<?>> iterDss = getDataSets().iterator();
 			    		while (iterDss.hasNext()) {

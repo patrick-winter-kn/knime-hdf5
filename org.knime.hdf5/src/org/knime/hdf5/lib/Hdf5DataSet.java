@@ -15,7 +15,6 @@ import org.knime.core.data.def.LongCell;
 import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
-import org.knime.hdf5.lib.types.Hdf5DataTypeTemplate;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 import hdf.hdf5lib.H5;
@@ -81,10 +80,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
     		parent.addDataSet(dataSet);
     		dataSet.setOpen(true);
     		
-    		if (type instanceof Hdf5DataTypeTemplate) {
-	    		dataSet.setType(((Hdf5DataTypeTemplate) type).createDataType(dataSet.getElementId(), type.getHdfType().getStringLength()));
-	    	}
-    		
 		} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException | IllegalStateException hlnpiaise) {
             NodeLogger.getLogger("HDF5 Files").error("DataSet could not be created: " + hlnpiaise.getMessage(), hlnpiaise);
 			/* dataSet stays null */
@@ -102,10 +97,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			
 	    	parent.addDataSet(dataSet);
 	    	dataSet.open();
-	    	
-	    	if (type instanceof Hdf5DataTypeTemplate) {
-	    		dataSet.setType(((Hdf5DataTypeTemplate) type).openDataType(dataSet.getElementId()));
-	    	}
         	
         } catch (NullPointerException | IllegalArgumentException | IllegalStateException npiaise) {
             NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened: " + npiaise.getMessage(), npiaise);
@@ -129,10 +120,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	public Hdf5DataType getType() {
 		return m_type;
-	}
-	
-	private void setType(Hdf5DataType type) {
-		m_type = type;
 	}
 	
 	/**
@@ -237,6 +224,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * @param toRow exclusive row index
 	 * @return
 	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public boolean writeRows(Type[] dataIn, long fromRow, long toRow) {
 		try {
 	        if (isOpen()) {
@@ -248,11 +236,23 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	    						memSpaceId, m_dataspaceId,
 	    						HDF5Constants.H5P_DEFAULT, (String[]) dataIn);
 	    				
-	            	} else {
+	    			} else if (m_type.hdfTypeEqualsKnimeType()) {
 	                    H5.H5Dwrite(getElementId(), m_type.getConstants()[1],
 	                    		memSpaceId, m_dataspaceId,
 	                            HDF5Constants.H5P_DEFAULT, dataIn);
-	                }
+	                
+	    			} else {
+						Object[] dataWrite = (Object[]) m_type.getHdfType().createArray((int) numberOfValuesFrom(1));
+			            
+						Class hdfClass = m_type.getHdfClass();
+						Class knimeClass = m_type.getKnimeClass();
+						for (int i = 0; i < dataWrite.length; i++) {
+							dataWrite[i] = m_type.knimeToHdf(knimeClass, knimeClass.cast(dataIn[i]), hdfClass);
+						}
+						
+			            H5.H5Dwrite(getElementId(), m_type.getConstants()[1],
+			            		memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, dataWrite);
+					}
 	    			
 					H5.H5Sclose(memSpaceId);
 					
@@ -262,8 +262,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	                throw new IllegalStateException("DataSet \"" + getPathFromFileWithName() + "\" is not open: data could not be written into it");
 	        	}
 			}
-	    } catch (HDF5Exception | NullPointerException | IllegalArgumentException | IllegalStateException hnpiaise) {
-            NodeLogger.getLogger("HDF5 Files").error(hnpiaise.getMessage(), hnpiaise);
+	    } catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException | IllegalArgumentException | IllegalStateException hudtnpiaise) {
+            NodeLogger.getLogger("HDF5 Files").error(hudtnpiaise.getMessage(), hudtnpiaise);
         }
 		
 		return false;
@@ -470,8 +470,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         			iter.next().close();
         		}
 
-                // TODO m_type.getHdfType().closeIfString();
-        		
                 // Terminate access to the dataSpace.
             	H5.H5Sclose(m_dataspaceId);
                 m_dataspaceId = -1;

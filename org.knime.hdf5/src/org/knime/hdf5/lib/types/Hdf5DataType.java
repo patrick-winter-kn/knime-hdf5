@@ -27,19 +27,13 @@ public class Hdf5DataType {
 	
 	private final boolean m_fromDS;
 	
-	protected Hdf5DataType(Hdf5HdfDataType hdfType, Hdf5KnimeDataType knimeType, 
+	private Hdf5DataType(Hdf5HdfDataType hdfType, Hdf5KnimeDataType knimeType, 
 			boolean vlen, boolean fromDS) {
+		// TODO throw exception if hdfType and knimeType do not fit together
 		m_hdfType = hdfType;
 		m_knimeType = knimeType;
 		m_vlen = vlen;
 		m_fromDS = fromDS;
-	}
-	
-	protected Hdf5DataType(Hdf5DataTypeTemplate templ) {
-		m_hdfType = Hdf5HdfDataType.getInstance(templ.getHdfTypeTemplate());
-		m_knimeType = templ.getKnimeType();
-		m_vlen = templ.isVlen();
-		m_fromDS = templ.isFromDS();
 	}
 	
 	/**
@@ -64,10 +58,7 @@ public class Hdf5DataType {
 			
 		} else if (classId == HDF5Constants.H5T_FLOAT) {
 			typeId = 100 * size + 20;
-			
-		}/* else if (classId == HDF5Constants.H5T_CHAR) {
-			typeId = 30 + (unsigned ? 1 : 0);
-		}*/
+		}
 		
 		m_hdfType = Hdf5HdfDataType.getInstance(HdfDataType.get(typeId));
 		
@@ -90,8 +81,6 @@ public class Hdf5DataType {
 		case DOUBLE:
 			m_knimeType = Hdf5KnimeDataType.DOUBLE;
 			break;
-		case CHAR:
-		case UCHAR:
 		case STRING:
 			m_knimeType = Hdf5KnimeDataType.STRING;
 			break;
@@ -120,11 +109,12 @@ public class Hdf5DataType {
 		return dataType;
 	}
 	
-	public static Hdf5DataType createDataType(long elementId, long classId, int size, boolean unsigned, boolean vlen, long stringLength) {
+	public static Hdf5DataType createDataType(Hdf5HdfDataType hdfType, Hdf5KnimeDataType knimeType, 
+			boolean vlen, boolean fromDS, long stringLength) {
 		Hdf5DataType dataType = null;
 		
 		try {
-			dataType = getInstance(elementId, classId, size, unsigned, vlen);
+			dataType = new Hdf5DataType(hdfType, knimeType, vlen, fromDS);
 			dataType.getHdfType().createHdfDataTypeString(stringLength);
     		
 		} catch (NullPointerException | IllegalArgumentException npiae) {
@@ -162,7 +152,7 @@ public class Hdf5DataType {
 		return m_vlen;
 	}
 	
-	protected boolean isFromDS() {
+	private boolean isFromDS() {
 		return m_fromDS;
 	}
 
@@ -176,6 +166,11 @@ public class Hdf5DataType {
 
 	public boolean isKnimeType(Hdf5KnimeDataType knimeType) {
 		return m_knimeType == knimeType;
+	}
+	
+	public boolean isSimilarTo(Hdf5DataType dataType) {
+		return getHdfType().isSimilarTo(dataType.getHdfType()) && isKnimeType(dataType.getKnimeType())
+				&& isVlen() == dataType.isVlen() && isFromDS() == dataType.isFromDS();
 	}
 	
 	public boolean hdfTypeEqualsKnimeType() throws UnsupportedDataTypeException {
@@ -211,9 +206,6 @@ public class Hdf5DataType {
 			return Float.class;
 		case DOUBLE:
 			return Double.class;
-		case CHAR:
-		case UCHAR:
-			return Character.class;
 		case STRING:
 			return String.class;
 		default:
@@ -235,11 +227,21 @@ public class Hdf5DataType {
 			throw new UnsupportedDataTypeException("Unknown knimeDataType");
 		}
 	}
+
+	public <T, S> S knimeToHdf(Class<T> knimeClass, T in, Class<S> hdfClass) throws UnsupportedDataTypeException {
+		if (knimeClass == in.getClass() && knimeClass == getKnimeClass() && hdfClass == getHdfClass()) {
+			// TODO add the other cases
+			if (isKnimeType(Hdf5KnimeDataType.INTEGER) && isHdfType(HdfDataType.DOUBLE)) {
+				return hdfClass.cast((double) (int) in);
+			}
+		}
+		
+		throw new UnsupportedDataTypeException("Incorrect combination of input classes");
+	}
 	
 	public <T, S> S hdfToKnime(Class<T> hdfClass, T in, Class<S> knimeClass) throws UnsupportedDataTypeException {
-		if (hdfClass == in.getClass() && hdfClass == getHdfClass()) {
-			if (isHdfType(HdfDataType.INTEGER) || isHdfType(HdfDataType.DOUBLE) || isHdfType(HdfDataType.CHAR)
-					|| isHdfType(HdfDataType.UCHAR) || isHdfType(HdfDataType.STRING)) {
+		if (hdfClass == in.getClass() && hdfClass == getHdfClass() && knimeClass == getKnimeClass()) {
+			if (isHdfType(HdfDataType.INTEGER) || isHdfType(HdfDataType.DOUBLE) || isHdfType(HdfDataType.STRING)) {
 				return knimeClass.cast(in);
 			}
 			
@@ -278,7 +280,7 @@ public class Hdf5DataType {
 			}
 		}
 		
-		throw new UnsupportedDataTypeException("Incorrect hdfClass or input class");
+		throw new UnsupportedDataTypeException("Incorrect combination of input classes");
 	}
 	
 	@Override

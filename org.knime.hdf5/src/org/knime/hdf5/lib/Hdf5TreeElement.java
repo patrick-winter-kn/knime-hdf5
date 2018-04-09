@@ -16,9 +16,7 @@ import org.knime.core.data.DataType;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.types.Hdf5DataType;
-import org.knime.hdf5.lib.types.Hdf5DataTypeTemplate;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
-import org.knime.hdf5.lib.types.Hdf5HdfDataTypeTemplate;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
@@ -291,30 +289,24 @@ abstract public class Hdf5TreeElement {
 	
 	@SuppressWarnings("unchecked")
 	public Hdf5Attribute<?> createAndWriteAttributeFromFlowVariable(FlowVariable flowVariable) throws IOException {
-		Hdf5DataTypeTemplate dataTypeTempl = null;
+		Hdf5DataType dataType = null;
 		
 		switch (flowVariable.getType()) {
 		case INTEGER:
-			dataTypeTempl = new Hdf5DataTypeTemplate(
-					new Hdf5HdfDataTypeTemplate(HdfDataType.INTEGER, Hdf5HdfDataType.DEFAULT_STRING_LENGTH), 
-					Hdf5KnimeDataType.INTEGER, false, true);
-			Hdf5Attribute<Integer> attributeInteger = (Hdf5Attribute<Integer>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataTypeTempl);
+			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.INTEGER), Hdf5KnimeDataType.INTEGER, false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
+			Hdf5Attribute<Integer> attributeInteger = (Hdf5Attribute<Integer>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataType);
 			attributeInteger.write(new Integer[] { flowVariable.getIntValue() });
 			return attributeInteger;
 			
 		case DOUBLE:
-			dataTypeTempl = new Hdf5DataTypeTemplate(
-					new Hdf5HdfDataTypeTemplate(HdfDataType.DOUBLE, Hdf5HdfDataType.DEFAULT_STRING_LENGTH), 
-					Hdf5KnimeDataType.DOUBLE, false, true);
-			Hdf5Attribute<Double> attributeDouble = (Hdf5Attribute<Double>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataTypeTempl);
+			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.DOUBLE), Hdf5KnimeDataType.DOUBLE, false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
+			Hdf5Attribute<Double> attributeDouble = (Hdf5Attribute<Double>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataType);
 			attributeDouble.write(new Double[] { flowVariable.getDoubleValue() });
 			return attributeDouble;
 			
 		case STRING:
-			dataTypeTempl = new Hdf5DataTypeTemplate(
-					new Hdf5HdfDataTypeTemplate(HdfDataType.STRING, Hdf5HdfDataType.DEFAULT_STRING_LENGTH), 
-					Hdf5KnimeDataType.STRING, false, true);
-			Hdf5Attribute<String> attributeString = (Hdf5Attribute<String>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataTypeTempl);
+			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.STRING), Hdf5KnimeDataType.STRING, false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
+			Hdf5Attribute<String> attributeString = (Hdf5Attribute<String>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataType);
 			attributeString.write(new String[] { flowVariable.getStringValue() });
 			return attributeString;
 			
@@ -407,7 +399,7 @@ abstract public class Hdf5TreeElement {
 				classId = H5.H5Tget_class(typeId);
 				size = (int) H5.H5Tget_size(typeId);
 				vlen = classId == HDF5Constants.H5T_VLEN || H5.H5Tis_variable_str(typeId);
-				if (classId == HDF5Constants.H5T_INTEGER /*TODO || classId == HDF5Constants.H5T_CHAR*/) {
+				if (classId == HDF5Constants.H5T_INTEGER) {
 					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(typeId);
 				}
 				H5.H5Tclose(typeId);
