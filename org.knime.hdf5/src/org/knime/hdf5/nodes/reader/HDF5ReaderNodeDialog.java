@@ -1,5 +1,6 @@
 package org.knime.hdf5.nodes.reader;
 
+import java.io.File;
 import java.io.IOException;
 
 import javax.swing.BorderFactory;
@@ -62,19 +63,23 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		fileChooser.setBorderTitle("Input file:");
 		addDialogComponent(fileChooser);
 		fileChooser.getModel().addChangeListener(new ChangeListener() {
+			
+			private boolean m_specEmpty = true;
+			
 			@Override
 			public void stateChanged(ChangeEvent e) {
-				updateConfigs(m_filePathSettings.getStringValue(), null);
+				if (new File(m_filePathSettings.getStringValue()).isFile() || !m_specEmpty) {
+					m_specEmpty = updateConfigs(null);
+				}
 			}
 		});
 	}
 
-	private void updateConfigs(String filePath, final NodeSettingsRO settings) {
-		updateDataSetConfig(filePath, settings);
-		updateAttributeConfig(filePath, settings);
+	private boolean updateConfigs(final NodeSettingsRO settings) {
+		return updateDataSetConfig(settings) & updateAttributeConfig(settings);
 	}
 
-	private void updateDataSetConfig(String filePath, NodeSettingsRO settings) {
+	private boolean updateDataSetConfig(NodeSettingsRO settings) {
 		DataColumnSpecFilterConfiguration config = SettingsFactory.createDataSetFilterConfiguration();
 		if (settings == null) {
 			NodeSettings tempSettings = new NodeSettings("temp");
@@ -85,7 +90,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		
 		DataTableSpec spec = null;
 		try {
-			Hdf5File file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+			Hdf5File file = Hdf5File.openFile(m_filePathSettings.getStringValue(), Hdf5File.READ_ONLY_ACCESS);
 			try {
 				spec = file.createSpecOfDataSets();
 			} finally {
@@ -98,9 +103,11 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		
 		config.loadConfigurationInDialog(settings, spec);
 		m_dataSetFilterPanel.loadConfiguration(config, spec);
+		
+		return spec.getNumColumns() == 0;
 	}
 
-	private void updateAttributeConfig(String filePath, NodeSettingsRO settings) {
+	private boolean updateAttributeConfig(NodeSettingsRO settings) {
 		DataColumnSpecFilterConfiguration config = SettingsFactory.createAttributeFilterConfiguration();
 		if (settings == null) {
 			NodeSettings tempSettings = new NodeSettings("temp");
@@ -111,7 +118,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		
 		DataTableSpec spec = null;
 		try {
-			Hdf5File file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+			Hdf5File file = Hdf5File.openFile(m_filePathSettings.getStringValue(), Hdf5File.READ_ONLY_ACCESS);
 			try {
 				spec = file.createSpecOfAttributes();
 			} finally {
@@ -124,6 +131,8 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		
 		config.loadConfigurationInDialog(settings, spec);
 		m_attributeFilterPanel.loadConfiguration(config, spec);
+
+		return spec.getNumColumns() == 0;
 	}
 
 	/**
@@ -139,7 +148,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 	@Override
 	public void loadAdditionalSettingsFrom(final NodeSettingsRO settings, final DataTableSpec[] specs)
 			throws NotConfigurableException {
-		updateConfigs(m_filePathSettings.getStringValue(), settings);
+		updateConfigs(settings);
 	}
 
 	@Override

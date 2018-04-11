@@ -7,6 +7,7 @@ import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
 import org.knime.core.data.def.LongCell;
 import org.knime.core.data.def.StringCell;
+import org.knime.core.node.workflow.FlowVariable.Type;
 
 public enum Hdf5KnimeDataType {
 	UNKNOWN,		// data type is unknown
@@ -26,6 +27,20 @@ public enum Hdf5KnimeDataType {
 			return STRING;
 		}
 		throw new UnsupportedDataTypeException("Unknown knimeDataType");
+	}
+	
+	public static DataType getColumnDataType(Type type) throws UnsupportedDataTypeException {
+		switch (type) {
+		case INTEGER:
+			return IntCell.TYPE;
+		case DOUBLE:
+			return DoubleCell.TYPE;
+		case STRING:
+			return StringCell.TYPE;
+		default:
+			throw new UnsupportedDataTypeException("Unknown knimeDataType");
+		
+		}
 	}
 	
 	public DataType getColumnDataType() throws UnsupportedDataTypeException {
