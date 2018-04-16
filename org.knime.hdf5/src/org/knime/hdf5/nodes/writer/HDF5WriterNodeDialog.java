@@ -1,15 +1,20 @@
 package org.knime.hdf5.nodes.writer;
 
+import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import javax.activation.UnsupportedDataTypeException;
+import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
 import javax.swing.DefaultListModel;
 import javax.swing.DropMode;
 import javax.swing.Icon;
@@ -18,6 +23,7 @@ import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JList;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTree;
 import javax.swing.TransferHandler;
 import javax.swing.event.ChangeEvent;
@@ -38,27 +44,43 @@ import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.NotConfigurableException;
 import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
-import org.knime.core.node.defaultnodesettings.DialogComponentString;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.workflow.FlowVariable;
+import org.knime.hdf5.lib.Hdf5DataSet;
+import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.lib.Hdf5Group;
+import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 
+	private enum SpecInfo {
+		COLUMN_SPECS("colSpecs"),
+		FLOW_VARIABLE_SPECS("varSpecs");
+		
+		private final String m_specName;
+		
+		private SpecInfo(String specName) {
+			m_specName = specName;
+		}
+		
+		private String getSpecName() {
+			return m_specName;
+		}
+	}
+	
 	private SettingsModelString m_filePathSettings;
-	
-	private SettingsModelString m_groupPathSettings;
-	
-	private SettingsModelString m_groupNameSettings;
 
 	private DefaultListModel<DataColumnSpec> m_columnSpecModel = new DefaultListModel<>();
 	
 	private DefaultListModel<DataColumnSpec> m_flowVariableSpecModel = new DefaultListModel<>();
 	
 	// TODO this should be in the SettingsFactory later
-	private Map<String, List<DataColumnSpec>> m_transfer = new HashMap<>();
+	private final Map<String, List<DataColumnSpec>> m_transfer = new HashMap<>();
 	
-	private static final String COL_TRANSFER = "colSpecs";
+	private JPanel m_panel = new JPanel();
+	
+	private JTree m_tree = new JTree(new DefaultMutableTreeNode("(null)"));
 	
     /**
      * Creates a new {@link NodeDialogPane} for the column filter in order to
@@ -66,18 +88,54 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
      */
     public HDF5WriterNodeDialog() {
 		createFileChooser();
-		createGroupEntryBox();
 		
-		JPanel panel = new JPanel();
-		addTab("Data", panel);
-		
-		JPanel select = new JPanel();
-		panel.add(select);
+		addTab("Data", m_panel);
+		m_panel.setLayout(new BoxLayout(m_panel, BoxLayout.X_AXIS));
 
-		JList<DataColumnSpec> colList = new JList<>(m_columnSpecModel);
-		colList.setVisibleRowCount(-1);
-		colList.setDragEnabled(true);
-		colList.setTransferHandler(new TransferHandler() {
+		JPanel input = new JPanel();
+		m_panel.add(input, BorderLayout.LINE_START);
+		
+		input.setLayout(new BoxLayout(input, BoxLayout.Y_AXIS));
+		input.setBorder(BorderFactory.createTitledBorder(" Input "));
+		addListToPanel(SpecInfo.COLUMN_SPECS, input);
+		addListToPanel(SpecInfo.FLOW_VARIABLE_SPECS, input);
+    	
+    	JPanel output = new JPanel();
+		output.setBorder(BorderFactory.createTitledBorder(" Output "));
+		m_panel.add(output, BorderLayout.LINE_END);
+		initTree();
+		output.add(m_tree);
+	}
+    
+    private void createFileChooser() {
+		m_filePathSettings = SettingsFactory.createFilePathSettings();
+		FlowVariableModel filePathFvm = super.createFlowVariableModel(m_filePathSettings);
+		DialogComponentFileChooser fileChooser = new DialogComponentFileChooser(m_filePathSettings, "outputFilePathHistory",
+				JFileChooser.SAVE_DIALOG, false, filePathFvm, ".h5|.hdf5");
+		fileChooser.setBorderTitle("Output file:");
+		addDialogComponent(fileChooser);
+		fileChooser.getModel().addChangeListener(new ChangeListener() {
+
+			private boolean m_init = false;
+			
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				if (new File(m_filePathSettings.getStringValue()).isFile() || !m_init) {
+			        updateTree();
+			        m_init = true;
+				}
+			}
+		});
+	}
+    
+    private JList<DataColumnSpec> addListToPanel(SpecInfo specInfo, JPanel panel) {
+    	JList<DataColumnSpec> list = new JList<>(specInfo == SpecInfo.COLUMN_SPECS ? m_columnSpecModel : m_flowVariableSpecModel);
+    	panel.add(list);
+    	
+		list.setBorder(BorderFactory.createTitledBorder(specInfo == SpecInfo.COLUMN_SPECS ? "Columns:" : "Flow Variables:"));
+		list.setVisibleRowCount(-1);
+		list.setDragEnabled(true);
+		list.setTransferHandler(new TransferHandler() {
 
 			private static final long serialVersionUID = -4233815652319877595L;
 
@@ -89,31 +147,41 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			protected Transferable createTransferable(JComponent c) {
                 if (c instanceof JList) {
                 	JList<DataColumnSpec> list = (JList<DataColumnSpec>) c;
-    				m_transfer.put(COL_TRANSFER, list.getSelectedValuesList());
+    				m_transfer.put(specInfo.getSpecName(), list.getSelectedValuesList());
 					
-					return new StringSelection(COL_TRANSFER);
+					return new StringSelection(specInfo.getSpecName());
                 }
                 return null;
             }
 		});
-		select.add(colList);
-        
-		JList<DataColumnSpec> varList = new JList<>(m_flowVariableSpecModel);
-		varList.setVisibleRowCount(-1);
-		varList.setDragEnabled(true);
-		select.add(varList);
-        
-		JPanel output = new JPanel();
-		panel.add(output);
 		
-		DefaultMutableTreeNode root = new DefaultMutableTreeNode("group");
-		JTree tree = new JTree(root);
-		output.add(tree);
-		/*
-		tree.setCellRenderer(new DefaultTreeCellRenderer() {
+		final JScrollPane jsp = new JScrollPane(list);
+		jsp.setMinimumSize(new Dimension(50, 100));
+		panel.add(jsp);
+		
+		return list;
+    }
+    
+    private Hdf5File createFile(OverwritePolicy policy) throws IOException {
+		String filePath = m_filePathSettings.getStringValue();
+		
+		try {
+			return Hdf5File.createFile(filePath);
+			
+		} catch (IOException ioe) {
+			if (policy == OverwritePolicy.ABORT) {
+				throw new IOException("Abort: " + ioe.getMessage());
+			} else {
+				return Hdf5File.openFile(filePath, Hdf5File.READ_WRITE_ACCESS);
+			}
+		}
+	}
+    
+    private void initTree() {
+		m_tree.setBorder(BorderFactory.createTitledBorder("File:"));
+    	m_tree.setCellRenderer(new DefaultTreeCellRenderer() {
 
 			private static final long serialVersionUID = -2424225988962935310L;
-
 			
 			@Override
 			public Component getTreeCellRendererComponent(final JTree tree,
@@ -124,28 +192,29 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 				
 				if (value instanceof DefaultMutableTreeNode) {
 					DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
-					String name = (String) node.getUserObject();
 					
 					Icon icon = null;
-					if (name.equals("group")) {
-						icon = new ImageIcon("icons/group.png");
-					} else if (name.startsWith("dataSet")) {
-						icon = new ImageIcon("icons" + File.separator + "dataSet.png");
+					String dir = "C:\\Users\\UK\\Documents\\GitHub\\knime-hdf5\\org.knime.hdf5\\icons\\";
+					if (!node.getAllowsChildren()) {
+						icon = new ImageIcon(dir + "column.png");
+					} else if (node.getChildCount() != 0 && !node.getFirstChild().getAllowsChildren()) {
+						icon = new ImageIcon(dir + "dataSet.png");
+					} else if (!node.isRoot()) {
+						icon = new ImageIcon(dir + "group.png");
 					} else {
-						icon = new ImageIcon("icons" + File.separator + "column.png");
+						icon = new ImageIcon(dir + "file.png");
 					}
-					setLeafIcon(icon);
-					setClosedIcon(icon);
-					setOpenIcon(icon);
+					setIcon(icon);
+					
 				} else {
 					// TODO exception
 				}
 				return this;
 			}
 		});
-		*/
-		tree.setDragEnabled(true);
-        tree.setTransferHandler(new TransferHandler() {
+		
+    	m_tree.setDragEnabled(true);
+    	m_tree.setTransferHandler(new TransferHandler() {
 
 			private static final long serialVersionUID = -4233815652319877595L;
         	
@@ -176,15 +245,15 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
                 TreePath path = dl.getPath();
                 DefaultMutableTreeNode parent = (DefaultMutableTreeNode) path.getLastPathComponent();
                 
-                if (parent.isRoot()) {
+                if (!parent.getAllowsChildren()) {
+                	path = path.getParentPath();
+                	parent = (DefaultMutableTreeNode) parent.getParent();
+                	
+                } else if (parent.getChildCount() == 0 || parent.getFirstChild().getAllowsChildren()) {
                 	DefaultMutableTreeNode newChild = new DefaultMutableTreeNode("dataSet[" + parent.getChildCount() + "]");
                 	parent.add(newChild);
                 	path = path.pathByAddingChild(newChild);
                 	parent = newChild;
-                	
-                } else if (!parent.getAllowsChildren()) {
-                	path = path.getParentPath();
-                	parent = (DefaultMutableTreeNode) parent.getParent();
                 }
  
                 // Get the string that is being dropped.
@@ -202,43 +271,69 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     				parent.add(newChild);
                 }
 				
-				((DefaultTreeModel) (tree.getModel())).reload();
-				tree.makeVisible(path.pathByAddingChild(parent.getFirstChild()));
+				((DefaultTreeModel) (m_tree.getModel())).reload();
+				m_tree.makeVisible(path.pathByAddingChild(parent.getFirstChild()));
                 
                 return true;
             }
         });
-        tree.setDropMode(DropMode.ON_OR_INSERT);
-	}
+    	m_tree.setDropMode(DropMode.ON_OR_INSERT);
+    }
     
-	private void createFileChooser() {
-		m_filePathSettings = SettingsFactory.createFilePathSettings();
-		FlowVariableModel filePathFvm = super.createFlowVariableModel(m_filePathSettings);
-		DialogComponentFileChooser fileChooser = new DialogComponentFileChooser(m_filePathSettings, "outputFilePathHistory",
-				JFileChooser.SAVE_DIALOG, false, filePathFvm, ".h5|.hdf5");
-		fileChooser.setBorderTitle("Output file:");
-		addDialogComponent(fileChooser);
-		fileChooser.getModel().addChangeListener(new ChangeListener() {
-			@Override
-			public void stateChanged(ChangeEvent e) {
-				
-			}
-		});
-	}
-	
-	private void createGroupEntryBox() {
-		// Border groupBorder = BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "Output group:");
-
-		m_groupPathSettings = SettingsFactory.createGroupPathSettings();
-		DialogComponentString groupPathSettings = new DialogComponentString(m_groupPathSettings,
-				"Path to output group");
-		addDialogComponent(groupPathSettings);
-		
-		m_groupNameSettings = SettingsFactory.createGroupNameSettings();
-		DialogComponentString groupNameSettings = new DialogComponentString(m_groupNameSettings,
-				"Output group");
-		addDialogComponent(groupNameSettings);
-	}
+    private void updateTree() {
+    	Hdf5File file = null;
+		try {
+			file = createFile(OverwritePolicy.OVERWRITE);
+			
+			DefaultMutableTreeNode root = new DefaultMutableTreeNode(file.getName());
+			((DefaultTreeModel) m_tree.getModel()).setRoot(root);
+			addChildrenToNode(root, file);
+			
+		} catch (IOException ioe) {
+			// TODO exception (should never occur)
+		} finally {
+			file.close();
+		}
+    }
+    
+    private void addChildrenToNode(DefaultMutableTreeNode parentNode, Hdf5TreeElement treeElement) {
+    	try {
+        	if (treeElement.isGroup()) {
+        		for (String groupName : ((Hdf5Group) treeElement).loadGroupNames()) {
+        			Hdf5Group group = ((Hdf5Group) treeElement).getGroup(groupName);
+        			DefaultMutableTreeNode childNode = new DefaultMutableTreeNode(group.getName());
+        			parentNode.add(childNode);
+        			addChildrenToNode(childNode, group);
+        		}
+        		for (String dataSetName : ((Hdf5Group) treeElement).loadDataSetNames()) {
+        			Hdf5DataSet<?> dataSet = ((Hdf5Group) treeElement).getDataSet(dataSetName);
+        			DefaultMutableTreeNode childNode = new DefaultMutableTreeNode(dataSet.getName());
+        			parentNode.add(childNode);
+        			addChildrenToNode(childNode, dataSet);
+        		}
+        	}
+    	} catch (Exception e) {
+    		// TODO exception
+    	}
+    	
+    	if (treeElement.isDataSet()) {
+    		Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) treeElement;
+    		// TODO what to do with 1 dimension?
+    		if (dataSet.getDimensions().length == 2) {
+    			for (int i = 0; i < dataSet.getDimensions()[1]; i++) {
+    				try {
+						DataColumnSpec spec = new DataColumnSpecCreator("col" + (i + 1), dataSet.getType().getKnimeType().getColumnDataType()).createSpec();
+		    			DefaultMutableTreeNode childNode = new DefaultMutableTreeNode(spec);
+		    			childNode.setAllowsChildren(false);
+	    				parentNode.add(childNode);
+	        			
+					} catch (UnsupportedDataTypeException udte) {
+						NodeLogger.getLogger("HDF5 Files").error(udte.getMessage(), udte);
+					}
+    			}
+    		}
+    	}
+    }
     
     /**
      * Calls the update method of the underlying filter panel.
@@ -266,5 +361,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     }
     
     @Override
-	public void saveAdditionalSettingsTo(final NodeSettingsWO settings) {}
+	public void saveAdditionalSettingsTo(final NodeSettingsWO settings) {
+    }
 }

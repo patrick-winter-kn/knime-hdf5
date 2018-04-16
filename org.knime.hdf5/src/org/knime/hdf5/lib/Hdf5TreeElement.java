@@ -83,14 +83,14 @@ abstract public class Hdf5TreeElement {
 	}
 
 	protected boolean isOpen() {
-		if (this instanceof Hdf5File) {
+		if (isFile()) {
 			throw new IllegalStateException("Wrong method used for Hdf5File");
 		}
 		return m_open;
 	}
 
 	protected void setOpen(boolean open) {
-		if (this instanceof Hdf5File) {
+		if (isFile()) {
 			throw new IllegalStateException("Wrong method used for Hdf5File");
 		}
 		m_open = open;
@@ -113,6 +113,23 @@ abstract public class Hdf5TreeElement {
 	}
 
 	/**
+	 * Returns {@code true} if this is an instance of Hdf5Group. It is either an Hdf5Group or Hdf5File.
+	 * 
+	 * @return {@code true} if this is an instance of Hdf5Group
+	 */
+	public boolean isGroup() {
+		return this instanceof Hdf5Group;
+	}
+	
+	public boolean isFile() {
+		return this instanceof Hdf5File;
+	}
+	
+	public boolean isDataSet() {
+		return this instanceof Hdf5DataSet;
+	}
+	
+	/**
 	 * 
 	 * @param endSlash (only relevant if treeElement is an {@code Hdf5File})
 	 * set to {@code true} if an {@code '/'} should be added to the path. <br>
@@ -121,7 +138,7 @@ abstract public class Hdf5TreeElement {
 	 * @return
 	 */
 	public String getPathFromFileWithName(boolean endSlash) {
-		return this instanceof Hdf5File ? (endSlash ? "/" : "") : getPathFromFile() + getName() + "/";
+		return isFile() ? (endSlash ? "/" : "") : getPathFromFile() + getName() + "/";
 	}
 	
 	public String getPathFromFileWithName() {
@@ -186,13 +203,13 @@ abstract public class Hdf5TreeElement {
 		
 		if (path.contains("/")) {
 			String name = path.substring(path.lastIndexOf("/") + 1);
-			if (this instanceof Hdf5Group) {
-				assert (this instanceof Hdf5Group);
+			if (isGroup()) {
 				String pathWithoutName = path.substring(0, path.length() - name.length() - 1);
-				Hdf5DataSet<?> dataSet = ((Hdf5Group) this).getDataSetByPath(pathWithoutName);
-				if (dataSet != null) {
+				try {
+					Hdf5DataSet<?> dataSet = ((Hdf5Group) this).getDataSetByPath(pathWithoutName);
 					attribute = dataSet.getAttribute(name);
-				} else {
+					
+				} catch (IOException ioe) {
 					Hdf5Group group = ((Hdf5Group) this).getGroupByPath(pathWithoutName);
 					attribute = group.getAttribute(name);
 				}
@@ -213,8 +230,8 @@ abstract public class Hdf5TreeElement {
 	public List<String> loadAttributeNames() throws IllegalStateException {
 		List<String> attrNames = new ArrayList<>();
 		long numAttrs = -1;
-		Hdf5TreeElement treeElement = this instanceof Hdf5File ? this : getParent();
-		String name = this instanceof Hdf5File ? "/" : getName();
+		Hdf5TreeElement treeElement = isFile() ? this : getParent();
+		String name = isFile() ? "/" : getName();
 		
 		try {
 			if (treeElement.isOpen()) {
@@ -257,7 +274,7 @@ abstract public class Hdf5TreeElement {
 				}
 			}
 			
-			if (this instanceof Hdf5Group) {
+			if (isGroup()) {
 				Iterator<String> iterDS = ((Hdf5Group) this).loadDataSetNames().iterator();
 				while (iterDS.hasNext()) {
 					try {

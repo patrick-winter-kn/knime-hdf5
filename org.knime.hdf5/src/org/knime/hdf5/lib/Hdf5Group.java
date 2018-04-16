@@ -85,14 +85,14 @@ public class Hdf5Group extends Hdf5TreeElement {
 	/**
 	 * @return a list of all children groups of this group
 	 */
-	protected List<Hdf5Group> getGroups() {
+	public List<Hdf5Group> getGroups() {
 		return m_groups;
 	}
 	
 	/**
 	 * @return a list of all dataSets of this group
 	 */
-	protected List<Hdf5DataSet<?>> getDataSets() {
+	public List<Hdf5DataSet<?>> getDataSets() {
 		return m_dataSets;
 	}
 	
@@ -286,8 +286,8 @@ public class Hdf5Group extends Hdf5TreeElement {
 
 	private List<String> loadObjectNames(int objectId) throws IllegalStateException {
 		List<String> names = new ArrayList<>();
-		Hdf5Group group = this instanceof Hdf5File ? this : getParent();
-		String name = this instanceof Hdf5File ? "/" : getName();
+		Hdf5Group group = isFile() ? this : getParent();
+		String name = isFile() ? "/" : getName();
 		
 		try {
 			if (group.isOpen()) {
@@ -484,7 +484,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 	
 	public void open() {
-		if (this instanceof Hdf5File) {
+		if (isFile()) {
 			throw new IllegalStateException("Wrong method used for Hdf5File");
 		}
 		try {

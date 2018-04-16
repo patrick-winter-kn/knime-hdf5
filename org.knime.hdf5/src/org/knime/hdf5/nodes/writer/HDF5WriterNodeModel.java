@@ -52,11 +52,12 @@ public class HDF5WriterNodeModel extends NodeModel {
 
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		OverwritePolicy policy = OverwritePolicy.OVERWRITE;
-		Hdf5File file = createFile(policy);
+		OverwritePolicy filePolicy = OverwritePolicy.OVERWRITE;
+		Hdf5File file = createFile(filePolicy);
 		
 		try {
-			Hdf5Group group = createGroup(file, policy);
+			OverwritePolicy groupPolicy = OverwritePolicy.ABORT;
+			Hdf5Group group = createGroup(file, groupPolicy);
 			
 			OverwritePolicy dsPolicy = OverwritePolicy.ABORT;
 			List<Hdf5DataSet<?>> dataSets = group.createDataSetsFromSpec(m_groupNameSettings.getStringValue(),

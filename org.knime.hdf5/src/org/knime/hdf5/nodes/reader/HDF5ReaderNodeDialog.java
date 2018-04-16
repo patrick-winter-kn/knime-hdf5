@@ -42,7 +42,7 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		createFileChooser();
 
 		m_dataSetFilterPanel = new DataColumnSpecFilterPanel();
-		addTab("Data Sets", m_dataSetFilterPanel);
+		addTab("DataSets", m_dataSetFilterPanel);
 
 		m_attributeFilterPanel = new DataColumnSpecFilterPanel();
 		addTab("Attributes", m_attributeFilterPanel);
