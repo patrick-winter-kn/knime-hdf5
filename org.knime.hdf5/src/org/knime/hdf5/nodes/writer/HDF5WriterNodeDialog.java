@@ -1,6 +1,5 @@
 package org.knime.hdf5.nodes.writer;
 
-import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.datatransfer.DataFlavor;
@@ -15,6 +14,7 @@ import java.util.Map;
 import javax.activation.UnsupportedDataTypeException;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.DropMode;
 import javax.swing.Icon;
@@ -93,18 +93,17 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		m_panel.setLayout(new BoxLayout(m_panel, BoxLayout.X_AXIS));
 
 		JPanel input = new JPanel();
-		m_panel.add(input, BorderLayout.LINE_START);
-		
+		m_panel.add(input);
 		input.setLayout(new BoxLayout(input, BoxLayout.Y_AXIS));
 		input.setBorder(BorderFactory.createTitledBorder(" Input "));
 		addListToPanel(SpecInfo.COLUMN_SPECS, input);
 		addListToPanel(SpecInfo.FLOW_VARIABLE_SPECS, input);
     	
     	JPanel output = new JPanel();
+		m_panel.add(output);
+		output.setLayout(new BoxLayout(output, BoxLayout.Y_AXIS));
 		output.setBorder(BorderFactory.createTitledBorder(" Output "));
-		m_panel.add(output, BorderLayout.LINE_END);
-		initTree();
-		output.add(m_tree);
+		addTreeToPanel(output);
 	}
     
     private void createFileChooser() {
@@ -128,12 +127,42 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		});
 	}
     
-    private JList<DataColumnSpec> addListToPanel(SpecInfo specInfo, JPanel panel) {
-    	JList<DataColumnSpec> list = new JList<>(specInfo == SpecInfo.COLUMN_SPECS ? m_columnSpecModel : m_flowVariableSpecModel);
-    	panel.add(list);
+    private void addListToPanel(SpecInfo specInfo, JPanel panel) {
+    	JPanel listPanel = new JPanel();
+    	panel.add(listPanel);
     	
-		list.setBorder(BorderFactory.createTitledBorder(specInfo == SpecInfo.COLUMN_SPECS ? "Columns:" : "Flow Variables:"));
+    	listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
+		listPanel.setBorder(BorderFactory.createTitledBorder(specInfo == SpecInfo.COLUMN_SPECS ? "Columns:" : "Flow Variables:"));
+    	
+    	JList<DataColumnSpec> list = new JList<>(specInfo == SpecInfo.COLUMN_SPECS ? m_columnSpecModel : m_flowVariableSpecModel);
+    	listPanel.add(list);
 		list.setVisibleRowCount(-1);
+		
+		final JScrollPane jsp = new JScrollPane(list);
+		jsp.setMinimumSize(new Dimension(50, 100));
+		listPanel.add(jsp);
+		
+		list.setCellRenderer(new DefaultListCellRenderer() {
+
+			private static final long serialVersionUID = 4119451757237000581L;
+
+			@Override
+			public Component getListCellRendererComponent(JList<?> list,
+					Object value, int index, boolean isSelected,
+					boolean cellHasFocus) {
+				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+				
+				if (value instanceof DataColumnSpec) {
+					DataColumnSpec spec = (DataColumnSpec) value;
+					
+					setIcon(spec.getType().getIcon());
+					setText(spec.getName());
+				}
+				
+				return this;
+			}
+		});
+		
 		list.setDragEnabled(true);
 		list.setTransferHandler(new TransferHandler() {
 
@@ -154,12 +183,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
                 return null;
             }
 		});
-		
-		final JScrollPane jsp = new JScrollPane(list);
-		jsp.setMinimumSize(new Dimension(50, 100));
-		panel.add(jsp);
-		
-		return list;
     }
     
     private Hdf5File createFile(OverwritePolicy policy) throws IOException {
@@ -177,11 +200,27 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		}
 	}
     
-    private void initTree() {
-		m_tree.setBorder(BorderFactory.createTitledBorder("File:"));
+    private void addTreeToPanel(JPanel panel) {
+    	JPanel treePanel = new JPanel();
+    	panel.add(treePanel);
+    	
+    	treePanel.setLayout(new BoxLayout(treePanel, BoxLayout.Y_AXIS));
+		treePanel.setBorder(BorderFactory.createTitledBorder("File:"));
+    	treePanel.add(m_tree);
+		
+		final JScrollPane jsp = new JScrollPane(m_tree);
+		jsp.setMinimumSize(new Dimension(50, 100));
+		treePanel.add(jsp);
+		
     	m_tree.setCellRenderer(new DefaultTreeCellRenderer() {
 
 			private static final long serialVersionUID = -2424225988962935310L;
+
+			private final String dir = "C:\\Users\\UK\\Documents\\GitHub\\knime-hdf5\\org.knime.hdf5\\";
+			private final Icon columnIcon = new ImageIcon(dir + "icons\\column.png");
+			private final Icon dataSetIcon = new ImageIcon(dir + "icons\\dataSet.png");
+			private final Icon groupIcon = new ImageIcon(dir + "icons\\group.png");
+			private final Icon fileIcon = new ImageIcon(dir + "icons\\file.png");
 			
 			@Override
 			public Component getTreeCellRendererComponent(final JTree tree,
@@ -194,21 +233,18 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 					DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
 					
 					Icon icon = null;
-					String dir = "C:\\Users\\UK\\Documents\\GitHub\\knime-hdf5\\org.knime.hdf5\\icons\\";
 					if (!node.getAllowsChildren()) {
-						icon = new ImageIcon(dir + "column.png");
+						icon = columnIcon;
 					} else if (node.getChildCount() != 0 && !node.getFirstChild().getAllowsChildren()) {
-						icon = new ImageIcon(dir + "dataSet.png");
+						icon = dataSetIcon;
 					} else if (!node.isRoot()) {
-						icon = new ImageIcon(dir + "group.png");
+						icon = groupIcon;
 					} else {
-						icon = new ImageIcon(dir + "file.png");
+						icon = fileIcon;
 					}
 					setIcon(icon);
-					
-				} else {
-					// TODO exception
 				}
+				
 				return this;
 			}
 		});
@@ -345,14 +381,16 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     @Override
 	public void loadAdditionalSettingsFrom(final NodeSettingsRO settings,
             final DataTableSpec[] specs) throws NotConfigurableException {
+    	m_columnSpecModel.clear();
     	for (int i = 0; i < specs[0].getNumColumns(); i++) {
         	m_columnSpecModel.addElement(specs[0].getColumnSpec(i));
     	}
 
+    	m_flowVariableSpecModel.clear();
     	FlowVariable[] flowVariables = getAvailableFlowVariables().values().toArray(new FlowVariable[] {});
 		for (FlowVariable flowVariable : flowVariables) {
 			try {
-				m_flowVariableSpecModel.addElement(new DataColumnSpecCreator(flowVariable.getName(), Hdf5KnimeDataType.getColumnDataType(flowVariable.getType())).createSpec());
+				m_flowVariableSpecModel.add(0, new DataColumnSpecCreator(flowVariable.getName(), Hdf5KnimeDataType.getColumnDataType(flowVariable.getType())).createSpec());
 				
 			} catch (UnsupportedDataTypeException udte) {
 				NodeLogger.getLogger("HDF5 Files").error("Type of FlowVariable \"" + flowVariable.getName() + "\" is not supported", udte);
