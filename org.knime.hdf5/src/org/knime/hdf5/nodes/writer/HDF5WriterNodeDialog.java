@@ -1,10 +1,12 @@
 package org.knime.hdf5.nodes.writer;
 
+import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.Dimension;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
@@ -19,11 +21,14 @@ import javax.swing.DefaultListModel;
 import javax.swing.DropMode;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.TransferHandler;
 import javax.swing.event.ChangeEvent;
@@ -36,6 +41,7 @@ import javax.swing.tree.TreePath;
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataColumnSpecCreator;
 import org.knime.core.data.DataTableSpec;
+import org.knime.core.data.util.ListModelFilterUtils;
 import org.knime.core.node.FlowVariableModel;
 import org.knime.core.node.NodeDialogPane;
 import org.knime.core.node.NodeLogger;
@@ -45,6 +51,7 @@ import org.knime.core.node.NotConfigurableException;
 import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
+import org.knime.core.node.util.FlowVariableListCellRenderer;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
@@ -128,20 +135,47 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 	}
     
     private void addListToPanel(SpecInfo specInfo, JPanel panel) {
-    	JPanel listPanel = new JPanel();
+    	JPanel listPanel = new JPanel(new BorderLayout());
     	panel.add(listPanel);
-    	
-    	listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
 		listPanel.setBorder(BorderFactory.createTitledBorder(specInfo == SpecInfo.COLUMN_SPECS ? "Columns:" : "Flow Variables:"));
-    	
-    	JList<DataColumnSpec> list = new JList<>(specInfo == SpecInfo.COLUMN_SPECS ? m_columnSpecModel : m_flowVariableSpecModel);
-    	listPanel.add(list);
+
+		DefaultListModel<DataColumnSpec> listModel = specInfo == SpecInfo.COLUMN_SPECS ? m_columnSpecModel : m_flowVariableSpecModel;
+    	JList<DataColumnSpec> list = new JList<>(listModel);
 		list.setVisibleRowCount(-1);
-		
 		final JScrollPane jsp = new JScrollPane(list);
-		jsp.setMinimumSize(new Dimension(50, 100));
-		listPanel.add(jsp);
-		
+		listPanel.add(jsp, BorderLayout.CENTER);
+
+		JPanel searchPanel = new JPanel(new BorderLayout());
+        listPanel.add(searchPanel, BorderLayout.NORTH);
+        searchPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        
+		JTextField searchField = new JTextField(4);
+        JButton searchButton = new JButton("Search");
+        JCheckBox markAllHits = new JCheckBox("Select all search hits");
+        searchPanel.add(searchField, BorderLayout.CENTER);
+        searchPanel.add(searchButton, BorderLayout.EAST);
+        searchPanel.add(markAllHits, BorderLayout.PAGE_END);
+        
+        ActionListener actionListener = new ActionListener() {
+            @Override
+            public void actionPerformed(final ActionEvent e) {
+                ListModelFilterUtils.onSearch(list, listModel, searchField.getText(),
+                    markAllHits.isSelected());
+            }
+        };
+        searchField.addActionListener(actionListener);
+        searchButton.addActionListener(actionListener);
+        
+        ActionListener actionListenerAll = new ActionListener() {
+            @Override
+            public void actionPerformed(final ActionEvent e) {
+                list.clearSelection();
+                ListModelFilterUtils.onSearch(list, listModel, searchField.getText(),
+                    markAllHits.isSelected());
+            }
+        };
+        markAllHits.addActionListener(actionListenerAll);
+
 		list.setCellRenderer(new DefaultListCellRenderer() {
 
 			private static final long serialVersionUID = 4119451757237000581L;
@@ -168,14 +202,14 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 
 			private static final long serialVersionUID = -4233815652319877595L;
 
-            public int getSourceActions(JComponent c) {
+            public int getSourceActions(JComponent comp) {
                 return COPY;
             }
              
             @SuppressWarnings("unchecked")
-			protected Transferable createTransferable(JComponent c) {
-                if (c instanceof JList) {
-                	JList<DataColumnSpec> list = (JList<DataColumnSpec>) c;
+			protected Transferable createTransferable(JComponent comp) {
+                if (comp instanceof JList) {
+                	JList<DataColumnSpec> list = (JList<DataColumnSpec>) comp;
     				m_transfer.put(specInfo.getSpecName(), list.getSelectedValuesList());
 					
 					return new StringSelection(specInfo.getSpecName());
@@ -185,42 +219,44 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		});
     }
     
-    private Hdf5File createFile(OverwritePolicy policy) throws IOException {
-		String filePath = m_filePathSettings.getStringValue();
-		
-		try {
-			return Hdf5File.createFile(filePath);
-			
-		} catch (IOException ioe) {
-			if (policy == OverwritePolicy.ABORT) {
-				throw new IOException("Abort: " + ioe.getMessage());
-			} else {
-				return Hdf5File.openFile(filePath, Hdf5File.READ_WRITE_ACCESS);
-			}
-		}
-	}
-    
     private void addTreeToPanel(JPanel panel) {
-    	JPanel treePanel = new JPanel();
+    	JPanel treePanel = new JPanel(new BorderLayout());
     	panel.add(treePanel);
     	
-    	treePanel.setLayout(new BoxLayout(treePanel, BoxLayout.Y_AXIS));
 		treePanel.setBorder(BorderFactory.createTitledBorder("File:"));
-    	treePanel.add(m_tree);
 		
 		final JScrollPane jsp = new JScrollPane(m_tree);
-		jsp.setMinimumSize(new Dimension(50, 100));
-		treePanel.add(jsp);
+		treePanel.add(jsp, BorderLayout.CENTER);
 		
     	m_tree.setCellRenderer(new DefaultTreeCellRenderer() {
 
 			private static final long serialVersionUID = -2424225988962935310L;
 
-			private final String dir = "C:\\Users\\UK\\Documents\\GitHub\\knime-hdf5\\org.knime.hdf5\\";
-			private final Icon columnIcon = new ImageIcon(dir + "icons\\column.png");
-			private final Icon dataSetIcon = new ImageIcon(dir + "icons\\dataSet.png");
-			private final Icon groupIcon = new ImageIcon(dir + "icons\\group.png");
-			private final Icon fileIcon = new ImageIcon(dir + "icons\\file.png");
+			private final Icon columnIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/column.png");
+			private final Icon dataSetIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/dataSet.png");
+			private final Icon groupIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/group.png");
+			private final Icon fileIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/file.png");
+			
+			private Icon loadIcon(
+		            final Class<?> className, final String path) {
+		        ImageIcon icon;
+		        try {
+		            ClassLoader loader = className.getClassLoader();
+		            String packagePath =
+		                className.getPackage().getName().replace('.', '/');
+		            String correctedPath = path;
+		            if (!path.startsWith("/")) {
+		                correctedPath = "/" + path;
+		            }
+		            icon = new ImageIcon(
+		                    loader.getResource(packagePath + correctedPath));
+		        } catch (Exception e) {
+		            NodeLogger.getLogger(FlowVariableListCellRenderer.class).debug(
+		                    "Unable to load icon at path " + path, e);
+		            icon = null;
+		        }
+		        return icon;
+		    }
 			
 			@Override
 			public Component getTreeCellRendererComponent(final JTree tree,
@@ -331,6 +367,21 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			file.close();
 		}
     }
+    
+    private Hdf5File createFile(OverwritePolicy policy) throws IOException {
+		String filePath = m_filePathSettings.getStringValue();
+		
+		try {
+			return Hdf5File.createFile(filePath);
+			
+		} catch (IOException ioe) {
+			if (policy == OverwritePolicy.ABORT) {
+				throw new IOException("Abort: " + ioe.getMessage());
+			} else {
+				return Hdf5File.openFile(filePath, Hdf5File.READ_WRITE_ACCESS);
+			}
+		}
+	}
     
     private void addChildrenToNode(DefaultMutableTreeNode parentNode, Hdf5TreeElement treeElement) {
     	try {
