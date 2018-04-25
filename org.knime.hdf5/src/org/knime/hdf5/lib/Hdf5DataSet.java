@@ -270,11 +270,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public boolean writeRowToDataSet(DataRow row, int specIndex, long rowId) throws UnsupportedDataTypeException {
+	public boolean writeRowToDataSet(DataRow row, int[] specIndex, long rowId) throws UnsupportedDataTypeException {
 		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfValuesFrom(1));
 		
 		for (int i = 0; i < dataIn.length; i++) {
-			dataIn[i] = getValueFromDataCell(row.getCell(specIndex + i));
+			dataIn[i] = getValueFromDataCell(row.getCell(specIndex[i]));
 		}
 		
 		return writeRow(dataIn, rowId);

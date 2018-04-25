@@ -32,11 +32,12 @@ public class Hdf5HdfDataType {
 		DOUBLE(820),
 		STRING(41),
 		REFERENCE(51);	// dataType is an object reference
-		private static final Map<Integer, HdfDataType> LOOKUP = new HashMap<Integer, HdfDataType>();
+		private static final Map<Integer, HdfDataType> LOOKUP = new HashMap<>();
 
 		static {
-			for (HdfDataType s : EnumSet.allOf(HdfDataType.class))
+			for (HdfDataType s : EnumSet.allOf(HdfDataType.class)) {
 				LOOKUP.put(s.getTypeId(), s);
+			}
 		}
 
 		private int m_typeId;

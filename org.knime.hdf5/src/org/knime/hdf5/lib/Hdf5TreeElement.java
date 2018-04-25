@@ -173,6 +173,7 @@ abstract public class Hdf5TreeElement {
 			Hdf5Attribute<?> attr = iter.next();
 			if (attr.getName().equals(name)) {
 				attribute = attr;
+				attr.open();
 				found = true;
 			}
 		}
@@ -311,19 +312,19 @@ abstract public class Hdf5TreeElement {
 		switch (flowVariable.getType()) {
 		case INTEGER:
 			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.INTEGER), Hdf5KnimeDataType.INTEGER, false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
-			Hdf5Attribute<Integer> attributeInteger = (Hdf5Attribute<Integer>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataType);
+			Hdf5Attribute<Integer> attributeInteger = (Hdf5Attribute<Integer>) createAttribute(flowVariable.getName(), 1L, dataType);
 			attributeInteger.write(new Integer[] { flowVariable.getIntValue() });
 			return attributeInteger;
 			
 		case DOUBLE:
 			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.DOUBLE), Hdf5KnimeDataType.DOUBLE, false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
-			Hdf5Attribute<Double> attributeDouble = (Hdf5Attribute<Double>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataType);
+			Hdf5Attribute<Double> attributeDouble = (Hdf5Attribute<Double>) createAttribute(flowVariable.getName(), 1L, dataType);
 			attributeDouble.write(new Double[] { flowVariable.getDoubleValue() });
 			return attributeDouble;
 			
 		case STRING:
 			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.STRING), Hdf5KnimeDataType.STRING, false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
-			Hdf5Attribute<String> attributeString = (Hdf5Attribute<String>) createAttribute(flowVariable.getName().substring(flowVariable.getName().lastIndexOf("/") + 1), 1L, dataType);
+			Hdf5Attribute<String> attributeString = (Hdf5Attribute<String>) createAttribute(flowVariable.getName(), 1L, dataType);
 			attributeString.write(new String[] { flowVariable.getStringValue() });
 			return attributeString;
 			

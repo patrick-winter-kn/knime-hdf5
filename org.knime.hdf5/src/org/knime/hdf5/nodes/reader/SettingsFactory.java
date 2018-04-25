@@ -6,11 +6,11 @@ import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 
 final class SettingsFactory {
 
+	private static final String INPUT_CONFIG_KEY = "_Input";
+	
 	private static final String DATA_SET_FILTER_CONFIG_KEY = "dataSetFilter";
 
 	private static final String ATTRIBUTE_FILTER_CONFIG_KEY = "attributeFilter";
-	
-	private static final String INPUT_CONFIG_KEY = "_Input";
 
 	private SettingsFactory() {
 		// Disables default constructor
@@ -50,5 +50,4 @@ final class SettingsFactory {
     static final DataColumnSpecFilterConfiguration createAttributeFilterConfiguration() {
         return new DataColumnSpecFilterConfiguration(ATTRIBUTE_FILTER_CONFIG_KEY);
     }
-
 }

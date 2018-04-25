@@ -9,6 +9,7 @@ import java.util.Map;
 
 import javax.activation.UnsupportedDataTypeException;
 
+import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.DataType;
 import org.knime.core.node.NodeLogger;
@@ -200,8 +201,11 @@ public class Hdf5Group extends Hdf5TreeElement {
 			if (grp != null) {
 				group = grp.getGroupByPath(path.substring(name.length() + 1));
 			}
-		} else {
+		} else if (!path.isEmpty()) {
 			group = getGroup(name);
+			
+		} else {
+			group = this;
 		}
 		
 		return group;
@@ -362,58 +366,41 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return paths;
 	}
 
-	public List<Hdf5DataSet<?>> createDataSetsFromSpec(String dname, long rows, DataTableSpec spec, boolean abort) {
-		List<Hdf5DataSet<?>> dataSets = new ArrayList<>();
+	public Hdf5DataSet<?> createDataSetFromSpec(String dname, long rows, DataColumnSpec[] specs, boolean abort) {
+		Hdf5DataSet<?> dataSet = null;
 		
-		DataType type = spec.getColumnSpec(0).getType();
-		int cols = 0;
-		for (int i = 0; i < spec.getNumColumns() + 1; i++) {
-			DataType curType = i < spec.getNumColumns() ? spec.getColumnSpec(i).getType() : null;
-			if (type.equals(curType)) {
-				cols++;
+		try {
+			DataType type = specs[0].getType();
+			Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.getHdfDataType(type)), 
+					Hdf5KnimeDataType.getKnimeDataType(type), false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
+			long[] dims = new long[] { rows, specs.length };
 			
-			} else {
-				Hdf5DataSet<?> dataSet = null;
+			try {
+				dataSet = createDataSet(dname, dims, dataType);
 				
+			} catch (IOException ioe) {
 				try {
-					Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.getHdfDataType(type)), 
-							Hdf5KnimeDataType.getKnimeDataType(type), false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
-					long[] dims = new long[] { rows, cols };
-					
-					try {
-						// TODO maybe add zeros in front of size for better ordering
-						dataSet = createDataSet(dname + "[" + dataSets.size() + "]", dims, dataType);
-						dataSets.add(dataSet);
+					if (abort) {
+						throw new IOException("Abort: " + ioe.getMessage());
+					} else {
+						dataSet = getDataSet(dname);
 						
-					} catch (IOException ioe) {
-						try {
-							if (abort) {
-								throw new IOException("Abort: " + ioe.getMessage());
-							} else {
-								dataSet = getDataSet(dname + "[" + dataSets.size() + "]");
-								
-								if (dataType.isSimilarTo(dataSet.getType()) && dims.equals(dataSet.getDimensions())) {
-									dataSets.add(dataSet);
-									
-								} else {
-									throw new UnsupportedDataTypeException("DataSet \"" + dataSet.getPathFromFileWithName()
-											+ "\" already exists, but with different dataType or dimensions");
-								}
-							}
-						} catch (IOException ioe2) {
-							NodeLogger.getLogger("HDF5 Files").warn(ioe2.getMessage(), ioe2);
+						if (dataType.isSimilarTo(dataSet.getType()) && dims.equals(dataSet.getDimensions())) {
+							
+						} else {
+							throw new UnsupportedDataTypeException("DataSet \"" + dataSet.getPathFromFileWithName()
+									+ "\" already exists, but with different dataType or dimensions");
 						}
 					}
-				} catch (UnsupportedDataTypeException udte) {
-					NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
+				} catch (IOException ioe2) {
+					NodeLogger.getLogger("HDF5 Files").warn(ioe2.getMessage(), ioe2);
 				}
-				
-				type = curType;
-				cols = 1;
 			}
+		} catch (UnsupportedDataTypeException udte) {
+			NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
 		}
 		
-		return dataSets;
+		return dataSet;
 	}
 
 	public DataTableSpec createSpecOfDataSets() throws IllegalStateException {

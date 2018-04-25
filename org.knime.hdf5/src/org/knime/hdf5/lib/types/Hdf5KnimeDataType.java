@@ -29,7 +29,7 @@ public enum Hdf5KnimeDataType {
 		throw new UnsupportedDataTypeException("Unknown knimeDataType");
 	}
 	
-	public static DataType getColumnDataType(Type type) throws UnsupportedDataTypeException {
+	public static DataType getColumnDataType(Type type)/* throws UnsupportedDataTypeException*/ {
 		switch (type) {
 		case INTEGER:
 			return IntCell.TYPE;
@@ -38,7 +38,9 @@ public enum Hdf5KnimeDataType {
 		case STRING:
 			return StringCell.TYPE;
 		default:
-			throw new UnsupportedDataTypeException("Unknown knimeDataType");
+			// TODO see if useless
+			return null;
+			//throw new UnsupportedDataTypeException("Unknown knimeDataType");
 		
 		}
 	}
