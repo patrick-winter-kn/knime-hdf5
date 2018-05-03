@@ -9,7 +9,6 @@ import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.IOException;
 
-import javax.activation.UnsupportedDataTypeException;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultListCellRenderer;
@@ -26,17 +25,13 @@ import javax.swing.JTextField;
 import javax.swing.TransferHandler;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeModel;
 
 import org.knime.core.data.DataColumnSpec;
-import org.knime.core.data.DataColumnSpecCreator;
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.DataValue;
 import org.knime.core.data.util.ListModelFilterUtils;
 import org.knime.core.node.FlowVariableModel;
 import org.knime.core.node.NodeDialogPane;
-import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.NotConfigurableException;
@@ -45,11 +40,7 @@ import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.FlowVariableListCellRenderer;
 import org.knime.core.node.workflow.FlowVariable;
-import org.knime.hdf5.lib.Hdf5Attribute;
-import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
-import org.knime.hdf5.lib.Hdf5Group;
-import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
 
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
@@ -101,7 +92,16 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			@Override
 			public void stateChanged(ChangeEvent e) {
 				if (new File(m_filePathSettings.getStringValue()).isFile() || !m_init) {
-			        updateTree();
+					Hdf5File file = null;
+					try {
+						file = getFile(OverwritePolicy.OVERWRITE);
+						m_editTreePanel.updateTreeWithFile(file);
+						
+					} catch (IOException ioe) {
+						// TODO exception (should never occur)
+					} finally {
+						file.close();
+					}
 			        m_init = true;
 				}
 			}
@@ -215,23 +215,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		});
     }
     
-    private void updateTree() {
-    	Hdf5File file = null;
-		try {
-			file = createFile(OverwritePolicy.OVERWRITE);
-			
-			DefaultMutableTreeNode root = new DefaultMutableTreeNode(file);
-			((DefaultTreeModel) m_editTreePanel.getTree().getModel()).setRoot(root);
-			addChildrenToNode(root);
-			
-		} catch (IOException ioe) {
-			// TODO exception (should never occur)
-		} finally {
-			file.close();
-		}
-    }
-    
-    private Hdf5File createFile(OverwritePolicy policy) throws IOException {
+    private Hdf5File getFile(OverwritePolicy policy) throws IOException {
 		String filePath = m_filePathSettings.getStringValue();
 		
 		try {
@@ -245,62 +229,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			}
 		}
 	}
-    
-    private void addChildrenToNode(DefaultMutableTreeNode parentNode) {
-    	Object userObject = parentNode.getUserObject();
-    	
-    	if (userObject instanceof Hdf5TreeElement) {
-        	Hdf5TreeElement parent = (Hdf5TreeElement) userObject;
-
-        	if (parent.isGroup()) {
-        		Hdf5Group parentGroup = (Hdf5Group) parent;
-        		
-            	try {
-            		for (String groupName : parentGroup.loadGroupNames()) {
-            			Hdf5Group group = parentGroup.getGroup(groupName);
-            			DefaultMutableTreeNode childNode = new DefaultMutableTreeNode(group);
-            			parentNode.add(childNode);
-            			addChildrenToNode(childNode);
-            		}
-            		for (String dataSetName : parentGroup.loadDataSetNames()) {
-            			Hdf5DataSet<?> dataSet = parentGroup.getDataSet(dataSetName);
-            			DefaultMutableTreeNode childNode = new DefaultMutableTreeNode(dataSet);
-            			parentNode.add(childNode);
-            			addChildrenToNode(childNode);
-            		}
-            	} catch (IOException ioe) {
-            		// TODO exception
-            	}
-        	} else if (parent.isDataSet()) {
-        		Hdf5DataSet<?> parentDS = (Hdf5DataSet<?>) parent;
-        		
-        		// TODO what to do with 1 dimension?
-        		if (parentDS.getDimensions().length == 2) {
-        			for (int i = 0; i < parentDS.getDimensions()[1]; i++) {
-        				try {
-    						DataColumnSpec spec = new DataColumnSpecCreator("col" + (i + 1), parentDS.getType().getKnimeType().getColumnDataType()).createSpec();
-    		    			DefaultMutableTreeNode childNode = new DefaultMutableTreeNode(spec);
-    		    			childNode.setAllowsChildren(false);
-    	    				parentNode.add(childNode);
-    	        			
-    					} catch (UnsupportedDataTypeException udte) {
-    						NodeLogger.getLogger("HDF5 Files").error(udte.getMessage(), udte);
-    					}
-        			}
-        		}
-        	}
-        	
-        	try {
-        		for (String attributeName : parent.loadAttributeNames()) {
-        			Hdf5Attribute<?> attribute = parent.getAttribute(attributeName);
-        			DefaultMutableTreeNode childNode = new DefaultMutableTreeNode(attribute);
-        			parentNode.add(childNode);
-        		}
-        	} catch (IOException ioe) {
-        		// TODO exception
-        	}
-    	}
-    }
     
     /**
      * Calls the update method of the underlying filter panel.
@@ -321,6 +249,17 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	FlowVariable[] flowVariables = getAvailableFlowVariables().values().toArray(new FlowVariable[] {});
 		for (FlowVariable flowVariable : flowVariables) {
 			m_flowVariableSpecModel.add(0, flowVariable);
+		}
+		
+		Hdf5File file = null;
+		try {
+			file = getFile(OverwritePolicy.OVERWRITE);
+			m_editTreePanel.updateTreeWithFile(file);
+			
+		} catch (IOException ioe) {
+			// TODO exception (should never occur)
+		} finally {
+			file.close();
 		}
 
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();

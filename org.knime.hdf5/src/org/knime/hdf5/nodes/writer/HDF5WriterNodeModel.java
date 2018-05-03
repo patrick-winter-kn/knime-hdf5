@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.knime.core.data.DataColumnSpec;
-import org.knime.core.data.DataColumnSpecCreator;
 import org.knime.core.data.DataRow;
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.container.CloseableRowIterator;
@@ -18,20 +17,14 @@ import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.ExecutionMonitor;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeCreationContext;
-import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeModel;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
-import org.knime.core.node.workflow.FlowVariable;
-import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.Hdf5TreeElement;
-
-import hdf.hdf5lib.HDF5Constants;
-import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class HDF5WriterNodeModel extends NodeModel {
 
@@ -58,22 +51,23 @@ public class HDF5WriterNodeModel extends NodeModel {
 		Hdf5File file = null;
 		
 		try {
-			file = createFile(filePolicy);
+			file = getFile(filePolicy);
 			
 			Map<String, List<DataColumnSpec>> dataSets = new HashMap<>();
 			List<TreeNodeEdit> attributeEdits = new ArrayList<>();
 			for (TreeNodeEdit edit : m_editTreeConfig.getEdits()) {
-				switch (edit.getNodeValueClassId()) {
-				case TreeNodeEdit.HDF5_GROUP:
-					// TODO
+				switch (edit.getEditClass()) {
+				case HDF5_GROUP:
+					Hdf5Group parent = file.getGroupByPath(edit.getPathFromFile());
+					parent.createGroup(edit.getName());
 					break;
-				case TreeNodeEdit.HDF5_DATASET:
+				case HDF5_DATASET:
 					dataSets.put(edit.getPathFromFile() + edit.getName(), new ArrayList<>());
 					break;
-				case TreeNodeEdit.DATA_COLUMN_SPEC:
+				case DATA_COLUMN_SPEC:
 					dataSets.get(edit.getPathFromFile().substring(0, edit.getPathFromFile().length() - 1)).add(inData[0].getDataTableSpec().getColumnSpec(edit.getName()));
 					break;
-				case TreeNodeEdit.FLOW_VARIABLE:
+				case FLOW_VARIABLE:
 					attributeEdits.add(edit);
 				}
 			}
@@ -125,7 +119,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 		return null;
 	}
 	
-	private Hdf5File createFile(OverwritePolicy policy) throws IOException {
+	private Hdf5File getFile(OverwritePolicy policy) throws IOException {
 		String filePath = m_filePathSettings.getStringValue();
 		
 		try {

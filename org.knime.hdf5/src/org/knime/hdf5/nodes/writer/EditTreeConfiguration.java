@@ -7,6 +7,7 @@ import org.knime.core.data.DataType;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
+import org.knime.hdf5.nodes.writer.TreeNodeEdit.EditClass;
 
 class EditTreeConfiguration {
 
@@ -36,6 +37,10 @@ class EditTreeConfiguration {
 		m_editList.add(edit);
 	}
 	
+	boolean removeTreeNodeEdit(TreeNodeEdit edit) {
+		return m_editList.remove(edit);
+	}
+	
 	void saveConfiguration(NodeSettingsWO settings) {
         NodeSettingsWO subSettings = settings.addNodeSettings(m_configRootName);
 
@@ -49,7 +54,7 @@ class EditTreeConfiguration {
         	paths[i] = edit.getPathFromFile();
         	names[i] = edit.getName();
         	types[i] = edit.getDataType();
-        	classIds[i] = edit.getNodeValueClassId();
+        	classIds[i] = edit.getEditClass().getClassId();
         }
 
         subSettings.addStringArray(PATHS_FROM_FILE, paths);
@@ -68,7 +73,7 @@ class EditTreeConfiguration {
         
         m_editList.clear();
         for (int i = 0; i < paths.length; i++) {
-        	m_editList.add(new TreeNodeEdit(paths[i], names[i], types[i], classIds[i]));
+        	m_editList.add(new TreeNodeEdit(paths[i], names[i], types[i], EditClass.get(classIds[i])));
         }
     }
 	
