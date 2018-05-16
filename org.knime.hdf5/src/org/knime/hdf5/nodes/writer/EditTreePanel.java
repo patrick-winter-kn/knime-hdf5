@@ -2,15 +2,13 @@ package org.knime.hdf5.nodes.writer;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
-import java.awt.Frame;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.util.Enumeration;
 import java.util.List;
 
 import javax.activation.UnsupportedDataTypeException;
@@ -18,18 +16,10 @@ import javax.swing.BorderFactory;
 import javax.swing.DropMode;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JDialog;
-import javax.swing.JLabel;
-import javax.swing.JMenuItem;
 import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
-import javax.swing.JTextField;
 import javax.swing.JTree;
-import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
-import javax.swing.WindowConstants;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
@@ -38,7 +28,6 @@ import javax.swing.tree.TreePath;
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataColumnSpecCreator;
 import org.knime.core.node.NodeLogger;
-import org.knime.core.node.util.FlowVariableListCellRenderer;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
@@ -46,9 +35,13 @@ import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
-import org.knime.hdf5.nodes.writer.TreeNodeEdit.EditClass;
+import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.ColumnNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.GroupNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit;
 
-class EditTreePanel extends JPanel {
+public class EditTreePanel extends JPanel {
 
 	private static final long serialVersionUID = -9129152385004241047L;
 
@@ -56,7 +49,7 @@ class EditTreePanel extends JPanel {
 	
 	private final JTree m_tree = new JTree(new DefaultMutableTreeNode("(null)"));
 
-	EditTreePanel() {
+	public EditTreePanel() {
 		setLayout(new BorderLayout());
 		setBorder(BorderFactory.createTitledBorder("File:"));
 		
@@ -67,15 +60,15 @@ class EditTreePanel extends JPanel {
 
 			private static final long serialVersionUID = -2424225988962935310L;
 
-			private final Icon columnIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/column.png");
-			private final Icon attributeIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/attribute.png");
-			private final Icon dataSetIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/dataSet.png");
-			private final Icon fileIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/file.png");
-			private final Icon groupIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/group.png");
-			private final Icon newColumnIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/column_new.png");
-			private final Icon newAttributeIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/attribute_new.png");
-			private final Icon newDataSetIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/dataSet_new.png");
-			private final Icon newGroupIcon = loadIcon(HDF5WriterNodeDialog.class, "/icon/group_new.png");
+			private final Icon columnIcon = loadIcon(EditTreePanel.class, "/icon/column.png");
+			private final Icon attributeIcon = loadIcon(EditTreePanel.class, "/icon/attribute.png");
+			private final Icon dataSetIcon = loadIcon(EditTreePanel.class, "/icon/dataSet.png");
+			private final Icon fileIcon = loadIcon(EditTreePanel.class, "/icon/file.png");
+			private final Icon groupIcon = loadIcon(EditTreePanel.class, "/icon/group.png");
+			private final Icon newColumnIcon = loadIcon(EditTreePanel.class, "/icon/column_new.png");
+			private final Icon newAttributeIcon = loadIcon(EditTreePanel.class, "/icon/attribute_new.png");
+			private final Icon newDataSetIcon = loadIcon(EditTreePanel.class, "/icon/dataSet_new.png");
+			private final Icon newGroupIcon = loadIcon(EditTreePanel.class, "/icon/group_new.png");
 			
 			private Icon loadIcon(
 		            final Class<?> className, final String path) {
@@ -91,7 +84,7 @@ class EditTreePanel extends JPanel {
 		            icon = new ImageIcon(
 		                    loader.getResource(packagePath + correctedPath));
 		        } catch (Exception e) {
-		            NodeLogger.getLogger(FlowVariableListCellRenderer.class).debug(
+		            NodeLogger.getLogger(EditTreePanel.class).debug(
 		                    "Unable to load icon at path " + path, e);
 		            icon = null;
 		        }
@@ -107,21 +100,21 @@ class EditTreePanel extends JPanel {
 				
 				if (value instanceof DefaultMutableTreeNode) {
 					DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
-					Object userObject = node.getUserObject();
+					Object nodeObject = node.getUserObject();
 
 					String text = null;
 					Icon icon = null;
 					
-					if (userObject instanceof DataColumnSpec) {
-						text = ((DataColumnSpec) userObject).getName();
+					if (nodeObject instanceof DataColumnSpec) {
+						text = ((DataColumnSpec) nodeObject).getName();
 						icon = columnIcon;
 						
-					} else if (userObject instanceof Hdf5Attribute) {
-						text = ((Hdf5Attribute<?>) userObject).getName();
+					} else if (nodeObject instanceof Hdf5Attribute) {
+						text = ((Hdf5Attribute<?>) nodeObject).getName();
 						icon = attributeIcon;
 					
-					} else if (userObject instanceof Hdf5TreeElement) {
-						Hdf5TreeElement treeElement = (Hdf5TreeElement) userObject;
+					} else if (nodeObject instanceof Hdf5TreeElement) {
+						Hdf5TreeElement treeElement = (Hdf5TreeElement) nodeObject;
 						text = treeElement.getName();
 						if (treeElement.isDataSet()) {
 							icon = dataSetIcon;
@@ -130,22 +123,20 @@ class EditTreePanel extends JPanel {
 						} else if (treeElement.isGroup()) {
 							icon = groupIcon;
 						}
-					} else if (userObject instanceof TreeNodeEdit) {
-						TreeNodeEdit edit = (TreeNodeEdit) userObject;
+					} else if (nodeObject instanceof TreeNodeEdit) {
+						TreeNodeEdit edit = (TreeNodeEdit) nodeObject;
 						text = edit.getName();
-						switch (edit.getEditClass()) {
-						case DATA_COLUMN_SPEC:
+						if (edit instanceof ColumnNodeEdit) {
 							icon = newColumnIcon;
-							break;
-						case FLOW_VARIABLE:
+							
+						} else if (edit instanceof AttributeNodeEdit) {
 							icon = newAttributeIcon;
-							break;
-						case HDF5_DATASET:
+							
+						} else if (edit instanceof DataSetNodeEdit) {
 							icon = newDataSetIcon;
-							break;
-						case HDF5_GROUP:
+							
+						} else if (edit instanceof GroupNodeEdit) {
 							icon = newGroupIcon;
-							break;
 						}
 					}
 
@@ -201,40 +192,75 @@ class EditTreePanel extends JPanel {
                 	return false;
                 }
                 
-                // TODO maybe do it without the properties of the parent node
-                if (!parent.getAllowsChildren()) {
+                Object parentObject = parent.getUserObject();
+                if (parentObject instanceof DataColumnSpec || parentObject instanceof ColumnNodeEdit) {
                 	path = path.getParentPath();
                 	parent = (DefaultMutableTreeNode) parent.getParent();
-                	
-                } else if (parent.getChildCount() == 0 || parent.getFirstChild().getAllowsChildren()) {
-                	if (data.get(0) instanceof DataColumnSpec) {
-                		String newName = "dataSet[" + parent.getChildCount() + "]";
-                		TreeNodeEdit edit = new TreeNodeEdit(parent.getPath(), newName, null, EditClass.HDF5_DATASET);
-                    	DefaultMutableTreeNode newChild = new DefaultMutableTreeNode(edit);
-                    	parent.add(newChild);
-                    	m_editTreeConfig.addTreeNodeEdit(edit);
-                    	path = path.pathByAddingChild(newChild);
-                    	parent = newChild;
-                	}
+                	parentObject = parent.getUserObject();
                 }
                 
-                for (int i = 0; i < data.size(); i++) {
-                	Object newData = data.get(i);
-                	
-                	TreeNodeEdit edit = null;
-    				if (newData instanceof DataColumnSpec) {
-                    	edit = new TreeNodeEdit(parent.getPath(), (DataColumnSpec) newData);
-                    	
-    				} else if (newData instanceof FlowVariable) {
-                    	edit = new TreeNodeEdit(parent.getPath(), (FlowVariable) newData);
-    				}
-    				
-    				if (edit != null) {
-                        DefaultMutableTreeNode newChild = new DefaultMutableTreeNode(edit);
+                if (data.get(0) instanceof DataColumnSpec) {
+                	if (!(parentObject instanceof Hdf5DataSet<?> || parentObject instanceof DataSetNodeEdit)) {
+                		String newName = "dataSet[" + parent.getChildCount() + "]";
+                		DataSetNodeEdit newEdit = null;
+                		if (parentObject instanceof GroupNodeEdit) {
+                			GroupNodeEdit edit = (GroupNodeEdit) parentObject;
+                    		newEdit = new DataSetNodeEdit(newName);
+                    		edit.addDataSetNodeEdit(newEdit);
+                    		
+                		} else {
+                    		newEdit = new DataSetNodeEdit(parent, newName);
+                        	m_editTreeConfig.addDataSetNodeEdit(newEdit);
+                		}
+                    	DefaultMutableTreeNode newChild = new DefaultMutableTreeNode(newEdit);
+                    	parent.add(newChild);
+                    	path = path.pathByAddingChild(newChild);
+                    	parent = newChild;
+                    	parentObject = newEdit;
+                	}
+
+                    // TODO include case to append dataSets
+                	for (int i = 0; i < data.size(); i++) {
+                		DataColumnSpec spec = (DataColumnSpec) data.get(i);
+                		ColumnNodeEdit newEdit = null;
+                		if (parentObject instanceof DataSetNodeEdit) {
+                    		try {
+                    			DataSetNodeEdit edit = (DataSetNodeEdit) parentObject;
+								newEdit = new ColumnNodeEdit(spec);
+								edit.addColumnNodeEdit(newEdit);
+								
+							} catch (UnsupportedDataTypeException udte) {
+								// TODO exception
+							}
+                		}
+                        DefaultMutableTreeNode newChild = new DefaultMutableTreeNode(newEdit);
         				newChild.setAllowsChildren(false);
         				parent.add(newChild);
-                    	m_editTreeConfig.addTreeNodeEdit(edit);
-    				}
+                	}
+                } else if (data.get(0) instanceof FlowVariable) {
+                    for (int i = 0; i < data.size(); i++) {
+                    	FlowVariable var = (FlowVariable) data.get(i);
+                    	
+                    	AttributeNodeEdit newEdit = null;
+                    	if (parentObject instanceof GroupNodeEdit) {
+                    		GroupNodeEdit edit = (GroupNodeEdit) parentObject;
+                    		newEdit = new AttributeNodeEdit(var);
+                    		edit.addAttributeNodeEdit(newEdit);
+                    		
+                		} else if (parentObject instanceof DataSetNodeEdit) {
+                			DataSetNodeEdit edit = (DataSetNodeEdit) parentObject;
+                    		newEdit = new AttributeNodeEdit(var);
+                    		edit.addAttributeNodeEdit(newEdit);
+                    		
+                		} else {
+                    		newEdit = new AttributeNodeEdit(parent, var);
+                        	m_editTreeConfig.addAttributeNodeEdit(newEdit);
+                		}
+                    	
+                        DefaultMutableTreeNode newChild = new DefaultMutableTreeNode(newEdit);
+        				newChild.setAllowsChildren(false);
+        				parent.add(newChild);
+                	}
                 }
 				
 				((DefaultTreeModel) (m_tree.getModel())).reload();
@@ -245,8 +271,6 @@ class EditTreePanel extends JPanel {
         });
     	m_tree.setDropMode(DropMode.ON_OR_INSERT);
 
-    	final GroupMenu groupMenu = new GroupMenu(false);
-    	final GroupMenu editTreeNodeGroupMenu = new GroupMenu(true);
     	m_tree.addMouseListener(new MouseAdapter() {
     		
     		@Override
@@ -256,12 +280,13 @@ class EditTreePanel extends JPanel {
     				DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
     				Object userObject = node.getUserObject();
 					m_tree.setSelectionPath(path);
-					if (userObject instanceof Hdf5Group) {
-    					groupMenu.show(e.getComponent(), e.getX(), e.getY());
-        				groupMenu.initMenu(node);
-    				} else if (userObject instanceof TreeNodeEdit && ((TreeNodeEdit) userObject).getEditClass() == EditClass.HDF5_GROUP) {
-    					editTreeNodeGroupMenu.show(e.getComponent(), e.getX(), e.getY());
-    					editTreeNodeGroupMenu.initMenu(node);
+					if (userObject instanceof GroupNodeEdit) {
+    					GroupNodeEdit.GROUP_EDIT_MENU.show(e.getComponent(), e.getX(), e.getY());
+    					GroupNodeEdit.GROUP_EDIT_MENU.initMenu(m_tree, m_editTreeConfig, node);
+    					
+    				} else if (userObject instanceof Hdf5Group) {
+    					GroupNodeEdit.GROUP_MENU.show(e.getComponent(), e.getX(), e.getY());
+        				GroupNodeEdit.GROUP_MENU.initMenu(m_tree, m_editTreeConfig, node);
     				}
     			}
     		}
@@ -334,102 +359,100 @@ class EditTreePanel extends JPanel {
         	}
     	}
     }
-    
-    private class GroupMenu extends JPopupMenu {
-
-    	private static final long serialVersionUID = -7709804406752499090L;
-
-    	private DefaultMutableTreeNode m_node;
-    	
-		private GroupMenu(boolean fromTreeNodeEdit) {
-    		if (fromTreeNodeEdit) {
-	    		JMenuItem itemEdit = new JMenuItem("Edit group properties");
-	    		itemEdit.addActionListener(new ActionListener() {
-					
-					@Override
-					public void actionPerformed(ActionEvent e) {
-						Object userObject = m_node.getUserObject();
-						if (userObject instanceof TreeNodeEdit) {
-							TreeNodeEdit edit = (TreeNodeEdit) userObject;
-							Frame parent = (Frame)SwingUtilities.getAncestorOfClass(
-									Frame.class, m_tree);
-							JDialog dialog = new JDialog(parent, "Group properties");
-				            dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-							dialog.setSize(200, 200);
-							dialog.setLocation(400, 400);
-							dialog.setVisible(true);
-							JPanel panel = new JPanel(new BorderLayout());
-							dialog.add(panel, BorderLayout.PAGE_START);
-							JLabel nameLabel = new JLabel("Name: ");
-							JTextField nameField = new JTextField(4);
-							nameField.setText(edit.getName());
-							panel.add(nameLabel, BorderLayout.WEST);
-							panel.add(nameField, BorderLayout.CENTER);
-							JButton okButton = new JButton("OK");
-							okButton.addActionListener(new ActionListener() {
-								
-								@Override
-								public void actionPerformed(ActionEvent e) {
-									edit.setName(nameField.getText());
-									dialog.setVisible(false);
-				    				((DefaultTreeModel) (m_tree.getModel())).reload();
-								}
-							});
-							dialog.add(okButton, BorderLayout.PAGE_END);
-						}
-					}
-				});
-	    		add(itemEdit);
-    		}
-    		
-    		JMenuItem itemCreate = new JMenuItem("Create group");
-    		itemCreate.addActionListener(new ActionListener() {
-				
-				@Override
-				public void actionPerformed(ActionEvent e) {
-					String newName = "group[" + m_node.getChildCount() + "]";
-            		TreeNodeEdit edit = new TreeNodeEdit(m_node.getPath(), newName, null, EditClass.HDF5_GROUP);
-                	m_node.add(new DefaultMutableTreeNode(edit));
-                	m_editTreeConfig.addTreeNodeEdit(edit);
-    				((DefaultTreeModel) (m_tree.getModel())).reload();
-    				m_tree.makeVisible(new TreePath(m_node.getPath()).pathByAddingChild(m_node.getFirstChild()));
-				}
-			});
-    		add(itemCreate);
-    		
-    		if (fromTreeNodeEdit) {
-        		JMenuItem itemDelete = new JMenuItem("Delete group");
-        		itemDelete.addActionListener(new ActionListener() {
-    				
-    				@Override
-    				public void actionPerformed(ActionEvent e) {
-						Object userObject = m_node.getUserObject();
-						if (userObject instanceof TreeNodeEdit) {
-							TreeNodeEdit edit = (TreeNodeEdit) userObject;
-	                    	m_editTreeConfig.removeTreeNodeEdit(edit);
-	                    	DefaultMutableTreeNode parent = (DefaultMutableTreeNode) m_node.getParent();
-	                    	parent.remove(m_node);
-	        				((DefaultTreeModel) (m_tree.getModel())).reload();
-	        				m_tree.makeVisible(new TreePath(parent.getPath()));
-						}
-    				}
-    			});
-        		add(itemDelete);
-    		}
-    	}
-		
-		private void initMenu(DefaultMutableTreeNode node) {
-			m_node = node;
-		}
-    }
 
 	void saveConfiguration(EditTreeConfiguration editTreeConfig) {
-		for (TreeNodeEdit edit : m_editTreeConfig.getEdits()) {
-			editTreeConfig.addTreeNodeEdit(edit);
+		for (GroupNodeEdit edit : m_editTreeConfig.getGroupNodeEdits()) {
+			editTreeConfig.addGroupNodeEdit(edit);
+		}
+		for (DataSetNodeEdit edit : m_editTreeConfig.getDataSetNodeEdits()) {
+			editTreeConfig.addDataSetNodeEdit(edit);
+		}
+		for (AttributeNodeEdit edit : m_editTreeConfig.getAttributeNodeEdits()) {
+			editTreeConfig.addAttributeNodeEdit(edit);
 		}
 	}
 	
+	@SuppressWarnings("unchecked")
 	void loadConfiguration(EditTreeConfiguration editTreeConfig) {
-		/* use all the edits on the JTree */
+		for (GroupNodeEdit edit : editTreeConfig.getGroupNodeEdits()) {
+			String[] pathFromFile = edit.getPathFromFile().split("/");
+			DefaultMutableTreeNode node = (DefaultMutableTreeNode) m_tree.getModel().getRoot();
+			
+			boolean found = true;
+			for (String name : pathFromFile) {
+				if (!name.isEmpty()) {
+					Enumeration<DefaultMutableTreeNode> children = node.children();
+					found = false;
+					while (!found && children.hasMoreElements()) {
+						node = children.nextElement();
+						Object userObject = node.getUserObject();
+						if (userObject instanceof Hdf5TreeElement) {
+							found = name.equals(((Hdf5TreeElement) userObject).getName());
+						} else if (userObject instanceof TreeNodeEdit) {
+							found = name.equals(((TreeNodeEdit) userObject).getName());
+						}
+					}
+				}
+			}
+			
+			if (found) {
+				m_editTreeConfig.addGroupNodeEdit(edit);
+				edit.addEditToNode(node);
+			}
+		}
+		
+		for (DataSetNodeEdit edit : editTreeConfig.getDataSetNodeEdits()) {
+			String[] pathFromFile = edit.getPathFromFile().split("/");
+			DefaultMutableTreeNode node = (DefaultMutableTreeNode) m_tree.getModel().getRoot();
+			
+			boolean found = true;
+			for (String name : pathFromFile) {
+				if (!name.isEmpty()) {
+					Enumeration<DefaultMutableTreeNode> children = node.children();
+					found = false;
+					while (!found && children.hasMoreElements()) {
+						node = children.nextElement();
+						Object userObject = node.getUserObject();
+						if (userObject instanceof Hdf5TreeElement) {
+							found = name.equals(((Hdf5TreeElement) userObject).getName());
+						} else if (userObject instanceof TreeNodeEdit) {
+							found = name.equals(((TreeNodeEdit) userObject).getName());
+						}
+					}
+				}
+			}
+			
+			if (found) {
+				m_editTreeConfig.addDataSetNodeEdit(edit);
+				edit.addEditToNode(node);
+			}
+		}
+		
+		for (AttributeNodeEdit edit : editTreeConfig.getAttributeNodeEdits()) {
+			String[] pathFromFile = edit.getPathFromFile().split("/");
+			DefaultMutableTreeNode node = (DefaultMutableTreeNode) m_tree.getModel().getRoot();
+			
+			boolean found = true;
+			for (String name : pathFromFile) {
+				if (!name.isEmpty()) {
+					Enumeration<DefaultMutableTreeNode> children = node.children();
+					found = false;
+					while (!found && children.hasMoreElements()) {
+						node = children.nextElement();
+						Object userObject = node.getUserObject();
+						if (userObject instanceof Hdf5TreeElement) {
+							found = name.equals(((Hdf5TreeElement) userObject).getName());
+						} else if (userObject instanceof TreeNodeEdit) {
+							found = name.equals(((TreeNodeEdit) userObject).getName());
+						}
+					}
+				}
+			}
+			
+			if (found) {
+				m_editTreeConfig.addAttributeNodeEdit(edit);
+				edit.addEditToNode(node);
+			}
+		}
 	}
 }

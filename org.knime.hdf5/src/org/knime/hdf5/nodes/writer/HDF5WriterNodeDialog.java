@@ -31,6 +31,7 @@ import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.DataValue;
 import org.knime.core.data.util.ListModelFilterUtils;
 import org.knime.core.node.FlowVariableModel;
+import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeDialogPane;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
@@ -263,8 +264,12 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		}
 
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
-		editTreeConfig.loadConfigurationInDialog(settings);
-		m_editTreePanel.loadConfiguration(editTreeConfig);
+		try {
+			editTreeConfig.loadConfiguration(settings);
+			m_editTreePanel.loadConfiguration(editTreeConfig);
+		} catch (InvalidSettingsException ise) {
+			new NotConfigurableException(ise.getMessage());
+		}
     }
     
     @Override

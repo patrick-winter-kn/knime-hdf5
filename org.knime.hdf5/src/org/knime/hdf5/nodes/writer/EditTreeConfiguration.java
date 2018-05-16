@@ -1,83 +1,114 @@
 package org.knime.hdf5.nodes.writer;
 
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
 
-import org.knime.core.data.DataType;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
-import org.knime.hdf5.nodes.writer.TreeNodeEdit.EditClass;
+import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.GroupNodeEdit;
 
-class EditTreeConfiguration {
-
-	private static final String EDIT_TREE_CONFIG_KEY = "_EditTreeConfig";
-
-	private static final String PATHS_FROM_FILE = "pathsFromFile" + EDIT_TREE_CONFIG_KEY;
-
-	private static final String NAMES = "names" + EDIT_TREE_CONFIG_KEY;
-	
-	private static final String DATATYPES = "dataTypes" + EDIT_TREE_CONFIG_KEY;
-	
-	private static final String NODE_VALUE_CLASS_IDS = "nodeValueClassIds" + EDIT_TREE_CONFIG_KEY;
+public class EditTreeConfiguration {
 	
 	private final String m_configRootName;
+
+	private final List<GroupNodeEdit> m_groupEdits = new ArrayList<>();
 	
-	private final List<TreeNodeEdit> m_editList = new ArrayList<>();
+	private final List<DataSetNodeEdit> m_dataSetEdits = new ArrayList<>();
+	
+	private final List<AttributeNodeEdit> m_attributeEdits = new ArrayList<>();
 	
 	EditTreeConfiguration(String configRootName) {
 		m_configRootName = configRootName;
 	}
 	
-	TreeNodeEdit[] getEdits() {
-		return m_editList.toArray(new TreeNodeEdit[] {});
+	public GroupNodeEdit[] getGroupNodeEdits() {
+		return m_groupEdits.toArray(new GroupNodeEdit[] {});
 	}
 	
-	void addTreeNodeEdit(TreeNodeEdit edit) {
-		m_editList.add(edit);
+	public DataSetNodeEdit[] getDataSetNodeEdits() {
+		return m_dataSetEdits.toArray(new DataSetNodeEdit[] {});
 	}
 	
-	boolean removeTreeNodeEdit(TreeNodeEdit edit) {
-		return m_editList.remove(edit);
+	public AttributeNodeEdit[] getAttributeNodeEdits() {
+		return m_attributeEdits.toArray(new AttributeNodeEdit[] {});
+	}
+
+	public void addGroupNodeEdit(GroupNodeEdit edit) {
+		m_groupEdits.add(edit);
+	}
+	
+	public void addDataSetNodeEdit(DataSetNodeEdit edit) {
+		m_dataSetEdits.add(edit);
+	}
+	
+	public void addAttributeNodeEdit(AttributeNodeEdit edit) {
+		m_attributeEdits.add(edit);
+	}
+	
+	public void removeGroupNodeEdit(GroupNodeEdit edit) {
+		m_groupEdits.remove(edit);
+	}
+	
+	public void removeDataSetNodeEdit(DataSetNodeEdit edit) {
+		m_dataSetEdits.remove(edit);
+	}
+	
+	public void removeAttributeNodeEdit(AttributeNodeEdit edit) {
+		m_attributeEdits.remove(edit);
 	}
 	
 	void saveConfiguration(NodeSettingsWO settings) {
-        NodeSettingsWO subSettings = settings.addNodeSettings(m_configRootName);
-
-        String[] paths = new String[m_editList.size()];
-        String[] names = new String[paths.length];
-        DataType[] types = new DataType[paths.length];
-        int[] classIds = new int[paths.length];
+        NodeSettingsWO groupSettings = settings.addNodeSettings(m_configRootName + "_Groups");
+        NodeSettingsWO dataSetSettings = settings.addNodeSettings(m_configRootName + "_DataSets");
+        NodeSettingsWO attributeSettings = settings.addNodeSettings(m_configRootName + "_Attributes");
         
-        for (int i = 0; i < paths.length; i++) {
-        	TreeNodeEdit edit = m_editList.get(i);
-        	paths[i] = edit.getPathFromFile();
-        	names[i] = edit.getName();
-        	types[i] = edit.getDataType();
-        	classIds[i] = edit.getEditClass().getClassId();
-        }
-
-        subSettings.addStringArray(PATHS_FROM_FILE, paths);
-        subSettings.addStringArray(NAMES, names);
-        subSettings.addDataTypeArray(DATATYPES, types);
-        subSettings.addIntArray(NODE_VALUE_CLASS_IDS, classIds);
+        for (GroupNodeEdit edit : m_groupEdits) {
+	        NodeSettingsWO editSettings = groupSettings.addNodeSettings(edit.getPathFromFile() + edit.getName() + "/");
+	        editSettings.addString("pathFromFile", edit.getPathFromFile());
+			edit.saveSettings(editSettings);
+		}
+		
+		for (DataSetNodeEdit edit : m_dataSetEdits) {
+	        NodeSettingsWO editSettings = dataSetSettings.addNodeSettings(edit.getPathFromFile() + edit.getName() + "/");
+	        editSettings.addString("pathFromFile", edit.getPathFromFile());
+			edit.saveSettings(editSettings);
+		}
+		
+		for (AttributeNodeEdit edit : m_attributeEdits) {
+	        NodeSettingsWO editSettings = attributeSettings.addNodeSettings(edit.getPathFromFile() + edit.getName() + "/");
+	        editSettings.addString("pathFromFile", edit.getPathFromFile());
+			edit.saveSettings(editSettings);
+		}
 	}
 	
-	void loadConfigurationInModel(final NodeSettingsRO settings) throws InvalidSettingsException {
-        NodeSettingsRO subSettings = settings.getNodeSettings(m_configRootName);
-
-        String[] paths = subSettings.getStringArray(PATHS_FROM_FILE);
-        String[] names = subSettings.getStringArray(NAMES);
-        DataType[] types = subSettings.getDataTypeArray(DATATYPES);
-        int[] classIds = subSettings.getIntArray(NODE_VALUE_CLASS_IDS);
+	@SuppressWarnings("unchecked")
+	void loadConfiguration(final NodeSettingsRO settings) throws InvalidSettingsException {
+        m_groupEdits.clear();
+        NodeSettingsRO groupSettings = settings.getNodeSettings(m_configRootName + "_Groups");
+        Enumeration<NodeSettingsRO> groupEnum = groupSettings.children();
+        while (groupEnum.hasMoreElements()) {
+        	NodeSettingsRO editSettings = groupEnum.nextElement();
+        	addGroupNodeEdit(GroupNodeEdit.loadSettings(editSettings));
+        }
         
-        m_editList.clear();
-        for (int i = 0; i < paths.length; i++) {
-        	m_editList.add(new TreeNodeEdit(paths[i], names[i], types[i], EditClass.get(classIds[i])));
+        m_dataSetEdits.clear();
+        NodeSettingsRO dataSetSettings = settings.getNodeSettings(m_configRootName + "_DataSets");
+        Enumeration<NodeSettingsRO> dataSetEnum = dataSetSettings.children();
+        while (dataSetEnum.hasMoreElements()) {
+        	NodeSettingsRO editSettings = dataSetEnum.nextElement();
+        	addDataSetNodeEdit(DataSetNodeEdit.loadSettings(editSettings));
+        }
+        
+        m_attributeEdits.clear();
+        NodeSettingsRO attributeSettings = settings.getNodeSettings(m_configRootName + "_Attributes");
+        Enumeration<NodeSettingsRO> attributeEnum = attributeSettings.children();
+        while (attributeEnum.hasMoreElements()) {
+        	NodeSettingsRO editSettings = attributeEnum.nextElement();
+        	addAttributeNodeEdit(AttributeNodeEdit.loadSettings(editSettings));
         }
     }
-	
-	void loadConfigurationInDialog(final NodeSettingsRO settings) {
-		
-	}
 }

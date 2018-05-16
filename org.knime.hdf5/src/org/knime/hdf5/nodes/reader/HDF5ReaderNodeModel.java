@@ -126,7 +126,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 						}
 					} else {
 						pushFlowVariableString(attrPath, Arrays.toString(attr.getValue()) + " ("
-								+ attr.getType().getKnimeType().getArrayType() + ")");
+								+ attr.getType().getKnimeType().toString() + ")");
 					}
 				}
 			}
