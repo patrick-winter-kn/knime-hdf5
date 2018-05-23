@@ -20,12 +20,15 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	private Hdf5HdfDataType m_hdfType;
 	
-	private final List<AttributeNodeEdit> m_attributeEdits = new ArrayList<>();
+	/**
+	 * only those specs that are already physically existing
+	 */
+	private final List<DataColumnSpec> m_columnSpecs = new ArrayList<>();
 	
 	private final List<ColumnNodeEdit> m_columnEdits = new ArrayList<>();
-	
-	private final List<DataColumnSpec> m_columnSpecs = new ArrayList<>();
 
+	private final List<AttributeNodeEdit> m_attributeEdits = new ArrayList<>();
+	
 	public DataSetNodeEdit(DefaultMutableTreeNode parent, String name) {
 		super(parent, name);
 	}
@@ -46,47 +49,67 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		return m_hdfType;
 	}
 	
-	public AttributeNodeEdit[] getAttributeNodeEdits() {
-		return m_attributeEdits.toArray(new AttributeNodeEdit[] {});
+	/**
+	 * Returns the specs of m_columnEdits and m_columnSpecs.
+	 * 
+	 * @return 
+	 */
+	public DataColumnSpec[] getColumnSpecs() {
+		List<DataColumnSpec> specs = new ArrayList<>();
+		specs.addAll(m_columnSpecs);
+		for (ColumnNodeEdit edit : m_columnEdits) {
+			specs.add(edit.getColumnSpec());
+		}
+		return specs.toArray(new DataColumnSpec[] {});
 	}
 	
 	public ColumnNodeEdit[] getColumnNodeEdits() {
 		return m_columnEdits.toArray(new ColumnNodeEdit[] {});
 	}	
-	
-	public DataColumnSpec[] getColumnSpecs() {
-		return m_columnSpecs.toArray(new DataColumnSpec[] {});
-	}
 
+	public AttributeNodeEdit[] getAttributeNodeEdits() {
+		return m_attributeEdits.toArray(new AttributeNodeEdit[] {});
+	}
+	
 	private void setHdfType(Hdf5HdfDataType hdfType) {
 		m_hdfType = hdfType;
+	}
+
+	public void addColumnNodeEdit(ColumnNodeEdit edit) throws UnsupportedDataTypeException {
+		DataColumnSpec spec = edit.getColumnSpec();
+		m_knimeType = Hdf5KnimeDataType.getKnimeDataType(spec.getType());
+		m_columnEdits.add(edit);
 	}
 
 	public void addAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.add(edit);
 	}
 
-	public void addColumnNodeEdit(ColumnNodeEdit edit) throws UnsupportedDataTypeException {
+	public void removeColumnNodeEdit(ColumnNodeEdit edit) {
 		DataColumnSpec spec = edit.getColumnSpec();
-		m_knimeType = Hdf5KnimeDataType.getKnimeDataType(spec.getType());
-		m_columnSpecs.add(spec);
-		m_columnEdits.add(edit);
+		// TODO update m_knimeType
+		
+		m_columnEdits.remove(edit);
+	}
+	
+	public void removeAttributeNodeEdit(AttributeNodeEdit edit) {
+		m_attributeEdits.remove(edit);
 	}
 	
 	@Override
 	public void saveSettings(NodeSettingsWO settings) {
 		super.saveSettings(settings);
 		
-	    NodeSettingsWO attributeSettings = settings.addNodeSettings("attributes");
 	    NodeSettingsWO columnSettings = settings.addNodeSettings("columns");
-	    
-		for (AttributeNodeEdit edit : m_attributeEdits) {
-	        NodeSettingsWO editSettings = attributeSettings.addNodeSettings(edit.getName());
-			edit.saveSettings(editSettings);
-		}
+	    NodeSettingsWO attributeSettings = settings.addNodeSettings("attributes");
 		
 		for (ColumnNodeEdit edit : m_columnEdits) {
 	        NodeSettingsWO editSettings = columnSettings.addNodeSettings(edit.getName());
+			edit.saveSettings(editSettings);
+		}
+	    
+		for (AttributeNodeEdit edit : m_attributeEdits) {
+	        NodeSettingsWO editSettings = attributeSettings.addNodeSettings(edit.getName());
 			edit.saveSettings(editSettings);
 		}
 	}
@@ -95,13 +118,6 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	public static DataSetNodeEdit loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
 		DataSetNodeEdit edit = new DataSetNodeEdit(settings.getString("pathFromFile"), settings.getString("name"));
 		
-		NodeSettingsRO attributeSettings = settings.getNodeSettings("attributes");
-		Enumeration<NodeSettingsRO> attributeEnum = attributeSettings.children();
-		while (attributeEnum.hasMoreElements()) {
-			NodeSettingsRO editSettings = attributeEnum.nextElement();
-			edit.addAttributeNodeEdit(AttributeNodeEdit.getEditFromSettings(editSettings));
-        }
-		
 		NodeSettingsRO columnSettings = settings.getNodeSettings("columns");
 		Enumeration<NodeSettingsRO> columnEnum = columnSettings.children();
 		while (columnEnum.hasMoreElements()) {
@@ -113,6 +129,13 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				throw new InvalidSettingsException(udte.getMessage());
 			}
 		}
+		
+		NodeSettingsRO attributeSettings = settings.getNodeSettings("attributes");
+		Enumeration<NodeSettingsRO> attributeEnum = attributeSettings.children();
+		while (attributeEnum.hasMoreElements()) {
+			NodeSettingsRO editSettings = attributeEnum.nextElement();
+			edit.addAttributeNodeEdit(AttributeNodeEdit.getEditFromSettings(editSettings));
+        }
 		
 		return edit;
 	}
@@ -120,13 +143,6 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	@SuppressWarnings("unchecked")
 	public static DataSetNodeEdit getEditFromSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
 		DataSetNodeEdit edit = new DataSetNodeEdit(settings.getString("name"));
-
-		NodeSettingsRO attributeSettings = settings.getNodeSettings("attributes");
-		Enumeration<NodeSettingsRO> attributeEnum = attributeSettings.children();
-		while (attributeEnum.hasMoreElements()) {
-			NodeSettingsRO editSettings = attributeEnum.nextElement();
-			edit.addAttributeNodeEdit(AttributeNodeEdit.getEditFromSettings(editSettings));
-        }
 		
 		NodeSettingsRO columnSettings = settings.getNodeSettings("columns");
 		Enumeration<NodeSettingsRO> columnEnum = columnSettings.children();
@@ -139,6 +155,13 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				throw new InvalidSettingsException(udte.getMessage());
 			}
 		}
+
+		NodeSettingsRO attributeSettings = settings.getNodeSettings("attributes");
+		Enumeration<NodeSettingsRO> attributeEnum = attributeSettings.children();
+		while (attributeEnum.hasMoreElements()) {
+			NodeSettingsRO editSettings = attributeEnum.nextElement();
+			edit.addAttributeNodeEdit(AttributeNodeEdit.getEditFromSettings(editSettings));
+        }
 		
 		return edit;
 	}
@@ -147,11 +170,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		DefaultMutableTreeNode node = new DefaultMutableTreeNode(this);
 		parentNode.add(node);
 		
-		for (AttributeNodeEdit edit : m_attributeEdits) {
+		for (ColumnNodeEdit edit : m_columnEdits) {
 	        edit.addEditToNode(node);
 		}
 		
-		for (ColumnNodeEdit edit : m_columnEdits) {
+		for (AttributeNodeEdit edit : m_attributeEdits) {
 	        edit.addEditToNode(node);
 		}
 	}

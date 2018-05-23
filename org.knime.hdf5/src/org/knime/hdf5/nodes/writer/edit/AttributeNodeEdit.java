@@ -1,7 +1,23 @@
 package org.knime.hdf5.nodes.writer.edit;
 
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.Frame;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
 import javax.activation.UnsupportedDataTypeException;
+import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
+import javax.swing.JMenuItem;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JTextField;
+import javax.swing.JTree;
+import javax.swing.SwingUtilities;
 import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreePath;
 
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
@@ -9,9 +25,15 @@ import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
+import org.knime.hdf5.nodes.writer.EditTreeConfiguration;
+import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.PropertiesDialog;
 
 public class AttributeNodeEdit extends TreeNodeEdit {
 
+	public static final AttributeNodeMenu ATTRIBUTE_EDIT_MENU = new AttributeNodeMenu(true);
+	
+	public static final AttributeNodeMenu ATTRIBUTE_MENU = new AttributeNodeMenu(false);
+	
 	private final Hdf5KnimeDataType m_knimeType;
 	
 	private Hdf5HdfDataType m_hdfType;
@@ -78,4 +100,103 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	public void addEditToNode(DefaultMutableTreeNode parentNode) {
 		parentNode.add(new DefaultMutableTreeNode(this));
 	}
+	
+	public static class AttributeNodeMenu extends JPopupMenu {
+
+		private static final long serialVersionUID = -6418394582185524L;
+
+		private static AttributePropertiesDialog propertiesDialog;
+    	
+    	private JTree m_tree;
+    	
+    	private EditTreeConfiguration m_editTreeConfig;
+    	
+    	private DefaultMutableTreeNode m_node;
+    	
+		private AttributeNodeMenu(boolean fromTreeNodeEdit) {
+    		if (fromTreeNodeEdit) {
+	    		JMenuItem itemEdit = new JMenuItem("Edit attribute properties");
+	    		itemEdit.addActionListener(new ActionListener() {
+					
+					@Override
+					public void actionPerformed(ActionEvent e) {
+						if (propertiesDialog == null) {
+							propertiesDialog = new AttributePropertiesDialog("Attribute properties");
+						}
+						
+						propertiesDialog.initProperties((AttributeNodeEdit) m_node.getUserObject());
+						propertiesDialog.setVisible(true);
+					}
+				});
+	    		add(itemEdit);
+    		}
+    		
+    		if (fromTreeNodeEdit) {
+        		JMenuItem itemDelete = new JMenuItem("Delete attribute");
+        		itemDelete.addActionListener(new ActionListener() {
+    				
+    				@Override
+    				public void actionPerformed(ActionEvent e) {
+						Object userObject = m_node.getUserObject();
+						if (userObject instanceof AttributeNodeEdit) {
+							AttributeNodeEdit edit = (AttributeNodeEdit) userObject;
+	                    	DefaultMutableTreeNode parent = (DefaultMutableTreeNode) m_node.getParent();
+	                    	Object parentObject = parent.getUserObject();
+	                    	if (parentObject instanceof DataSetNodeEdit) {
+	    						((DataSetNodeEdit) parentObject).removeAttributeNodeEdit(edit);
+	                    		
+	                		} else if (parentObject instanceof GroupNodeEdit) {
+	    						((GroupNodeEdit) parentObject).removeAttributeNodeEdit(edit);
+	                    		
+	                		} else {
+		                    	m_editTreeConfig.removeAttributeNodeEdit(edit);
+	                		}
+	                    	parent.remove(m_node);
+	        				((DefaultTreeModel) (m_tree.getModel())).reload();
+	        				m_tree.makeVisible(new TreePath(parent.getPath()));
+						}
+    				}
+    			});
+        		add(itemDelete);
+    		}
+    	}
+		
+		public void initMenu(JTree tree, EditTreeConfiguration editTreeConfig, DefaultMutableTreeNode node) {
+			m_tree = tree;
+			m_editTreeConfig = editTreeConfig;
+			m_node = node;
+		}
+		
+		private class AttributePropertiesDialog extends PropertiesDialog<AttributeNodeEdit> {
+	    	
+	    	private static final long serialVersionUID = 1254593831386973543L;
+	    	
+			private JTextField m_nameField = new JTextField(15);
+	    	
+			private AttributePropertiesDialog(String title) {
+				super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, m_tree), title);
+				setMinimumSize(new Dimension(250, 200));
+
+				JPanel namePanel = new JPanel();
+				namePanel.add(m_nameField, BorderLayout.CENTER);
+				addPropertyPanel("Name: ", namePanel, false);
+
+				JComboBox<String> typeBox = new JComboBox<>(new String[] {"Type 1", "Type 2", "Type 3", "Type 4"});
+				addPropertyPanel("Type: ", typeBox, false);
+			}
+			
+			@Override
+			protected void initProperties(AttributeNodeEdit edit) {
+				m_nameField.setText(edit.getName());
+			}
+
+			@Override
+			protected void editProperties() {
+				TreeNodeEdit edit = (TreeNodeEdit) m_node.getUserObject();
+				edit.setName(m_nameField.getText());
+				((DefaultTreeModel) (m_tree.getModel())).reload();
+				m_tree.makeVisible(new TreePath(m_node.getPath()));
+			}
+		}
+    }
 }

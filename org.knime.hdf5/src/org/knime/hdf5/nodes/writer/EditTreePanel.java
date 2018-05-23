@@ -277,16 +277,34 @@ public class EditTreePanel extends JPanel {
     		public void mouseReleased(MouseEvent e) {
     			if (e.isPopupTrigger()) {
     				TreePath path = m_tree.getPathForLocation(e.getX(), e.getY());
-    				DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
-    				Object userObject = node.getUserObject();
-					m_tree.setSelectionPath(path);
-					if (userObject instanceof GroupNodeEdit) {
-    					GroupNodeEdit.GROUP_EDIT_MENU.show(e.getComponent(), e.getX(), e.getY());
-    					GroupNodeEdit.GROUP_EDIT_MENU.initMenu(m_tree, m_editTreeConfig, node);
-    					
-    				} else if (userObject instanceof Hdf5Group) {
-    					GroupNodeEdit.GROUP_MENU.show(e.getComponent(), e.getX(), e.getY());
-        				GroupNodeEdit.GROUP_MENU.initMenu(m_tree, m_editTreeConfig, node);
+    				if (path != null) {
+    					m_tree.setSelectionPath(path);
+        				DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+        				Object userObject = node.getUserObject();
+        				if (userObject instanceof DataColumnSpec) {
+        					ColumnNodeEdit.COLUMN_MENU.initMenu(m_tree, m_editTreeConfig, node);
+        					ColumnNodeEdit.COLUMN_MENU.show(e.getComponent(), e.getX(), e.getY());
+        					
+        				} else if (userObject instanceof Hdf5Attribute) {
+        					AttributeNodeEdit.ATTRIBUTE_MENU.initMenu(m_tree, m_editTreeConfig, node);
+        					AttributeNodeEdit.ATTRIBUTE_MENU.show(e.getComponent(), e.getX(), e.getY());
+        					
+        				} else if (userObject instanceof Hdf5Group) {
+            				GroupNodeEdit.GROUP_MENU.initMenu(m_tree, m_editTreeConfig, node);
+        					GroupNodeEdit.GROUP_MENU.show(e.getComponent(), e.getX(), e.getY());
+        					
+        				} else if (userObject instanceof ColumnNodeEdit) {
+        					ColumnNodeEdit.COLUMN_EDIT_MENU.initMenu(m_tree, m_editTreeConfig, node);
+        					ColumnNodeEdit.COLUMN_EDIT_MENU.show(e.getComponent(), e.getX(), e.getY());
+        					
+        				} else if (userObject instanceof AttributeNodeEdit) {
+        					AttributeNodeEdit.ATTRIBUTE_EDIT_MENU.initMenu(m_tree, m_editTreeConfig, node);
+        					AttributeNodeEdit.ATTRIBUTE_EDIT_MENU.show(e.getComponent(), e.getX(), e.getY());
+        					
+        				} else if (userObject instanceof GroupNodeEdit) {
+        					GroupNodeEdit.GROUP_EDIT_MENU.initMenu(m_tree, m_editTreeConfig, node);
+        					GroupNodeEdit.GROUP_EDIT_MENU.show(e.getComponent(), e.getX(), e.getY());
+        				}
     				}
     			}
     		}

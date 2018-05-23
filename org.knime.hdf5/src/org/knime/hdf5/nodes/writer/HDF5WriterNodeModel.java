@@ -57,14 +57,12 @@ public class HDF5WriterNodeModel extends NodeModel {
 				String pathFromFile = edit.getPathFromFileWithoutEndSlash();
 				Hdf5Group group = file.getGroupByPath(pathFromFile);
 				createGroupFromEdit(inData[0], exec, group, edit);
-				// TODO delete settings after successful creation
 			}
 			
 			for (DataSetNodeEdit edit : m_editTreeConfig.getDataSetNodeEdits()) {
 				String pathFromFile = edit.getPathFromFileWithoutEndSlash();
 				Hdf5Group group = file.getGroupByPath(pathFromFile);
 				createDataSetFromEdit(inData[0], exec, group, edit);
-				// TODO delete settings after successful creation
 			}
 			
 			for (AttributeNodeEdit edit : m_editTreeConfig.getAttributeNodeEdits()) {
@@ -76,7 +74,6 @@ public class HDF5WriterNodeModel extends NodeModel {
 					treeElement = file.getDataSetByPath(pathFromFile);
 				}
 				createAttributeFromEdit(treeElement, edit);
-				// TODO delete settings after successful creation
 			}
 			
 		} finally {
