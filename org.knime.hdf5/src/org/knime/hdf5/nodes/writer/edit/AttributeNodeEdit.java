@@ -1,20 +1,23 @@
 package org.knime.hdf5.nodes.writer.edit;
 
-import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 import javax.activation.UnsupportedDataTypeException;
-import javax.swing.JCheckBox;
+import javax.swing.ButtonGroup;
 import javax.swing.JComboBox;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JRadioButton;
+import javax.swing.JSpinner;
 import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
@@ -24,9 +27,9 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.nodes.writer.EditTreeConfiguration;
-import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.PropertiesDialog;
 
 public class AttributeNodeEdit extends TreeNodeEdit {
 
@@ -124,7 +127,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 							propertiesDialog = new AttributePropertiesDialog("Attribute properties");
 						}
 						
-						propertiesDialog.initProperties((AttributeNodeEdit) m_node.getUserObject());
+						propertiesDialog.initPropertyItems((AttributeNodeEdit) m_node.getUserObject());
 						propertiesDialog.setVisible(true);
 					}
 				});
@@ -175,23 +178,56 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	    	
 			private AttributePropertiesDialog(String title) {
 				super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, m_tree), title);
-				setMinimumSize(new Dimension(250, 200));
+				setMinimumSize(new Dimension(300, 300));
 
-				JPanel namePanel = new JPanel();
-				namePanel.add(m_nameField, BorderLayout.CENTER);
-				addPropertyPanel("Name: ", namePanel, false);
+				addProperty("Name: ", m_nameField, false);
 
-				JComboBox<String> typeBox = new JComboBox<>(new String[] {"Type 1", "Type 2", "Type 3", "Type 4"});
-				addPropertyPanel("Type: ", typeBox, false);
+				JComboBox<HdfDataType> typeField = new JComboBox<>(((AttributeNodeEdit) m_node.getUserObject()).getKnimeType().getConvertibleTypes().toArray(new HdfDataType[] {}));
+				addProperty("Type: ", typeField, false);
+
+				JComboBox<String> endianField = new JComboBox<>(new String[] {"little endian", "big endian"});
+				addProperty("Endian: ", endianField, false);
+				
+				JPanel sizeField = new JPanel();
+				ButtonGroup sizeGroup = new ButtonGroup();
+				JRadioButton auto = new JRadioButton("auto");
+				sizeField.add(auto);
+				sizeGroup.add(auto);
+				auto.setSelected(true);
+				JRadioButton fixed = new JRadioButton("fixed");
+				sizeField.add(fixed);
+				sizeGroup.add(fixed);
+				JSpinner size = new JSpinner();
+				sizeField.add(size);
+				size.setEnabled(false);
+				fixed.addChangeListener(new ChangeListener() {
+					
+					@Override
+					public void stateChanged(ChangeEvent e) {
+						size.setEnabled(fixed.isSelected());
+					}
+				});
+				addProperty("Size: ", sizeField, false);
+
+				JPanel overwriteField = new JPanel();
+				ButtonGroup overwriteGroup = new ButtonGroup();
+				JRadioButton no = new JRadioButton("no");
+				overwriteField.add(no);
+				overwriteGroup.add(no);
+				no.setSelected(true);
+				JRadioButton yes = new JRadioButton("yes");
+				overwriteField.add(yes);
+				overwriteGroup.add(yes);
+				addProperty("Overwrite: ", overwriteField, false);
 			}
 			
 			@Override
-			protected void initProperties(AttributeNodeEdit edit) {
+			protected void initPropertyItems(AttributeNodeEdit edit) {
 				m_nameField.setText(edit.getName());
 			}
 
 			@Override
-			protected void editProperties() {
+			protected void editPropertyItems() {
 				TreeNodeEdit edit = (TreeNodeEdit) m_node.getUserObject();
 				edit.setName(m_nameField.getText());
 				((DefaultTreeModel) (m_tree.getModel())).reload();

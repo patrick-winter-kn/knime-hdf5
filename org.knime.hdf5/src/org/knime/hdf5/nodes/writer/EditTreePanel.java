@@ -289,6 +289,10 @@ public class EditTreePanel extends JPanel {
         					AttributeNodeEdit.ATTRIBUTE_MENU.initMenu(m_tree, m_editTreeConfig, node);
         					AttributeNodeEdit.ATTRIBUTE_MENU.show(e.getComponent(), e.getX(), e.getY());
         					
+        				} else if (userObject instanceof Hdf5DataSet) {
+        					DataSetNodeEdit.DATASET_MENU.initMenu(m_tree, m_editTreeConfig, node);
+        					DataSetNodeEdit.DATASET_MENU.show(e.getComponent(), e.getX(), e.getY());
+        					
         				} else if (userObject instanceof Hdf5Group) {
             				GroupNodeEdit.GROUP_MENU.initMenu(m_tree, m_editTreeConfig, node);
         					GroupNodeEdit.GROUP_MENU.show(e.getComponent(), e.getX(), e.getY());
@@ -300,6 +304,10 @@ public class EditTreePanel extends JPanel {
         				} else if (userObject instanceof AttributeNodeEdit) {
         					AttributeNodeEdit.ATTRIBUTE_EDIT_MENU.initMenu(m_tree, m_editTreeConfig, node);
         					AttributeNodeEdit.ATTRIBUTE_EDIT_MENU.show(e.getComponent(), e.getX(), e.getY());
+        					
+        				} else if (userObject instanceof DataSetNodeEdit) {
+        					DataSetNodeEdit.DATASET_EDIT_MENU.initMenu(m_tree, m_editTreeConfig, node);
+        					DataSetNodeEdit.DATASET_EDIT_MENU.show(e.getComponent(), e.getX(), e.getY());
         					
         				} else if (userObject instanceof GroupNodeEdit) {
         					GroupNodeEdit.GROUP_EDIT_MENU.initMenu(m_tree, m_editTreeConfig, node);

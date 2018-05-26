@@ -1,16 +1,15 @@
 package org.knime.hdf5.nodes.writer.edit;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.Frame;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 import javax.swing.BorderFactory;
-import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -19,6 +18,8 @@ import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.WindowConstants;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreeNode;
 
@@ -97,8 +98,6 @@ public abstract class TreeNodeEdit {
 		
 		private final GridBagConstraints m_constraints = new GridBagConstraints();
 		
-		protected PropertiesDialog() {}
-		
 		protected PropertiesDialog(Frame owner, String title) {
 			super(owner, title);
 			setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
@@ -109,11 +108,10 @@ public abstract class TreeNodeEdit {
 			panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
 			panel.add(m_contentPanel, BorderLayout.PAGE_START);
-			// TODO also use GridbagLayout adding the elements of PropertyPanel instances
 			m_contentPanel.setLayout(new GridBagLayout());
-			m_constraints.weightx = 1;
 			m_constraints.fill = GridBagConstraints.HORIZONTAL;
-			m_constraints.gridwidth = GridBagConstraints.REMAINDER;
+			m_constraints.insets = new Insets(2, 2, 2, 2);
+			m_constraints.gridy = 0;
 			
 			JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
 			panel.add(buttonPanel, BorderLayout.PAGE_END);
@@ -122,7 +120,7 @@ public abstract class TreeNodeEdit {
 				
 				@Override
 				public void actionPerformed(ActionEvent e) {
-					editProperties();
+					editPropertyItems();
 					setVisible(false);
 				}
 			});
@@ -139,38 +137,46 @@ public abstract class TreeNodeEdit {
 			buttonPanel.add(cancelButton);
 		}
 		
-		protected void addPropertyPanel(String description, JComponent component, boolean hasCheckBox) {
-			m_contentPanel.add(new PropertyPanel(description, component, hasCheckBox), m_constraints);
+		protected void addProperty(String description, JComponent component, boolean hasCheckBox) {
+			m_constraints.gridx = 0;
+            m_constraints.weightx = 0.0;
+			m_contentPanel.add(new PropertyDescriptionPanel(description, component, hasCheckBox), m_constraints);
+            m_constraints.gridx++;
+            m_constraints.weightx = 1.0;
+            m_contentPanel.add(component, m_constraints);
+			m_constraints.gridy++;
 		}
 		
-		protected abstract void initProperties(Edit edit);
-		
-		protected abstract void editProperties();
-		
-		private class PropertyPanel extends JPanel {
+		private class PropertyDescriptionPanel extends JPanel {
 
 			private static final long serialVersionUID = 3019076429508416644L;
 			
-			private PropertyPanel(String description, JComponent component, boolean hasCheckBox) {
+			private PropertyDescriptionPanel(String description, JComponent component, boolean hasCheckBox) {
 				setLayout(new BoxLayout(this, BoxLayout.X_AXIS));
-
-				JPanel descriptionPanel = new JPanel();
-				add(descriptionPanel);
 				if (hasCheckBox) {
 					JCheckBox checkBox = new JCheckBox();
-					descriptionPanel.add(checkBox, BorderLayout.WEST);
+					add(checkBox);
+					checkBox.addChangeListener(new ChangeListener() {
+						
+						@Override
+						public void stateChanged(ChangeEvent e) {
+							component.setEnabled(checkBox.isSelected());
+						}
+					});
+					checkBox.setSelected(false);
+					component.setEnabled(false);
 				}
 				JLabel nameLabel = new JLabel(description);
-				descriptionPanel.add(nameLabel, BorderLayout.CENTER);
+				add(nameLabel);
 				
-				add(Box.createHorizontalGlue());
-				add(component);
-				
-				setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.RED), getBorder()));
-				nameLabel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.GREEN), nameLabel.getBorder()));
-				descriptionPanel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLUE), descriptionPanel.getBorder()));
-				component.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLUE), component.getBorder()));
+				// setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.GREEN), getBorder()));
+				// nameLabel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.RED), nameLabel.getBorder()));
+				// component.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLUE), component.getBorder()));
 			}
 		}
+		
+		protected abstract void initPropertyItems(Edit edit);
+		
+		protected abstract void editPropertyItems();
 	}
 }

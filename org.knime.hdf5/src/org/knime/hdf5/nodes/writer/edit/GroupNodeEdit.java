@@ -206,7 +206,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 							propertiesDialog = new GroupPropertiesDialog("Group properties");
 						}
 						
-						propertiesDialog.initProperties((GroupNodeEdit) m_node.getUserObject());
+						propertiesDialog.initPropertyItems((GroupNodeEdit) m_node.getUserObject());
 						propertiesDialog.setVisible(true);
 					}
 				});
@@ -282,16 +282,16 @@ public class GroupNodeEdit extends TreeNodeEdit {
 
 				JPanel namePanel = new JPanel();
 				namePanel.add(m_nameField, BorderLayout.CENTER);
-				addPropertyPanel("Name: ", namePanel, false);
+				addProperty("Name: ", namePanel, false);
 			}
 			
 			@Override
-			protected void initProperties(GroupNodeEdit edit) {
+			protected void initPropertyItems(GroupNodeEdit edit) {
 				m_nameField.setText(edit.getName());
 			}
 
 			@Override
-			protected void editProperties() {
+			protected void editPropertyItems() {
 				TreeNodeEdit edit = (TreeNodeEdit) m_node.getUserObject();
 				edit.setName(m_nameField.getText());
 				((DefaultTreeModel) (m_tree.getModel())).reload();

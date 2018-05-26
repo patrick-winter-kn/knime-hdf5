@@ -1,5 +1,8 @@
 package org.knime.hdf5.lib.types;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.data.DataType;
@@ -8,6 +11,7 @@ import org.knime.core.data.def.IntCell;
 import org.knime.core.data.def.LongCell;
 import org.knime.core.data.def.StringCell;
 import org.knime.core.node.workflow.FlowVariable.Type;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 public enum Hdf5KnimeDataType {
 	UNKNOWN,		// data type is unknown
@@ -73,6 +77,26 @@ public enum Hdf5KnimeDataType {
 		default:
 			throw new UnsupportedDataTypeException("Unknown knimeDataType");
 		}
+	}
+	
+	public List<HdfDataType> getConvertibleTypes() {
+		List<HdfDataType> types = new ArrayList<>();
+		
+		// TODO add more possible types
+		switch (this) {
+		case INTEGER:
+			types.add(HdfDataType.INTEGER);
+		case LONG:
+			types.add(HdfDataType.LONG);
+		case DOUBLE:
+			types.add(HdfDataType.DOUBLE);
+		case STRING:
+			types.add(HdfDataType.STRING);
+		case UNKNOWN:
+			break;
+		}
+		
+		return types;
 	}
 	
 	@Override
