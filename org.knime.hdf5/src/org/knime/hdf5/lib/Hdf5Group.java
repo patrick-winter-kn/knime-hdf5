@@ -9,14 +9,11 @@ import java.util.Map;
 
 import javax.activation.UnsupportedDataTypeException;
 
-import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataTableSpec;
-import org.knime.core.data.DataType;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
-import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
-import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
+import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -366,38 +363,32 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return paths;
 	}
 
-	public Hdf5DataSet<?> createDataSetFromSpec(String dname, long rows, DataColumnSpec[] specs, boolean abort) {
+	public Hdf5DataSet<?> createDataSetFromEdit(long rows, DataSetNodeEdit edit) {
 		Hdf5DataSet<?> dataSet = null;
 		
+		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType()), 
+				edit.getKnimeType(), false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
+		long[] dims = new long[] { rows, edit.getColumnSpecs().length };
+		
 		try {
-			DataType type = specs[0].getType();
-			Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.getHdfDataType(type)), 
-					Hdf5KnimeDataType.getKnimeDataType(type), false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
-			long[] dims = new long[] { rows, specs.length };
+			dataSet = createDataSet(edit.getName(), dims, dataType);
 			
+		} catch (IOException ioe) {
 			try {
-				dataSet = createDataSet(dname, dims, dataType);
-				
-			} catch (IOException ioe) {
-				try {
-					if (abort) {
-						throw new IOException("Abort: " + ioe.getMessage());
-					} else {
-						dataSet = getDataSet(dname);
-						
-						if (dataType.isSimilarTo(dataSet.getType()) && dims.equals(dataSet.getDimensions())) {
-							
-						} else {
-							throw new UnsupportedDataTypeException("DataSet \"" + dataSet.getPathFromFileWithName()
-									+ "\" already exists, but with different dataType or dimensions");
-						}
+				if (edit.isOverwrite()) {
+					dataSet = getDataSet(edit.getName());
+					
+					// TODO try that it's also possible to overwrite when the types or dimensions differ
+					if (!dataType.isSimilarTo(dataSet.getType()) || !dims.equals(dataSet.getDimensions())) {
+						throw new UnsupportedDataTypeException("DataSet \"" + dataSet.getPathFromFileWithName()
+								+ "\" already exists, but with different dataType or dimensions");
 					}
-				} catch (IOException ioe2) {
-					NodeLogger.getLogger("HDF5 Files").warn(ioe2.getMessage(), ioe2);
+				} else {
+					throw new IOException("Abort: " + ioe.getMessage());
 				}
+			} catch (IOException ioe2) {
+				NodeLogger.getLogger("HDF5 Files").warn(ioe2.getMessage(), ioe2);
 			}
-		} catch (UnsupportedDataTypeException udte) {
-			NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage());
 		}
 		
 		return dataSet;

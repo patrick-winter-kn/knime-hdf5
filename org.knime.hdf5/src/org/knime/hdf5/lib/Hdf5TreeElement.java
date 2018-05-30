@@ -17,8 +17,7 @@ import org.knime.core.node.NodeLogger;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
-import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
-import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
+import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -306,25 +305,23 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public Hdf5Attribute<?> createAndWriteAttributeFromFlowVariable(FlowVariable flowVariable) throws IOException {
-		Hdf5DataType dataType = null;
-		
+	public Hdf5Attribute<?> createAndWriteAttributeFromFlowVariable(FlowVariable flowVariable, AttributeNodeEdit edit) throws IOException {
+		long stringLength = edit.isFixed() ? edit.getStringLength() : flowVariable.getValueAsString().length();
+		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType()), edit.getKnimeType(), false, false, stringLength);
+
 		switch (flowVariable.getType()) {
 		case INTEGER:
-			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.INTEGER), Hdf5KnimeDataType.INTEGER, false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
-			Hdf5Attribute<Integer> attributeInteger = (Hdf5Attribute<Integer>) createAttribute(flowVariable.getName(), 1L, dataType);
+			Hdf5Attribute<Integer> attributeInteger = (Hdf5Attribute<Integer>) createAttribute(edit.getName(), 1L, dataType);
 			attributeInteger.write(new Integer[] { flowVariable.getIntValue() });
 			return attributeInteger;
 			
 		case DOUBLE:
-			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.DOUBLE), Hdf5KnimeDataType.DOUBLE, false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
-			Hdf5Attribute<Double> attributeDouble = (Hdf5Attribute<Double>) createAttribute(flowVariable.getName(), 1L, dataType);
+			Hdf5Attribute<Double> attributeDouble = (Hdf5Attribute<Double>) createAttribute(edit.getName(), 1L, dataType);
 			attributeDouble.write(new Double[] { flowVariable.getDoubleValue() });
 			return attributeDouble;
 			
 		case STRING:
-			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.STRING), Hdf5KnimeDataType.STRING, false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
-			Hdf5Attribute<String> attributeString = (Hdf5Attribute<String>) createAttribute(flowVariable.getName(), 1L, dataType);
+			Hdf5Attribute<String> attributeString = (Hdf5Attribute<String>) createAttribute(edit.getName(), 1L, dataType);
 			attributeString.write(new String[] { flowVariable.getStringValue() });
 			return attributeString;
 			

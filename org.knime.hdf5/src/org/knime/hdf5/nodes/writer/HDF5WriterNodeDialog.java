@@ -8,6 +8,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -205,10 +206,11 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
                 return COPY;
             }
              
+			@SuppressWarnings("unchecked")
 			protected Transferable createTransferable(JComponent comp) {
                 if (comp instanceof JList) {
                 	JList<?> list = (JList<?>) comp;
-                	specInfo.setSpecList(list.getSelectedValuesList());
+                	specInfo.setSpecList((List<SpecInfo>) list.getSelectedValuesList());
                 	return new StringSelection(specInfo.getSpecName());
                 }
                 return null;

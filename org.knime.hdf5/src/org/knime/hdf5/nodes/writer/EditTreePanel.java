@@ -193,7 +193,8 @@ public class EditTreePanel extends JPanel {
                 }
                 
                 Object parentObject = parent.getUserObject();
-                if (parentObject instanceof DataColumnSpec || parentObject instanceof ColumnNodeEdit) {
+                if (parentObject instanceof DataColumnSpec || parentObject instanceof ColumnNodeEdit
+                		|| parentObject instanceof Hdf5Attribute || parentObject instanceof AttributeNodeEdit) {
                 	path = path.getParentPath();
                 	parent = (DefaultMutableTreeNode) parent.getParent();
                 	parentObject = parent.getUserObject();
@@ -286,12 +287,10 @@ public class EditTreePanel extends JPanel {
         					ColumnNodeEdit.COLUMN_MENU.show(e.getComponent(), e.getX(), e.getY());
         					
         				} else if (userObject instanceof Hdf5Attribute) {
-        					AttributeNodeEdit.ATTRIBUTE_MENU.initMenu(m_tree, m_editTreeConfig, node);
-        					AttributeNodeEdit.ATTRIBUTE_MENU.show(e.getComponent(), e.getX(), e.getY());
+        					// TODO
         					
         				} else if (userObject instanceof Hdf5DataSet) {
-        					DataSetNodeEdit.DATASET_MENU.initMenu(m_tree, m_editTreeConfig, node);
-        					DataSetNodeEdit.DATASET_MENU.show(e.getComponent(), e.getX(), e.getY());
+        					// TODO
         					
         				} else if (userObject instanceof Hdf5Group) {
             				GroupNodeEdit.GROUP_MENU.initMenu(m_tree, m_editTreeConfig, node);
@@ -302,12 +301,14 @@ public class EditTreePanel extends JPanel {
         					ColumnNodeEdit.COLUMN_EDIT_MENU.show(e.getComponent(), e.getX(), e.getY());
         					
         				} else if (userObject instanceof AttributeNodeEdit) {
-        					AttributeNodeEdit.ATTRIBUTE_EDIT_MENU.initMenu(m_tree, m_editTreeConfig, node);
-        					AttributeNodeEdit.ATTRIBUTE_EDIT_MENU.show(e.getComponent(), e.getX(), e.getY());
+        					AttributeNodeEdit.AttributeNodeMenu menu = ((AttributeNodeEdit) userObject).getAttributeEditMenu();
+        					menu.initMenu(m_tree, m_editTreeConfig, node);
+        					menu.show(e.getComponent(), e.getX(), e.getY());
         					
         				} else if (userObject instanceof DataSetNodeEdit) {
-        					DataSetNodeEdit.DATASET_EDIT_MENU.initMenu(m_tree, m_editTreeConfig, node);
-        					DataSetNodeEdit.DATASET_EDIT_MENU.show(e.getComponent(), e.getX(), e.getY());
+        					DataSetNodeEdit.DataSetNodeMenu menu = ((DataSetNodeEdit) userObject).getDataSetEditMenu();
+        					menu.initMenu(m_tree, m_editTreeConfig, node);
+        					menu.show(e.getComponent(), e.getX(), e.getY());
         					
         				} else if (userObject instanceof GroupNodeEdit) {
         					GroupNodeEdit.GROUP_EDIT_MENU.initMenu(m_tree, m_editTreeConfig, node);

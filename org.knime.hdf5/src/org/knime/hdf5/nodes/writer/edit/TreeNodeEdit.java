@@ -17,6 +17,7 @@ import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.WindowConstants;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -85,7 +86,7 @@ public abstract class TreeNodeEdit {
 	}
 
 	public static TreeNodeEdit loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		throw new InvalidSettingsException("invalid subclass (must inherit this method)");
+		throw new InvalidSettingsException("invalid subclass (must override this method)");
 	}
 	
 	public abstract void addEditToNode(DefaultMutableTreeNode parentNode);
@@ -100,7 +101,7 @@ public abstract class TreeNodeEdit {
 		
 		protected PropertiesDialog(Frame owner, String title) {
 			super(owner, title);
-			setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+			setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
 			setLocation(400, 400);
 			
 			JPanel panel = new JPanel(new BorderLayout());

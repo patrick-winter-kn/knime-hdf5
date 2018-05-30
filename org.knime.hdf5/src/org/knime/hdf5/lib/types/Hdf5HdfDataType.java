@@ -1,6 +1,5 @@
 package org.knime.hdf5.lib.types;
 
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -35,8 +34,8 @@ public class Hdf5HdfDataType {
 		private static final Map<Integer, HdfDataType> LOOKUP = new HashMap<>();
 
 		static {
-			for (HdfDataType s : EnumSet.allOf(HdfDataType.class)) {
-				LOOKUP.put(s.getTypeId(), s);
+			for (HdfDataType hdfType : HdfDataType.values()) {
+				LOOKUP.put(hdfType.getTypeId(), hdfType);
 			}
 		}
 
@@ -207,7 +206,7 @@ public class Hdf5HdfDataType {
 		}
 	}
 	
-	HdfDataType getType() {
+	public HdfDataType getType() {
 		return m_type;
 	}
 	
@@ -219,7 +218,7 @@ public class Hdf5HdfDataType {
 		return m_stringLength;
 	}
 	
-	boolean isSimilarTo(Hdf5HdfDataType hdfType) {
+	public boolean isSimilarTo(Hdf5HdfDataType hdfType) {
 		return getType() == hdfType.getType() && getStringLength() == hdfType.getStringLength();
 	}
 
@@ -250,31 +249,6 @@ public class Hdf5HdfDataType {
 	
 	@Override
 	public String toString() {
-		switch (m_type) {
-		case BYTE:
-			return "BYTE";
-		case UBYTE:
-			return "UBYTE";
-		case SHORT:
-			return "SHORT";
-		case USHORT:
-			return "USHORT";
-		case INTEGER:
-			return "INTEGER";
-		case UINTEGER:
-			return "UINTEGER";
-		case LONG:
-			return "LONG";
-		case ULONG:
-			return "ULONG";
-		case FLOAT:
-			return "FLOAT";
-		case DOUBLE:
-			return "DOUBLE";
-		case STRING:
-			return "STRING";
-		default:
-			return "UNKNOWN";
-		}
+		return m_type.toString();
 	}
 }

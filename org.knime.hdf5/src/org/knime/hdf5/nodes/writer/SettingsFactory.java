@@ -45,7 +45,7 @@ final class SettingsFactory {
 			return m_specList;
 		}
 
-		void setSpecList(List<?> specList) {
+		void setSpecList(List<SpecInfo> specList) {
 			m_specList = specList;
 		}
 	}

@@ -52,7 +52,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 		
 		try {
 			file = getFile(filePolicy);
-			
+
+			// TODO find a possibility to estimate exec.setProgress()
 			for (GroupNodeEdit edit : m_editTreeConfig.getGroupNodeEdits()) {
 				String pathFromFile = edit.getPathFromFileWithoutEndSlash();
 				Hdf5Group group = file.getGroupByPath(pathFromFile);
@@ -101,7 +102,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 	private void createGroupFromEdit(BufferedDataTable inputTable, ExecutionContext exec, Hdf5Group parent, GroupNodeEdit edit)
 			throws IOException, CanceledExecutionException {
 		Hdf5Group group = parent.createGroup(edit.getName());
-		
+
 		for (GroupNodeEdit groupEdit : edit.getGroupNodeEdits()) {
 	        createGroupFromEdit(inputTable, exec, group, groupEdit);
 		}
@@ -117,7 +118,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 	
 	private void createDataSetFromEdit(BufferedDataTable inputTable, ExecutionContext exec, Hdf5Group parent, DataSetNodeEdit edit)
 			throws CanceledExecutionException, UnsupportedDataTypeException {
-		Hdf5DataSet<?> dataSet = parent.createDataSetFromSpec(edit.getName(), inputTable.size(), edit.getColumnSpecs(), true);
+		Hdf5DataSet<?> dataSet = parent.createDataSetFromEdit(inputTable.size(), edit);
 
 		DataTableSpec tableSpec = inputTable.getDataTableSpec();
 		int[] specIndex = new int[edit.getColumnSpecs().length];
@@ -129,7 +130,6 @@ public class HDF5WriterNodeModel extends NodeModel {
 		int rowId = 0;
 		while (iter.hasNext()) {
 			exec.checkCanceled();
-			// exec.setProgress((double) rowId / (inputTable.size() * dataSets.keySet().size()));
 			
 			DataRow row = iter.next();
 			dataSet.writeRowToDataSet(row, specIndex, rowId);
@@ -139,7 +139,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 	}
 	
 	private void createAttributeFromEdit(Hdf5TreeElement parent, AttributeNodeEdit edit) throws IOException {
-		parent.createAndWriteAttributeFromFlowVariable(getAvailableFlowVariables().get(edit.getName()));
+		parent.createAndWriteAttributeFromFlowVariable(getAvailableFlowVariables().get(edit.getFlowVariableName()), edit);
 	}
 	
 	@Override

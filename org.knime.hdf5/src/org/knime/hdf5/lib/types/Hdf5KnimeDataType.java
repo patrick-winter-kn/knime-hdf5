@@ -79,7 +79,22 @@ public enum Hdf5KnimeDataType {
 		}
 	}
 	
-	public List<HdfDataType> getConvertibleTypes() {
+	public HdfDataType getEquivalentHdfType() {
+		switch (this) {
+		case INTEGER:
+			return HdfDataType.INTEGER;
+		case LONG:
+			return HdfDataType.LONG;
+		case DOUBLE:
+			return HdfDataType.DOUBLE;
+		case STRING:
+			return HdfDataType.STRING;
+		default:
+			return null;
+		}
+	}
+	
+	public List<HdfDataType> getConvertibleHdfTypes() {
 		List<HdfDataType> types = new ArrayList<>();
 		
 		// TODO add more possible types

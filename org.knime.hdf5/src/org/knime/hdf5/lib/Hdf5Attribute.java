@@ -223,6 +223,7 @@ public class Hdf5Attribute<Type> {
 	 * @return {@code true} if writing was successful,
 	 * 			{@code false} otherwise
 	 */
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public boolean write(final Type[] value) {
         try {
         	if (m_type.isHdfType(HdfDataType.STRING)) {
@@ -231,7 +232,7 @@ public class Hdf5Attribute<Type> {
 				byte[] dataIn = new byte[dim * ((int) stringLength + 1)];
 				
 				for (int i = 0; i < dim; i++) {
-					char[] dataChar = ((String) value[i]).toCharArray();
+					char[] dataChar = value[i].toString().toCharArray();
 					
 					for (int j = 0; j < dataChar.length; j++) {
 						dataIn[i * ((int) stringLength + 1) + j] = (byte) dataChar[j];
@@ -240,16 +241,29 @@ public class Hdf5Attribute<Type> {
 				
 				H5.H5Awrite(m_attributeId, m_type.getConstants()[1], dataIn);
 				
-			} else {
+			} else if (m_type.hdfTypeEqualsKnimeType()) {
 				H5.H5Awrite(m_attributeId, m_type.getConstants()[1], value);
-        	}
+				
+			} else {
+    			int dim = (int) m_dimension;
+				Object[] dataIn = (Object[]) m_type.getHdfType().createArray(dim);
+	
+				Class hdfClass = m_type.getHdfClass();
+				Class knimeClass = m_type.getKnimeClass();
+				for (int i = 0; i < dataIn.length; i++) {
+					dataIn[i] = (Type) m_type.knimeToHdf(knimeClass,
+							knimeClass.cast(value[i]), hdfClass);
+				}
+				
+	            H5.H5Awrite(m_attributeId, m_type.getConstants()[1], dataIn);
+			}
         	
 			m_value = value;
 			return true;
 			
-		} catch (HDF5Exception | NullPointerException hnpe) {
+		} catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException hudtnpe) {
             NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + getPathFromFileWithName()
-            		+ "\" could not be written", hnpe);
+            		+ "\" could not be written", hudtnpe);
 		}
         
         return false;
@@ -308,8 +322,8 @@ public class Hdf5Attribute<Type> {
 							hdfClass.cast(dataRead[i]), knimeClass);
 				}
 			}
-		} catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException hludtnpe) {
-            NodeLogger.getLogger("HDF5 Files").error(hludtnpe.getMessage(), hludtnpe);
+		} catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException hudtnpe) {
+            NodeLogger.getLogger("HDF5 Files").error(hudtnpe.getMessage(), hudtnpe);
         }
 		
 		m_value = dataOut;
