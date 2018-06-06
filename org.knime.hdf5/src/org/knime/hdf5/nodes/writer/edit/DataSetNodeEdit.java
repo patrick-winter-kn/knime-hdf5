@@ -3,9 +3,12 @@ package org.knime.hdf5.nodes.writer.edit;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Frame;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 
@@ -13,8 +16,11 @@ import javax.activation.UnsupportedDataTypeException;
 import javax.swing.ButtonGroup;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
 import javax.swing.DropMode;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JList;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
@@ -25,6 +31,7 @@ import javax.swing.JSpinner;
 import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -36,6 +43,7 @@ import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.nodes.writer.EditTreeConfiguration;
@@ -48,8 +56,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	private HdfDataType m_hdfType;
 
-	// TODO use an enum here
-	private boolean m_littleEndian;
+	private Endian m_endian;
 	
 	private boolean m_fixed;
 	
@@ -59,13 +66,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	private int m_chunkRowSize;
 
-	// TODO use an enum here; also include "append" here
+	// TODO use an enum here; also include "insert" here
 	private boolean m_overwrite;
-	
-	/**
-	 * only those specs that are already physically existing
-	 */
-	private final List<DataColumnSpec> m_columnSpecs = new ArrayList<>();
 	
 	private final List<ColumnNodeEdit> m_columnEdits = new ArrayList<>();
 
@@ -102,12 +104,12 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		m_hdfType = hdfType;
 	}
 
-	public boolean isLittleEndian() {
-		return m_littleEndian;
+	public Endian getEndian() {
+		return m_endian;
 	}
 
-	private void setLittleEndian(boolean littleEndian) {
-		m_littleEndian = littleEndian;
+	private void setEndian(Endian endian) {
+		m_endian = endian;
 	}
 
 	public boolean isFixed() {
@@ -150,15 +152,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		m_overwrite = overwrite;
 	}
 	
-	/**
-	 * Returns the specs of m_columnEdits and m_columnSpecs.
-	 * 
-	 * @return 
-	 */
 	public DataColumnSpec[] getColumnSpecs() {
-		// TODO use the correct order based on possible changes made in the Dialog
 		List<DataColumnSpec> specs = new ArrayList<>();
-		specs.addAll(m_columnSpecs);
 		for (ColumnNodeEdit edit : m_columnEdits) {
 			specs.add(edit.getColumnSpec());
 		}
@@ -175,7 +170,6 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 
 	public void addColumnNodeEdit(ColumnNodeEdit edit) throws UnsupportedDataTypeException {
 		Hdf5KnimeDataType knimeType = Hdf5KnimeDataType.getKnimeDataType(edit.getColumnSpec().getType());
-		// TODO check if the possible types need to be changed
 		m_knimeType = m_knimeType != null && knimeType.getConvertibleHdfTypes().contains(m_knimeType.getEquivalentHdfType()) ? m_knimeType : knimeType;
 		m_hdfType = m_knimeType.getConvertibleHdfTypes().contains(m_hdfType) ? m_hdfType : m_knimeType.getEquivalentHdfType();
 		m_columnEdits.add(edit);
@@ -213,6 +207,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		m_attributeEdits.remove(edit);
 	}
 	
+	private void setColumnEdits(List<ColumnNodeEdit> edits) {
+		m_columnEdits.clear();
+		m_columnEdits.addAll(edits);
+	}
+	
 	@Override
 	public void saveSettings(NodeSettingsWO settings) {
 		super.saveSettings(settings);
@@ -224,19 +223,19 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		}
 		
 		settings.addString("hdfType", m_hdfType.toString());
-		settings.addBoolean("littleEndian", m_littleEndian);
+		settings.addBoolean("littleEndian", m_endian == Endian.LITTLE_ENDIAN);
 		settings.addBoolean("fixed", m_fixed);
 		settings.addInt("stringLength", m_stringLength);
 		settings.addInt("compression", m_compression);
 		settings.addInt("chunkRowSize", m_chunkRowSize);
 		settings.addBoolean("overwrite", m_overwrite);
-		// TODO add order of specs
 		
 	    NodeSettingsWO columnSettings = settings.addNodeSettings("columns");
 	    NodeSettingsWO attributeSettings = settings.addNodeSettings("attributes");
 		
-		for (ColumnNodeEdit edit : m_columnEdits) {
-	        NodeSettingsWO editSettings = columnSettings.addNodeSettings(edit.getName());
+		for (int i = 0; i < m_columnEdits.size(); i++) {
+			ColumnNodeEdit edit = m_columnEdits.get(i);
+	        NodeSettingsWO editSettings = columnSettings.addNodeSettings(i + ": " + edit.getName());
 			edit.saveSettings(editSettings);
 		}
 	    
@@ -265,7 +264,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	@SuppressWarnings("unchecked")
 	private void loadProperties(final NodeSettingsRO settings) throws InvalidSettingsException {
 		setHdfType(HdfDataType.valueOf(settings.getString("hdfType")));
-		setLittleEndian(settings.getBoolean("littleEndian"));
+		setEndian(settings.getBoolean("littleEndian") ? Endian.LITTLE_ENDIAN : Endian.BIG_ENDIAN);
 		setFixed(settings.getBoolean("fixed"));
 		setStringLength(settings.getInt("stringLength"));
 		setStringLength(settings.getInt("compression"));
@@ -374,8 +373,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 
 			private JTextField m_nameField = new JTextField(15);
 			private JComboBox<HdfDataType> m_typeField = new JComboBox<>();
-			// TODO this should also be an enum
-			private JComboBox<String> m_endianField = new JComboBox<>(new String[] {"little endian", "big endian"});
+			private JComboBox<Endian> m_endianField = new JComboBox<>(Endian.values());
 			private JRadioButton m_stringLengthAuto = new JRadioButton("auto");
 			private JRadioButton m_stringLengthFixed = new JRadioButton("fixed");
 			private JSpinner m_stringLengthSpinner = new JSpinner();
@@ -383,18 +381,33 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			private JSpinner m_chunkField = new JSpinner();
 			private JRadioButton m_overwriteNo = new JRadioButton("no");
 			private JRadioButton m_overwriteYes = new JRadioButton("yes");
-			// TODO implement option to append
-			private JRadioButton m_overwriteAppend = new JRadioButton("append");
-			private JList<DataColumnSpec> m_columnField = new JList<>(getColumnSpecs());
+			// TODO implement option to insert columns
+			private JRadioButton m_overwriteInsert = new JRadioButton("insert");
+			private JList<ColumnNodeEdit> m_editList = new JList<>(new DefaultListModel<>());
 	    	
 			private DataSetPropertiesDialog(String title) {
 				// TODO the owner of the frame should be the whole dialog
 				super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, m_tree), title);
-				setMinimumSize(new Dimension(300, 400));
+				setMinimumSize(new Dimension(350, 500));
 
-				addProperty("Name: ", m_nameField, false);
-				addProperty("Type: ", m_typeField, false);
-				addProperty("Endian: ", m_endianField, false);
+				addProperty("Name: ", m_nameField);
+				
+				m_typeField.addActionListener(new ActionListener() {
+					
+					@Override
+					public void actionPerformed(ActionEvent e) {
+						boolean isString = (HdfDataType) m_typeField.getSelectedItem() == HdfDataType.STRING;
+						m_endianField.setEnabled(!isString);
+						m_stringLengthAuto.setEnabled(isString);
+						m_stringLengthFixed.setEnabled(isString);
+						m_stringLengthSpinner.setEnabled(isString && m_stringLengthFixed.isSelected());
+					}
+				});
+				
+				addProperty("Type: ", m_typeField);
+
+				m_endianField.setSelectedItem(Endian.LITTLE_ENDIAN);
+				addProperty("Endian: ", m_endianField);
 				
 				JPanel stringLengthField = new JPanel();
 				ButtonGroup stringLengthGroup = new ButtonGroup();
@@ -412,12 +425,22 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 						m_stringLengthSpinner.setEnabled(m_stringLengthFixed.isSelected());
 					}
 				});
-				addProperty("String length: ", stringLengthField, false);
+				addProperty("String length: ", stringLengthField);
 
 				// TODO implement option for compression
-				addProperty("Compression: ", m_compressionField, true);
+				m_compressionField.setEnabled(false);
+				addProperty("Compression: ", m_compressionField, new ChangeListener() {
+
+					@Override
+					public void stateChanged(ChangeEvent e) {
+						boolean selected = ((JCheckBox) e.getSource()).isSelected();
+						m_compressionField.setEnabled(selected);
+						m_chunkField.setEnabled(selected);
+					}
+				});
 				// TODO implement option for row chunk size
-				addProperty("Chunk row size: ", m_chunkField, false);
+				m_chunkField.setEnabled(false);
+				addProperty("Chunk row size: ", m_chunkField);
 				
 				JPanel overwriteField = new JPanel();
 				ButtonGroup overwriteGroup = new ButtonGroup();
@@ -426,12 +449,18 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				m_overwriteNo.setSelected(true);
 				overwriteField.add(m_overwriteYes);
 				overwriteGroup.add(m_overwriteYes);
-				overwriteField.add(m_overwriteAppend);
-				overwriteGroup.add(m_overwriteAppend);
-				addProperty("Overwrite: ", overwriteField, false);
+				overwriteField.add(m_overwriteInsert);
+				overwriteGroup.add(m_overwriteInsert);
+				addProperty("Overwrite: ", overwriteField);
 				
-				m_columnField.setVisibleRowCount(-1);
-				m_columnField.setCellRenderer(new DefaultListCellRenderer() {
+				DefaultListModel<ColumnNodeEdit> editModel = (DefaultListModel<ColumnNodeEdit>) m_editList.getModel();
+				editModel.clear();
+				for (ColumnNodeEdit edit : getColumnNodeEdits()) {
+					editModel.addElement(edit);
+				}
+				
+				m_editList.setVisibleRowCount(-1);
+				m_editList.setCellRenderer(new DefaultListCellRenderer() {
 
 					private static final long serialVersionUID = -3499393207598804129L;
 
@@ -441,8 +470,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 							boolean cellHasFocus) {
 						super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
 
-						if (value instanceof DataColumnSpec) {
-							DataColumnSpec spec = (DataColumnSpec) value;
+						if (value instanceof ColumnNodeEdit) {
+							DataColumnSpec spec = ((ColumnNodeEdit) value).getColumnSpec();
 
 							setText(spec.getName());
 							setIcon(spec.getType().getIcon());
@@ -452,20 +481,55 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 					}
 				});
 				
-				m_columnField.setDragEnabled(true);
-				/*m_columnField.setTransferHandler(new TransferHandler() {
+				m_editList.setDragEnabled(true);
+				m_editList.setTransferHandler(new TransferHandler() {
 
 					private static final long serialVersionUID = 1192996062714565516L;
+					
+					private int[] transferableIndices;
 
 		            public int getSourceActions(JComponent comp) {
 		                return MOVE;
 		            }
-				});*/
-				m_columnField.setDropMode(DropMode.INSERT);
-				final JScrollPane jsp = new JScrollPane(m_columnField);
-				// try that the gridLayoutConstraints
-				//jsp.setMinimumSize(new Dimension(0, 100));
-				addProperty("Columns: ", jsp, false);
+		            
+		            protected Transferable createTransferable(JComponent comp) {
+		                if (comp instanceof JList) {
+		                	JList<?> list = (JList<?>) comp;
+		                	transferableIndices = list.getSelectedIndices();
+		                }
+		                return new StringSelection("");
+		            }
+		            
+		            public boolean canImport(TransferHandler.TransferSupport info) {
+		            	JList.DropLocation dl = (JList.DropLocation) info.getDropLocation();
+		                return dl.getIndex() != -1;
+		            }
+
+					public boolean importData(TransferHandler.TransferSupport info) {
+		                if (!info.isDrop()) {
+		                    return false;
+		                }
+		                
+		                JList.DropLocation dl = (JList.DropLocation) info.getDropLocation();
+		                int startIndex = dl.getIndex();
+		                int transferableCount = transferableIndices.length;
+		                List<ColumnNodeEdit> edits = Collections.list(editModel.elements());
+		                for (int i = 0; i < transferableCount; i++) {
+			                editModel.add(startIndex + i, edits.get(transferableIndices[i]));
+		                }
+		                for (int i = transferableCount - 1; i >= 0; i--) {
+		                	int index = transferableIndices[i];
+		                	index += startIndex > index ? 0 : transferableCount;
+		                	editModel.remove(index);
+		                }
+		                m_editList.setModel(editModel);
+		                
+		                return true;
+		            }
+				});
+				m_editList.setDropMode(DropMode.INSERT);
+				final JScrollPane jsp = new JScrollPane(m_editList);
+				addProperty("Columns: ", jsp, 1.0);
 			}
 			
 			@Override
@@ -476,7 +540,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 					edit.setHdfType(edit.getKnimeType().getEquivalentHdfType());
 				}
 				m_typeField.setSelectedItem(edit.getHdfType());
-				m_endianField.setSelectedItem(edit.isLittleEndian() ? "little endian" : "big endian");
+				m_endianField.setSelectedItem(edit.getEndian());
 				m_stringLengthAuto.setSelected(!edit.isFixed());
 				m_stringLengthFixed.setSelected(edit.isFixed());
 				m_stringLengthSpinner.setValue(edit.getStringLength());
@@ -484,8 +548,13 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				m_chunkField.setValue(edit.getChunkRowSize());
 				m_overwriteNo.setSelected(!edit.isOverwrite());
 				m_overwriteYes.setSelected(edit.isOverwrite());
-				m_overwriteAppend.setSelected(false);
-				m_columnField.setListData(getColumnSpecs());
+				m_overwriteInsert.setSelected(false);
+				
+				DefaultListModel<ColumnNodeEdit> columnModel = (DefaultListModel<ColumnNodeEdit>) m_editList.getModel();
+				columnModel.clear();
+				for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
+					columnModel.addElement(columnEdit);
+				}
 			}
 
 			@Override
@@ -493,16 +562,21 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				DataSetNodeEdit edit = (DataSetNodeEdit) m_node.getUserObject();
 				edit.setName(m_nameField.getText());
 				edit.setHdfType((HdfDataType) m_typeField.getSelectedItem());
-				edit.setLittleEndian(m_endianField.getSelectedItem().equals("little endian"));
+				edit.setEndian((Endian) m_endianField.getSelectedItem());
 				edit.setFixed(m_stringLengthFixed.isSelected());
 				edit.setStringLength((Integer) m_stringLengthSpinner.getValue());
 				edit.setCompression((Integer) m_compressionField.getValue());
 				edit.setChunkRowSize((Integer) m_chunkField.getValue());
 				edit.setOverwrite(m_overwriteYes.isSelected());
-				// TODO also edit column order here
+				edit.setColumnEdits(Collections.list(((DefaultListModel<ColumnNodeEdit>) m_editList.getModel()).elements()));
+				
+				m_node.removeAllChildren();
+				for (ColumnNodeEdit columnEdit : edit.getColumnNodeEdits()) {
+					m_node.add(new DefaultMutableTreeNode(columnEdit));
+				}
 				
 				((DefaultTreeModel) (m_tree.getModel())).reload();
-				m_tree.makeVisible(new TreePath(m_node.getPath()));
+				m_tree.makeVisible(new TreePath(((DefaultMutableTreeNode) m_node.getFirstChild()).getPath()));
 			}
 		}
     }

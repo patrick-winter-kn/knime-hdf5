@@ -17,9 +17,7 @@ import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
 import javax.swing.WindowConstants;
-import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreeNode;
@@ -108,9 +106,9 @@ public abstract class TreeNodeEdit {
 			add(panel, BorderLayout.CENTER);
 			panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-			panel.add(m_contentPanel, BorderLayout.PAGE_START);
+			panel.add(m_contentPanel, BorderLayout.CENTER);
 			m_contentPanel.setLayout(new GridBagLayout());
-			m_constraints.fill = GridBagConstraints.HORIZONTAL;
+			m_constraints.fill = GridBagConstraints.BOTH;
 			m_constraints.insets = new Insets(2, 2, 2, 2);
 			m_constraints.gridy = 0;
 			
@@ -136,43 +134,61 @@ public abstract class TreeNodeEdit {
 				}
 			});
 			buttonPanel.add(cancelButton);
+
+//			m_contentPanel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLUE), m_contentPanel.getBorder()));
 		}
-		
-		protected void addProperty(String description, JComponent component, boolean hasCheckBox) {
+
+		protected PropertyDescriptionPanel addProperty(String description, JComponent component, ChangeListener checkBoxListener, double weighty) {
+			PropertyDescriptionPanel propertyPanel = new PropertyDescriptionPanel(description,
+					checkBoxListener, Double.compare(weighty, 0.0) != 0);
 			m_constraints.gridx = 0;
             m_constraints.weightx = 0.0;
-			m_contentPanel.add(new PropertyDescriptionPanel(description, component, hasCheckBox), m_constraints);
+            m_constraints.weighty = weighty;
+			m_contentPanel.add(propertyPanel, m_constraints);
             m_constraints.gridx++;
             m_constraints.weightx = 1.0;
             m_contentPanel.add(component, m_constraints);
 			m_constraints.gridy++;
+			
+			return propertyPanel;
+		}
+
+		protected PropertyDescriptionPanel addProperty(String description, JComponent component, ChangeListener checkBoxListener) {
+	        return addProperty(description, component, checkBoxListener, 0.0);
 		}
 		
-		private class PropertyDescriptionPanel extends JPanel {
+		protected void addProperty(String description, JComponent component, double weighty) {
+			addProperty(description, component, null, weighty);
+		}
+		
+		protected void addProperty(String description, JComponent component) {
+			addProperty(description, component, null, 0.0);
+		}
+		
+		protected class PropertyDescriptionPanel extends JPanel {
 
 			private static final long serialVersionUID = 3019076429508416644L;
 			
-			private PropertyDescriptionPanel(String description, JComponent component, boolean hasCheckBox) {
+			private PropertyDescriptionPanel(String description, ChangeListener checkBoxListener, boolean northwest) {
 				setLayout(new BoxLayout(this, BoxLayout.X_AXIS));
-				if (hasCheckBox) {
+				if (checkBoxListener != null) {
 					JCheckBox checkBox = new JCheckBox();
 					add(checkBox);
-					checkBox.addChangeListener(new ChangeListener() {
-						
-						@Override
-						public void stateChanged(ChangeEvent e) {
-							component.setEnabled(checkBox.isSelected());
-						}
-					});
-					checkBox.setSelected(false);
-					component.setEnabled(false);
+					checkBox.addChangeListener(checkBoxListener);
+					
+					if (northwest) {
+						checkBox.setAlignmentY(0.0f);
+					}
 				}
 				JLabel nameLabel = new JLabel(description);
 				add(nameLabel);
+				if (northwest) {
+					nameLabel.setAlignmentY(0.0f);
+				}
 				
-				// setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.GREEN), getBorder()));
-				// nameLabel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.RED), nameLabel.getBorder()));
-				// component.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLUE), component.getBorder()));
+//				setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.GREEN), getBorder()));
+//				nameLabel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.RED), nameLabel.getBorder()));
+//				component.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLUE), component.getBorder()));
 			}
 		}
 		

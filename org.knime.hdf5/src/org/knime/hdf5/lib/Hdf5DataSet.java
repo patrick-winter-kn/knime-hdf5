@@ -8,6 +8,7 @@ import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.data.DataCell;
 import org.knime.core.data.DataRow;
+import org.knime.core.data.DataType;
 import org.knime.core.data.MissingCell;
 import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
@@ -282,18 +283,44 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	@SuppressWarnings("unchecked")
 	private Type getValueFromDataCell(DataCell dataCell) throws UnsupportedDataTypeException {
+		DataType type = dataCell.getType();
 		switch (getType().getKnimeType()) {
 		case INTEGER:
-			return (Type) (Integer) ((IntCell) dataCell).getIntValue();
+			if (type.equals(IntCell.TYPE)) {	
+				return (Type) (Integer) ((IntCell) dataCell).getIntValue();
+			}
+			break;
 		case LONG:
-			return (Type) (Long) ((LongCell) dataCell).getLongValue();
+			if (type.equals(IntCell.TYPE)) {	
+				return (Type) (Long) (long) ((IntCell) dataCell).getIntValue();
+			} else if (type.equals(LongCell.TYPE)) {	
+				return (Type) (Long) ((LongCell) dataCell).getLongValue();
+			} 
+			break;
 		case DOUBLE:
-			return (Type) (Double) ((DoubleCell) dataCell).getDoubleValue();
+			if (type.equals(IntCell.TYPE)) {	
+				return (Type) (Double) (double) ((IntCell) dataCell).getIntValue();
+			} else if (type.equals(LongCell.TYPE)) {	
+				return (Type) (Double) (double) ((LongCell) dataCell).getLongValue();
+			} else if (type.equals(DoubleCell.TYPE)) {	
+				return (Type) (Double) ((DoubleCell) dataCell).getDoubleValue();
+			}
+			break;
 		case STRING:
-			return (Type) (String) ((StringCell) dataCell).getStringValue();
+			if (type.equals(IntCell.TYPE)) {	
+				return (Type) ("" + ((IntCell) dataCell).getIntValue());
+			} else if (type.equals(LongCell.TYPE)) {	
+				return (Type) ("" + ((LongCell) dataCell).getLongValue());
+			} else if (type.equals(DoubleCell.TYPE)) {	
+				return (Type) ("" + ((DoubleCell) dataCell).getDoubleValue());
+			} else if (type.equals(StringCell.TYPE)) {
+				return (Type) ((StringCell) dataCell).getStringValue();
+			}
 		default:
 			throw new UnsupportedDataTypeException("Unknown knimeDataType");
 		}
+		
+		throw new UnsupportedDataTypeException("Unsupported combination of dataCellDataType and knimeDataType");
 	}
 	
 	public Type[] readRow(long rowId) {

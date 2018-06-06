@@ -155,15 +155,8 @@ public class EditTreePanel extends JPanel {
         	
 			public boolean canImport(TransferHandler.TransferSupport info) {
 				// we only import Strings
-                if (!info.isDataFlavorSupported(DataFlavor.stringFlavor)) {
-                    return false;
-                }
-                
                 JTree.DropLocation dl = (JTree.DropLocation) info.getDropLocation();
-                if (dl.getPath() == null) {
-                    return false;
-                }
-                return true;
+                return info.isDataFlavorSupported(DataFlavor.stringFlavor) && dl.getPath() != null;
             }
 
 			public boolean importData(TransferHandler.TransferSupport info) {

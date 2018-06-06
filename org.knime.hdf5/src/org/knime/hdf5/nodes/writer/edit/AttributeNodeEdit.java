@@ -27,6 +27,7 @@ import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.nodes.writer.EditTreeConfiguration;
@@ -41,13 +42,13 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	private HdfDataType m_hdfType;
 	
-	// TODO use an enum here
-	private boolean m_littleEndian;
+	private Endian m_endian;
 	
 	private boolean m_fixed;
 	
 	private int m_stringLength;
 	
+	// TODO enum
 	private boolean m_overwrite;
 
 	public AttributeNodeEdit(DefaultMutableTreeNode parent, FlowVariable var) {
@@ -100,12 +101,12 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_hdfType = hdfType;
 	}
 
-	public boolean isLittleEndian() {
-		return m_littleEndian;
+	public Endian getEndian() {
+		return m_endian;
 	}
 
-	private void setLittleEndian(boolean littleEndian) {
-		m_littleEndian = littleEndian;
+	private void setEndian(Endian endian) {
+		m_endian = endian;
 	}
 
 	public boolean isFixed() {
@@ -144,7 +145,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		}
 		
 		settings.addString("hdfType", m_hdfType.toString());
-		settings.addBoolean("littleEndian", m_littleEndian);
+		settings.addBoolean("littleEndian", m_endian == Endian.LITTLE_ENDIAN);
 		settings.addBoolean("fixed", m_fixed);
 		settings.addInt("stringLength", m_stringLength);
 		settings.addBoolean("overwrite", m_overwrite);
@@ -180,7 +181,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	private void loadProperties(final NodeSettingsRO settings) throws InvalidSettingsException {
 		setHdfType(HdfDataType.valueOf(settings.getString("hdfType")));
-		setLittleEndian(settings.getBoolean("littleEndian"));
+		setEndian(settings.getBoolean("littleEndian") ? Endian.LITTLE_ENDIAN : Endian.BIG_ENDIAN);
 		setFixed(settings.getBoolean("fixed"));
 		setStringLength(settings.getInt("stringLength"));
 		setOverwrite(settings.getBoolean("overwrite"));
@@ -262,8 +263,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	    	
 			private JTextField m_nameField = new JTextField(15);
 			private JComboBox<HdfDataType> m_typeField = new JComboBox<>(((AttributeNodeEdit) m_node.getUserObject()).getKnimeType().getConvertibleHdfTypes().toArray(new HdfDataType[] {}));
-			// TODO this should also be an enum
-			private JComboBox<String> m_endianField = new JComboBox<>(new String[] {"little endian", "big endian"});
+			private JComboBox<Endian> m_endianField = new JComboBox<>(Endian.values());
 			private JRadioButton m_stringLengthAuto = new JRadioButton("auto");
 			private JRadioButton m_stringLengthFixed = new JRadioButton("fixed");
 			private JSpinner m_stringLengthSpinner = new JSpinner();
@@ -274,9 +274,23 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, m_tree), title);
 				setMinimumSize(new Dimension(300, 300));
 
-				addProperty("Name: ", m_nameField, false);
-				addProperty("Type: ", m_typeField, false);
-				addProperty("Endian: ", m_endianField, false);
+				addProperty("Name: ", m_nameField);
+				
+				m_typeField.addActionListener(new ActionListener() {
+					
+					@Override
+					public void actionPerformed(ActionEvent e) {
+						boolean isString = (HdfDataType) m_typeField.getSelectedItem() == HdfDataType.STRING;
+						m_endianField.setEnabled(!isString);
+						m_stringLengthAuto.setEnabled(isString);
+						m_stringLengthFixed.setEnabled(isString);
+						m_stringLengthSpinner.setEnabled(isString && m_stringLengthFixed.isSelected());
+					}
+				});
+				addProperty("Type: ", m_typeField);
+				
+				m_endianField.setSelectedItem(Endian.LITTLE_ENDIAN);
+				addProperty("Endian: ", m_endianField);
 				
 				JPanel stringLengthField = new JPanel();
 				ButtonGroup stringLengthGroup = new ButtonGroup();
@@ -294,7 +308,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 						m_stringLengthSpinner.setEnabled(m_stringLengthFixed.isSelected());
 					}
 				});
-				addProperty("String length: ", stringLengthField, false);
+				addProperty("String length: ", stringLengthField);
 
 				JPanel overwriteField = new JPanel();
 				ButtonGroup overwriteGroup = new ButtonGroup();
@@ -303,14 +317,14 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				m_overwriteNo.setSelected(true);
 				overwriteField.add(m_overwriteYes);
 				overwriteGroup.add(m_overwriteYes);
-				addProperty("Overwrite: ", overwriteField, false);
+				addProperty("Overwrite: ", overwriteField);
 			}
 			
 			@Override
 			protected void initPropertyItems(AttributeNodeEdit edit) {
 				m_nameField.setText(edit.getName());
 				m_typeField.setSelectedItem(edit.getHdfType());
-				m_endianField.setSelectedItem(edit.isLittleEndian() ? "little endian" : "big endian");
+				m_endianField.setSelectedItem(edit.getEndian());
 				m_stringLengthAuto.setSelected(!edit.isFixed());
 				m_stringLengthFixed.setSelected(edit.isFixed());
 				m_stringLengthSpinner.setValue(edit.getStringLength());
@@ -323,7 +337,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				AttributeNodeEdit edit = (AttributeNodeEdit) m_node.getUserObject();
 				edit.setName(m_nameField.getText());
 				edit.setHdfType((HdfDataType) m_typeField.getSelectedItem());
-				edit.setLittleEndian(m_endianField.getSelectedItem().equals("little endian"));
+				edit.setEndian((Endian) m_endianField.getSelectedItem());
 				edit.setFixed(m_stringLengthFixed.isSelected());
 				edit.setStringLength((Integer) m_stringLengthSpinner.getValue());
 				edit.setOverwrite(m_overwriteYes.isSelected());

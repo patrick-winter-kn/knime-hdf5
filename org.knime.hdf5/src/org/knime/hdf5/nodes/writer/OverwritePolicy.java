@@ -10,7 +10,12 @@ enum OverwritePolicy {
     /**
      * Abort if a file exists.
      */
-    ABORT("Abort");
+    ABORT("Abort"),
+	
+    /**
+     * Insert if a file exists and put both variants together.
+     */
+    INSERT("Insert");
 
     private final String m_name;
 
@@ -32,6 +37,6 @@ enum OverwritePolicy {
      * @return Array of all overwrite policy settings
      */
     static String[] getAllSettings() {
-        return new String[] { OVERWRITE.getName(), ABORT.getName() };
+        return new String[] { OVERWRITE.getName(), ABORT.getName(), INSERT.getName() };
     }
 }

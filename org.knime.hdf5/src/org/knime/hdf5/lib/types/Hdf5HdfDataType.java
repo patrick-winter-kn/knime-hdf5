@@ -67,6 +67,10 @@ public class Hdf5HdfDataType {
 		}
 	}
 	
+	public static enum Endian {
+		LITTLE_ENDIAN, BIG_ENDIAN
+	}
+	
 	public static final long DEFAULT_STRING_LENGTH = 63L;
 
 	private static final Map<HdfDataType, Hdf5HdfDataType> LOOKUP = new HashMap<>();

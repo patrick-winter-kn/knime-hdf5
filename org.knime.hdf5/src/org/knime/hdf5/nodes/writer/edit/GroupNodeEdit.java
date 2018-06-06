@@ -282,7 +282,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 
 				JPanel namePanel = new JPanel();
 				namePanel.add(m_nameField, BorderLayout.CENTER);
-				addProperty("Name: ", namePanel, false);
+				addProperty("Name: ", namePanel);
 			}
 			
 			@Override
