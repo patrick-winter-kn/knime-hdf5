@@ -3,6 +3,7 @@ package org.knime.hdf5.lib.types;
 import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.node.NodeLogger;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 import hdf.hdf5lib.H5;
@@ -45,7 +46,7 @@ public class Hdf5DataType {
 	 * @param fromDS true if the dataType is from a dataSet
 	 * @throws HDF5LibraryException 
 	 */
-	private Hdf5DataType(long elementId, long classId, int size, boolean unsigned, boolean vlen) throws HDF5LibraryException {
+	private Hdf5DataType(long elementId, long classId, int size, Endian endian, boolean unsigned, boolean vlen) throws HDF5LibraryException {
 		m_vlen = vlen;
 		m_fromDS = H5.H5Iget_type(elementId) == HDF5Constants.H5I_DATASET;
 		
@@ -60,7 +61,7 @@ public class Hdf5DataType {
 			typeId = 100 * size + 20;
 		}
 		
-		m_hdfType = Hdf5HdfDataType.getInstance(HdfDataType.get(typeId));
+		m_hdfType = Hdf5HdfDataType.getInstance(HdfDataType.get(typeId), endian);
 		
 		switch (m_hdfType.getType()) {
 		case BYTE:
@@ -90,7 +91,7 @@ public class Hdf5DataType {
 		}
 	}
 	
-	private static Hdf5DataType getInstance(long elementId, long classId, int size, boolean unsigned, boolean vlen) {
+	private static Hdf5DataType getInstance(long elementId, long classId, int size, Endian endian, boolean unsigned, boolean vlen) {
 		Hdf5DataType dataType = null;
 		
 		try {
@@ -99,7 +100,7 @@ public class Hdf5DataType {
 				throw new IllegalStateException("DataType can only be for a DataSet or Attribute");
 			}
 			
-			dataType = new Hdf5DataType(elementId, classId, size, unsigned, vlen);
+			dataType = new Hdf5DataType(elementId, classId, size, endian, unsigned, vlen);
 		
 		} catch (HDF5LibraryException hle) {
             NodeLogger.getLogger("HDF5 Files").error("Invalid elementId", hle);
@@ -125,11 +126,11 @@ public class Hdf5DataType {
 		return dataType;
 	}
 	
-	public static Hdf5DataType openDataType(long elementId, long classId, int size, boolean unsigned, boolean vlen) {
+	public static Hdf5DataType openDataType(long elementId, long classId, int size, Endian endian, boolean unsigned, boolean vlen) {
 		Hdf5DataType dataType = null;
 		
 		try {
-			dataType = getInstance(elementId, classId, size, unsigned, vlen);
+			dataType = getInstance(elementId, classId, size, endian, unsigned, vlen);
 			dataType.getHdfType().openHdfDataTypeString(elementId);
 			
 		} catch (NullPointerException | IllegalArgumentException npiae) {

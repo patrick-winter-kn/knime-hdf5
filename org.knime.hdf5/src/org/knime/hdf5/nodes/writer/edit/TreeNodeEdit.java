@@ -101,6 +101,7 @@ public abstract class TreeNodeEdit {
 			super(owner, title);
 			setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
 			setLocation(400, 400);
+			setModal(true);
 			
 			JPanel panel = new JPanel(new BorderLayout());
 			add(panel, BorderLayout.CENTER);
@@ -138,7 +139,7 @@ public abstract class TreeNodeEdit {
 //			m_contentPanel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLUE), m_contentPanel.getBorder()));
 		}
 
-		protected PropertyDescriptionPanel addProperty(String description, JComponent component, ChangeListener checkBoxListener, double weighty) {
+		protected void addProperty(String description, JComponent component, ChangeListener checkBoxListener, double weighty) {
 			PropertyDescriptionPanel propertyPanel = new PropertyDescriptionPanel(description,
 					checkBoxListener, Double.compare(weighty, 0.0) != 0);
 			m_constraints.gridx = 0;
@@ -149,12 +150,10 @@ public abstract class TreeNodeEdit {
             m_constraints.weightx = 1.0;
             m_contentPanel.add(component, m_constraints);
 			m_constraints.gridy++;
-			
-			return propertyPanel;
 		}
 
-		protected PropertyDescriptionPanel addProperty(String description, JComponent component, ChangeListener checkBoxListener) {
-	        return addProperty(description, component, checkBoxListener, 0.0);
+		protected void addProperty(String description, JComponent component, ChangeListener checkBoxListener) {
+	        addProperty(description, component, checkBoxListener, 0.0);
 		}
 		
 		protected void addProperty(String description, JComponent component, double weighty) {

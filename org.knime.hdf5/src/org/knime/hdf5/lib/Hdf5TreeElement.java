@@ -17,6 +17,7 @@ import org.knime.core.node.NodeLogger;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
 
 import hdf.hdf5lib.H5;
@@ -307,7 +308,7 @@ abstract public class Hdf5TreeElement {
 	@SuppressWarnings("unchecked")
 	public Hdf5Attribute<?> createAndWriteAttributeFromFlowVariable(FlowVariable flowVariable, AttributeNodeEdit edit) throws IOException {
 		long stringLength = edit.isFixed() ? edit.getStringLength() : flowVariable.getValueAsString().length();
-		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType()), edit.getKnimeType(), false, false, stringLength);
+		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), edit.getKnimeType(), false, false, stringLength);
 
 		switch (flowVariable.getType()) {
 		case INTEGER:
@@ -383,6 +384,7 @@ abstract public class Hdf5TreeElement {
 			long dataspaceId = -1;
 			long classId = -1;
 			int size = 0;
+			Endian endian = null;
 			boolean unsigned = false;
 			boolean vlen = false;
 
@@ -413,6 +415,7 @@ abstract public class Hdf5TreeElement {
 				long typeId = H5.H5Aget_type(attributeId);
 				classId = H5.H5Tget_class(typeId);
 				size = (int) H5.H5Tget_size(typeId);
+				endian = H5.H5Tget_order(typeId) == HDF5Constants.H5T_ORDER_LE ? Endian.LITTLE_ENDIAN : Endian.BIG_ENDIAN;
 				vlen = classId == HDF5Constants.H5T_VLEN || H5.H5Tis_variable_str(typeId);
 				if (classId == HDF5Constants.H5T_INTEGER) {
 					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(typeId);
@@ -432,7 +435,7 @@ abstract public class Hdf5TreeElement {
 							+ getPathFromFile() + getName() + "\" is not supported");
 				}
 				
-				dataType = Hdf5DataType.openDataType(attributeId, classId, size, unsigned, vlen);
+				dataType = Hdf5DataType.openDataType(attributeId, classId, size, endian, unsigned, vlen);
 				H5.H5Aclose(attributeId);
 				
 			} catch (HDF5LibraryException | NullPointerException hlnpe) {

@@ -72,61 +72,67 @@ public class Hdf5HdfDataType {
 	}
 	
 	public static final long DEFAULT_STRING_LENGTH = 63L;
-
-	private static final Map<HdfDataType, Hdf5HdfDataType> LOOKUP = new HashMap<>();
 	
+	private static final Map<HdfDataType, Hdf5HdfDataType> BIG_ENDIAN_TYPES = new HashMap<>();
+
+	private static final Map<HdfDataType, Hdf5HdfDataType> LITTLE_ENDIAN_TYPES = new HashMap<>();
+
 	private final HdfDataType m_type;
+	
+	private final Endian m_endian;
 	
 	private final long[] m_constants = { -1, -1 };
 	
 	private long m_stringLength;
 	
-	private Hdf5HdfDataType(final HdfDataType type) {
+	private Hdf5HdfDataType(final HdfDataType type, final Endian endian) {
 		m_type = type;
+		m_endian = endian;
 		
-		if (m_type != HdfDataType.STRING) {
-			LOOKUP.put(m_type, this);
+		boolean littleEndian = m_endian == Endian.LITTLE_ENDIAN;
+		if (m_type != HdfDataType.STRING && m_type != HdfDataType.REFERENCE) {
+			(littleEndian ? LITTLE_ENDIAN_TYPES : BIG_ENDIAN_TYPES).put(m_type, this);
 		}
 		
 		switch (m_type) {
 		case BYTE:
-			m_constants[0] = HDF5Constants.H5T_STD_I8LE;
+			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_I8LE : HDF5Constants.H5T_STD_I8BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT8;
 			break;
 		case UBYTE:
-			m_constants[0] = HDF5Constants.H5T_STD_U8LE;
+			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_U8LE : HDF5Constants.H5T_STD_U8BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT8;
 			break;
 		case SHORT:
-			m_constants[0] = HDF5Constants.H5T_STD_I16LE;
+			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_I16LE : HDF5Constants.H5T_STD_I16BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT16;
 			break;
 		case USHORT:
-			m_constants[0] = HDF5Constants.H5T_STD_U16LE;
+			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_U16LE : HDF5Constants.H5T_STD_U16BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT16;
 			break;
 		case INTEGER:
-			m_constants[0] = HDF5Constants.H5T_STD_I32LE;
+			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_I32LE : HDF5Constants.H5T_STD_I32BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT32;
 			break;
 		case UINTEGER:
-			m_constants[0] = HDF5Constants.H5T_STD_U32LE;
+			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_U32LE : HDF5Constants.H5T_STD_U32BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT32;
 			break;
 		case LONG:
-			m_constants[0] = HDF5Constants.H5T_STD_I64LE;
+			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_I64LE : HDF5Constants.H5T_STD_I64BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT64;
 			break;
 		case ULONG:
-			m_constants[0] = HDF5Constants.H5T_STD_U64LE;
+			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_U64LE : HDF5Constants.H5T_STD_U64BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT64;
 			break;
 		case FLOAT:
-			m_constants[0] = HDF5Constants.H5T_IEEE_F32LE;
+			m_constants[0] = littleEndian ? HDF5Constants.H5T_IEEE_F32LE : HDF5Constants.H5T_IEEE_F32BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_FLOAT;
 			break;
 		case DOUBLE:
-			m_constants[0] = HDF5Constants.H5T_IEEE_F64LE;
+			m_constants[0] = littleEndian ? HDF5Constants.H5T_IEEE_F64LE : HDF5Constants.H5T_IEEE_F64BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_DOUBLE;
 			break;
 		case STRING:
@@ -155,12 +161,15 @@ public class Hdf5HdfDataType {
 	 * @param stringLength
 	 * 
 	 */
-	public static synchronized Hdf5HdfDataType getInstance(final HdfDataType type) {
-		if (type != HdfDataType.STRING && LOOKUP.containsKey(type)) {
-			return LOOKUP.get(type);
+	public static synchronized Hdf5HdfDataType getInstance(final HdfDataType type, final Endian endian) {
+		if (type != HdfDataType.STRING && type != HdfDataType.REFERENCE) {
+			Map<HdfDataType, Hdf5HdfDataType> types = endian == Endian.LITTLE_ENDIAN ? LITTLE_ENDIAN_TYPES : BIG_ENDIAN_TYPES;
+			if (types.containsKey(type)) {
+				return types.get(type);
+			}
 		}
 		
-		return new Hdf5HdfDataType(type);
+		return new Hdf5HdfDataType(type, endian);
 	}
 	
 	void createHdfDataTypeString(final long stringLength) {
@@ -214,6 +223,10 @@ public class Hdf5HdfDataType {
 		return m_type;
 	}
 	
+	public Endian getEndian() {
+		return m_endian;
+	}
+	
 	long[] getConstants() {
 		return m_constants;
 	}
@@ -223,7 +236,7 @@ public class Hdf5HdfDataType {
 	}
 	
 	public boolean isSimilarTo(Hdf5HdfDataType hdfType) {
-		return getType() == hdfType.getType() && getStringLength() == hdfType.getStringLength();
+		return getType() == hdfType.getType() && getEndian() == hdfType.getEndian() && getStringLength() == hdfType.getStringLength();
 	}
 
 	public Object createArray(int length) throws UnsupportedDataTypeException {
@@ -253,6 +266,6 @@ public class Hdf5HdfDataType {
 	
 	@Override
 	public String toString() {
-		return m_type.toString();
+		return m_type.toString() + " " + m_endian.toString();
 	}
 }

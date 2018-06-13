@@ -13,6 +13,7 @@ import org.knime.core.data.DataTableSpec;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
 
 import hdf.hdf5lib.H5;
@@ -129,7 +130,8 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return group;
 	}
 	
-	public synchronized Hdf5DataSet<?> createDataSet(final String name, long[] dimensions, Hdf5DataType type) throws IOException {
+	public synchronized Hdf5DataSet<?> createDataSet(final String name, long[] dimensions,
+			int compressionLevel, long chunkRowSize, Hdf5DataType type) throws IOException {
 		Hdf5DataSet<?> dataSet = null;
 		
 		int objectType = -1;
@@ -137,7 +139,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 			objectType = getObjectTypeByName(name);
 			
 			if (objectType == OBJECT_NOT_EXISTS) {
-				dataSet = Hdf5DataSet.createDataSet(this, name, dimensions, type);
+				dataSet = Hdf5DataSet.createDataSet(this, name, dimensions, compressionLevel, chunkRowSize, type);
 				
 			} else if (objectType == HDF5Constants.H5I_DATASET || objectType == HDF5Constants.H5I_GROUP) {
 				throw new IOException("There is already "
@@ -366,12 +368,13 @@ public class Hdf5Group extends Hdf5TreeElement {
 	public Hdf5DataSet<?> createDataSetFromEdit(long rows, DataSetNodeEdit edit) {
 		Hdf5DataSet<?> dataSet = null;
 		
-		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType()), 
-				edit.getKnimeType(), false, true, Hdf5HdfDataType.DEFAULT_STRING_LENGTH);
+		long stringLength = edit.isFixed() ? edit.getStringLength() : Hdf5HdfDataType.DEFAULT_STRING_LENGTH;
+		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), 
+				edit.getKnimeType(), false, true, stringLength);
 		long[] dims = new long[] { rows, edit.getColumnSpecs().length };
 		
 		try {
-			dataSet = createDataSet(edit.getName(), dims, dataType);
+			dataSet = createDataSet(edit.getName(), dims, edit.getCompression(), edit.getChunkRowSize(), dataType);
 			
 		} catch (IOException ioe) {
 			try {
@@ -419,6 +422,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 			long dataSetId = -1;
 			long classId = -1;
 			int size = 0;
+			Endian endian = null;
 			boolean unsigned = false;
 			boolean vlen = false;
 			
@@ -427,6 +431,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				long typeId = H5.H5Dget_type(dataSetId);
 				classId = H5.H5Tget_class(typeId);
 				size = (int) H5.H5Tget_size(typeId);
+				endian = H5.H5Tget_order(typeId) == HDF5Constants.H5T_ORDER_LE ? Endian.LITTLE_ENDIAN : Endian.BIG_ENDIAN;
 				vlen = classId == HDF5Constants.H5T_VLEN || H5.H5Tis_variable_str(typeId);
 				if (classId == HDF5Constants.H5T_INTEGER) {
 					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(typeId);
@@ -446,7 +451,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 							+ getPathFromFileWithName() + name + "\" is not supported");
 				}
 				
-				dataType = Hdf5DataType.openDataType(dataSetId, classId, size, unsigned, vlen);
+				dataType = Hdf5DataType.openDataType(dataSetId, classId, size, endian, unsigned, vlen);
 				
 				H5.H5Dclose(dataSetId);
 				

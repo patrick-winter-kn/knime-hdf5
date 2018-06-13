@@ -30,6 +30,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JTextField;
 import javax.swing.JTree;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.event.ChangeEvent;
@@ -64,7 +65,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	private int m_compression;
 	
-	private int m_chunkRowSize;
+	private int m_chunkRowSize = 1;
 
 	// TODO use an enum here; also include "insert" here
 	private boolean m_overwrite;
@@ -76,6 +77,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	public DataSetNodeEdit(DefaultMutableTreeNode parent, String name) {
 		super(parent, name);
 		m_dataSetNodeMenu = new DataSetNodeMenu(true);
+		m_endian = Endian.LITTLE_ENDIAN;
 	}
 
 	public DataSetNodeEdit(String name) {
@@ -267,8 +269,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		setEndian(settings.getBoolean("littleEndian") ? Endian.LITTLE_ENDIAN : Endian.BIG_ENDIAN);
 		setFixed(settings.getBoolean("fixed"));
 		setStringLength(settings.getInt("stringLength"));
-		setStringLength(settings.getInt("compression"));
-		setStringLength(settings.getInt("chunkRowSize"));
+		setCompression(settings.getInt("compression"));
+		setChunkRowSize(settings.getInt("chunkRowSize"));
 		setOverwrite(settings.getBoolean("overwrite"));
 		
 		NodeSettingsRO columnSettings = settings.getNodeSettings("columns");
@@ -376,9 +378,9 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			private JComboBox<Endian> m_endianField = new JComboBox<>(Endian.values());
 			private JRadioButton m_stringLengthAuto = new JRadioButton("auto");
 			private JRadioButton m_stringLengthFixed = new JRadioButton("fixed");
-			private JSpinner m_stringLengthSpinner = new JSpinner();
-			private JSpinner m_compressionField = new JSpinner();
-			private JSpinner m_chunkField = new JSpinner();
+			private JSpinner m_stringLengthSpinner = new JSpinner(new SpinnerNumberModel(0, 0, Integer.MAX_VALUE, 1));
+			private JSpinner m_compressionField = new JSpinner(new SpinnerNumberModel(0, 0, 9, 1));
+			private JSpinner m_chunkField = new JSpinner(new SpinnerNumberModel(1, 1, Integer.MAX_VALUE, 1));
 			private JRadioButton m_overwriteNo = new JRadioButton("no");
 			private JRadioButton m_overwriteYes = new JRadioButton("yes");
 			// TODO implement option to insert columns
@@ -388,7 +390,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			private DataSetPropertiesDialog(String title) {
 				// TODO the owner of the frame should be the whole dialog
 				super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, m_tree), title);
-				setMinimumSize(new Dimension(350, 500));
+				setMinimumSize(new Dimension(400, 500));
 
 				addProperty("Name: ", m_nameField);
 				
@@ -405,8 +407,6 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				});
 				
 				addProperty("Type: ", m_typeField);
-
-				m_endianField.setSelectedItem(Endian.LITTLE_ENDIAN);
 				addProperty("Endian: ", m_endianField);
 				
 				JPanel stringLengthField = new JPanel();
@@ -536,9 +536,6 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			protected void initPropertyItems(DataSetNodeEdit edit) {
 				m_nameField.setText(edit.getName());
 				m_typeField.setModel(new DefaultComboBoxModel<HdfDataType>(edit.getKnimeType().getConvertibleHdfTypes().toArray(new HdfDataType[] {})));
-				if (edit.getHdfType() == null) {
-					edit.setHdfType(edit.getKnimeType().getEquivalentHdfType());
-				}
 				m_typeField.setSelectedItem(edit.getHdfType());
 				m_endianField.setSelectedItem(edit.getEndian());
 				m_stringLengthAuto.setSelected(!edit.isFixed());
@@ -565,7 +562,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				edit.setEndian((Endian) m_endianField.getSelectedItem());
 				edit.setFixed(m_stringLengthFixed.isSelected());
 				edit.setStringLength((Integer) m_stringLengthSpinner.getValue());
-				edit.setCompression((Integer) m_compressionField.getValue());
+				edit.setCompression(m_compressionField.isEnabled() ? (Integer) m_compressionField.getValue() : 0);
 				edit.setChunkRowSize((Integer) m_chunkField.getValue());
 				edit.setOverwrite(m_overwriteYes.isSelected());
 				edit.setColumnEdits(Collections.list(((DefaultListModel<ColumnNodeEdit>) m_editList.getModel()).elements()));

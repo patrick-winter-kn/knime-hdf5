@@ -16,6 +16,7 @@ import javax.swing.JRadioButton;
 import javax.swing.JSpinner;
 import javax.swing.JTextField;
 import javax.swing.JTree;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -57,6 +58,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_flowVariableName = var.getName();
 		m_knimeType = Hdf5KnimeDataType.getKnimeDataType(var.getType());
 		m_hdfType = m_knimeType.getEquivalentHdfType();
+		m_endian = Endian.LITTLE_ENDIAN;
+		m_stringLength = var.getValueAsString().length();
 	}
 
 	public AttributeNodeEdit(FlowVariable var) {
@@ -65,6 +68,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_flowVariableName = var.getName();
 		m_knimeType = Hdf5KnimeDataType.getKnimeDataType(var.getType());
 		m_hdfType = m_knimeType.getEquivalentHdfType();
+		m_endian = Endian.LITTLE_ENDIAN;
+		m_stringLength = var.getValueAsString().length();
 	}
 
 	private AttributeNodeEdit(String pathFromFile, String name, String varName, Hdf5KnimeDataType knimetype) {
@@ -266,13 +271,13 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			private JComboBox<Endian> m_endianField = new JComboBox<>(Endian.values());
 			private JRadioButton m_stringLengthAuto = new JRadioButton("auto");
 			private JRadioButton m_stringLengthFixed = new JRadioButton("fixed");
-			private JSpinner m_stringLengthSpinner = new JSpinner();
+			private JSpinner m_stringLengthSpinner = new JSpinner(new SpinnerNumberModel(0, 0, Integer.MAX_VALUE, 1));
 			private JRadioButton m_overwriteNo = new JRadioButton("no");
 			private JRadioButton m_overwriteYes = new JRadioButton("yes");
 			
 			private AttributePropertiesDialog(String title) {
 				super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, m_tree), title);
-				setMinimumSize(new Dimension(300, 300));
+				setMinimumSize(new Dimension(400, 300));
 
 				addProperty("Name: ", m_nameField);
 				

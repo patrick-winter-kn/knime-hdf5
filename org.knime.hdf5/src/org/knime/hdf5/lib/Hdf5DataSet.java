@@ -31,6 +31,10 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	private boolean m_dimsAvailable;
 	
+	private int m_compressionLevel;
+	
+	private long m_chunkRowSize;
+	
 	private Hdf5DataType m_type;
 	
 	private Hdf5DataSet(final Hdf5Group parent, final String name, final Hdf5DataType type) 
@@ -68,21 +72,25 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	static Hdf5DataSet<?> createDataSet(final Hdf5Group parent, final String name,
-			long[] dimensions, Hdf5DataType type) {
+			long[] dimensions, int compressionLevel, long chunkRowSize, Hdf5DataType type) {
 		Hdf5DataSet<?> dataSet = null;
 		
 		try {
 			dataSet = getInstance(parent, name, type);
 			dataSet.createDimensions(dimensions);
+			long propertyListId = dataSet.createChunking(compressionLevel, chunkRowSize);
+
 	        dataSet.setElementId(H5.H5Dcreate(parent.getElementId(), dataSet.getName(),
             		dataSet.getType().getConstants()[0], dataSet.getDataspaceId(),
-                    HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
+                    HDF5Constants.H5P_DEFAULT, propertyListId, HDF5Constants.H5P_DEFAULT));
+	        
+            H5.H5Pclose(propertyListId);
 	        
     		parent.addDataSet(dataSet);
     		dataSet.setOpen(true);
     		
-		} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException | IllegalStateException hlnpiaise) {
-            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be created: " + hlnpiaise.getMessage(), hlnpiaise);
+		} catch (HDF5Exception | NullPointerException | IllegalArgumentException | IllegalStateException hnpiaise) {
+            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be created: " + hnpiaise.getMessage(), hnpiaise);
 			/* dataSet stays null */
         }
 		
@@ -437,6 +445,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				
 				setOpen(true);
 				loadDimensions();
+				loadChunkInfo();
 			}
 		} catch (HDF5LibraryException | NullPointerException | IllegalStateException hlnpise) {
             NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened", hlnpise);
@@ -455,6 +464,40 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         } catch (HDF5Exception | NullPointerException hnpe) {
             NodeLogger.getLogger("HDF5 Files").error("DataSpace could not be created", hnpe);
         }
+	}
+	
+	/**
+	 * 
+	 * @param compressionLevel
+	 * @param chunkRowSize
+	 * @return							id of property list (H5P)
+	 * @throws HDF5Exception
+	 * @throws NullPointerException
+	 * @throws IllegalArgumentException
+	 */
+	private long createChunking(int compressionLevel, long chunkRowSize) throws HDF5Exception, NullPointerException, IllegalArgumentException {
+		long propertyListId = HDF5Constants.H5P_DEFAULT;
+		
+		if (compressionLevel > 0) {
+			if (chunkRowSize > 0) {
+				propertyListId = H5.H5Pcreate(HDF5Constants.H5P_DATASET_CREATE);
+                H5.H5Pset_layout(propertyListId, HDF5Constants.H5D_CHUNKED);
+                
+				long[] chunks = new long[m_dimensions.length];
+				Arrays.fill(chunks, 1);
+				chunks[0] = chunkRowSize;
+                H5.H5Pset_chunk(propertyListId, chunks.length, chunks);
+                H5.H5Pset_deflate(propertyListId, compressionLevel);
+                
+    			m_compressionLevel = compressionLevel;
+    			m_chunkRowSize = chunkRowSize;
+                
+			} else {
+				throw new IllegalArgumentException("chunkRowSize must be >0 due to a compressionLevel >0");
+			}
+		}
+		
+        return propertyListId;
 	}
 	
 	/**
@@ -486,6 +529,27 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
             NodeLogger.getLogger("HDF5 Files").error("Dimensions could not be loaded", hlnpe);
         }
+	}
+	
+	private void loadChunkInfo() throws HDF5LibraryException {
+		long propertyListId = H5.H5Dget_create_plist(getElementId());
+		int layoutType = H5.H5Pget_layout(propertyListId);
+        m_compressionLevel = 0;
+    	m_chunkRowSize = 0;
+		
+		if (layoutType == HDF5Constants.H5D_CHUNKED) {
+			int[] values = new int[1];
+            H5.H5Pget_filter(propertyListId, 0, new int[1], new long[] { 1 }, values, 1, new String[1], new int[1]);
+            m_compressionLevel = values[0];
+            
+            if (m_compressionLevel > 0) {
+    			long[] chunks = new long[m_dimensions.length];
+    	        H5.H5Pget_chunk(propertyListId, chunks.length, chunks);
+    	        m_chunkRowSize = chunks[0];
+    	    }
+		}
+		
+        H5.H5Pclose(propertyListId);
 	}
 	
 	public void close() {
