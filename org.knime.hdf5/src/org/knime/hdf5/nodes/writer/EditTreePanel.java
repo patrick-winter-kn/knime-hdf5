@@ -45,7 +45,7 @@ public class EditTreePanel extends JPanel {
 
 	private static final long serialVersionUID = -9129152385004241047L;
 
-	private final EditTreeConfiguration m_editTreeConfig = new EditTreeConfiguration("temp");
+	private EditTreeConfiguration m_editTreeConfig = new EditTreeConfiguration("temp");
 	
 	private final JTree m_tree = new JTree(new DefaultMutableTreeNode("(null)"));
 
@@ -206,8 +206,8 @@ public class EditTreePanel extends JPanel {
                     		newEdit = new DataSetNodeEdit(parent, newName);
                         	m_editTreeConfig.addDataSetNodeEdit(newEdit);
                 		}
-                    	DefaultMutableTreeNode newChild = new DefaultMutableTreeNode(newEdit);
-                    	parent.add(newChild);
+                    	newEdit.addEditToNode(parent);
+                    	DefaultMutableTreeNode newChild = newEdit.getTreeNode();
                     	path = path.pathByAddingChild(newChild);
                     	parent = newChild;
                     	parentObject = newEdit;
@@ -227,9 +227,7 @@ public class EditTreePanel extends JPanel {
 								// TODO exception
 							}
                 		}
-                        DefaultMutableTreeNode newChild = new DefaultMutableTreeNode(newEdit);
-        				newChild.setAllowsChildren(false);
-        				parent.add(newChild);
+                    	newEdit.addEditToNode(parent);
                 	}
                 } else if (data.get(0) instanceof FlowVariable) {
                     for (int i = 0; i < data.size(); i++) {
@@ -251,9 +249,7 @@ public class EditTreePanel extends JPanel {
                         	m_editTreeConfig.addAttributeNodeEdit(newEdit);
                 		}
                     	
-                        DefaultMutableTreeNode newChild = new DefaultMutableTreeNode(newEdit);
-        				newChild.setAllowsChildren(false);
-        				parent.add(newChild);
+                    	newEdit.addEditToNode(parent);
                 	}
                 }
 				
@@ -337,7 +333,6 @@ public class EditTreePanel extends JPanel {
             			Hdf5Group group = parentGroup.getGroup(groupName);
             			DefaultMutableTreeNode childNode = new DefaultMutableTreeNode(group);
             			parentNode.add(childNode);
-            			
             			addChildrenToNode(childNode);
             		}
             		for (String dataSetName : parentGroup.loadDataSetNames()) {
@@ -416,7 +411,6 @@ public class EditTreePanel extends JPanel {
 			}
 			
 			if (found) {
-				m_editTreeConfig.addGroupNodeEdit(edit);
 				edit.addEditToNode(node);
 			}
 		}
@@ -443,7 +437,6 @@ public class EditTreePanel extends JPanel {
 			}
 			
 			if (found) {
-				m_editTreeConfig.addDataSetNodeEdit(edit);
 				edit.addEditToNode(node);
 			}
 		}
@@ -470,9 +463,10 @@ public class EditTreePanel extends JPanel {
 			}
 			
 			if (found) {
-				m_editTreeConfig.addAttributeNodeEdit(edit);
 				edit.addEditToNode(node);
 			}
 		}
+		
+		m_editTreeConfig = editTreeConfig;
 	}
 }

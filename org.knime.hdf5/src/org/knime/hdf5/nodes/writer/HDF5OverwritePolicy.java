@@ -1,6 +1,9 @@
 package org.knime.hdf5.nodes.writer;
 
-enum OverwritePolicy {
+import java.util.HashMap;
+import java.util.Map;
+
+public enum HDF5OverwritePolicy {
 
     /**
      * Overwrite old files.
@@ -17,19 +20,31 @@ enum OverwritePolicy {
      */
     INSERT("Insert");
 
+	private static final Map<String, HDF5OverwritePolicy> LOOKUP = new HashMap<>();
+
+	static {
+		for (HDF5OverwritePolicy overwritePolicy : HDF5OverwritePolicy.values()) {
+			LOOKUP.put(overwritePolicy.getName(), overwritePolicy);
+		}
+	}
+
     private final String m_name;
 
     /**
      * @param name Name of this policy
      */
-    OverwritePolicy(final String name) {
+    HDF5OverwritePolicy(final String name) {
         m_name = name;
     }
 
+	public static HDF5OverwritePolicy get(String name) {
+		return LOOKUP.get(name);
+	}
+	
     /**
      * @return Name of this policy
      */
-    String getName() {
+    public String getName() {
         return m_name;
     }
 

@@ -39,14 +39,15 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	public void saveSettings(NodeSettingsWO settings) {
 		super.saveSettings(settings);
 		
-		settings.addDataType("columnSpec", m_columnSpec.getType());
+		settings.addDataType(SettingsKey.COLUMN_SPEC_TYPE.getKey(), m_columnSpec.getType());
 	}
 
 	public static ColumnNodeEdit getEditFromSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
 		ColumnNodeEdit edit = null;
 		
 		try {
-			edit = new ColumnNodeEdit(new DataColumnSpecCreator(settings.getString("name"), settings.getDataType("columnSpec")).createSpec());
+			edit = new ColumnNodeEdit(new DataColumnSpecCreator(settings.getString(SettingsKey.NAME.getKey()),
+					settings.getDataType(SettingsKey.COLUMN_SPEC_TYPE.getKey())).createSpec());
 		
 		} catch (UnsupportedDataTypeException udte) {
 			throw new InvalidSettingsException(udte.getMessage());
@@ -55,8 +56,12 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		return edit;
 	}
 	
+	@Override
 	public void addEditToNode(DefaultMutableTreeNode parentNode) {
-		parentNode.add(new DefaultMutableTreeNode(this));
+		DefaultMutableTreeNode node = new DefaultMutableTreeNode(this);
+		parentNode.add(node);
+		node.setAllowsChildren(false);
+		m_treeNode = node;
 	}
 	
 	public static class ColumnNodeMenu extends JPopupMenu {
@@ -82,9 +87,6 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	                    	DefaultMutableTreeNode parent = (DefaultMutableTreeNode) m_node.getParent();
 	                    	DataSetNodeEdit parentEdit = (DataSetNodeEdit) parent.getUserObject();
 	                    	parentEdit.removeColumnNodeEdit(edit);
-	                    	parent.remove(m_node);
-	        				((DefaultTreeModel) (m_tree.getModel())).reload();
-	        				m_tree.makeVisible(new TreePath(parent.getPath()));
 	                    	if (parent.getChildCount() == 0) {
 		                    	DefaultMutableTreeNode grandParent = (DefaultMutableTreeNode) parent.getParent();
 								Object grandParentObject = grandParent.getUserObject();
@@ -93,10 +95,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		                    	} else {
 		                    		m_editTreeConfig.removeDataSetNodeEdit(parentEdit);
 		                    	}
-		                    	grandParent.remove(parent);
-		        				((DefaultTreeModel) (m_tree.getModel())).reload();
-		        				m_tree.makeVisible(new TreePath(grandParent.getPath()));
 	                    	}
+	        				((DefaultTreeModel) (m_tree.getModel())).reload();
+	        				TreePath path = new TreePath(parent.getPath());
+	        				path = parent.getChildCount() > 0 ? path.pathByAddingChild(parent.getFirstChild()) : path;
+	        				m_tree.makeVisible(path);
 						}
     				}
     			});

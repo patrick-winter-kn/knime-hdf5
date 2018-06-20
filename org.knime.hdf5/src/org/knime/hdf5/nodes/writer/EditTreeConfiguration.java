@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 
+import javax.swing.tree.DefaultMutableTreeNode;
+
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
@@ -51,14 +53,17 @@ public class EditTreeConfiguration {
 	
 	public void removeGroupNodeEdit(GroupNodeEdit edit) {
 		m_groupEdits.remove(edit);
+		((DefaultMutableTreeNode) edit.getTreeNode().getParent()).remove(edit.getTreeNode());
 	}
 	
 	public void removeDataSetNodeEdit(DataSetNodeEdit edit) {
 		m_dataSetEdits.remove(edit);
+		((DefaultMutableTreeNode) edit.getTreeNode().getParent()).remove(edit.getTreeNode());
 	}
 	
 	public void removeAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.remove(edit);
+		((DefaultMutableTreeNode) edit.getTreeNode().getParent()).remove(edit.getTreeNode());
 	}
 	
 	void saveConfiguration(NodeSettingsWO settings) {

@@ -21,14 +21,16 @@ public enum Hdf5KnimeDataType {
 	STRING;			// data type is a String
 
 	public static Hdf5KnimeDataType getKnimeDataType(DataType type) throws UnsupportedDataTypeException {
-		if (type.equals(IntCell.TYPE)) {	
-			return INTEGER;
-		} else if (type.equals(LongCell.TYPE)) {	
-			return LONG;
-		} else if (type.equals(DoubleCell.TYPE)) {	
-			return DOUBLE;
-		} else if (type.equals(StringCell.TYPE)) {	
-			return STRING;
+		if (type != null) {
+			if (type.equals(IntCell.TYPE)) {	
+				return INTEGER;
+			} else if (type.equals(LongCell.TYPE)) {	
+				return LONG;
+			} else if (type.equals(DoubleCell.TYPE)) {	
+				return DOUBLE;
+			} else if (type.equals(StringCell.TYPE)) {	
+				return STRING;
+			}
 		}
 		throw new UnsupportedDataTypeException("Unknown knimeDataType");
 	}
@@ -45,7 +47,6 @@ public enum Hdf5KnimeDataType {
 			// TODO see if useless
 			return null;
 			//throw new UnsupportedDataTypeException("Unknown knimeDataType");
-		
 		}
 	}
 	

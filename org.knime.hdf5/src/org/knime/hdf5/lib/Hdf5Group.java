@@ -14,6 +14,7 @@ import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
+import org.knime.hdf5.nodes.writer.HDF5OverwritePolicy;
 import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
 
 import hdf.hdf5lib.H5;
@@ -378,7 +379,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 			
 		} catch (IOException ioe) {
 			try {
-				if (edit.isOverwrite()) {
+				if (edit.getOverwritePolicy() == HDF5OverwritePolicy.OVERWRITE) {
 					dataSet = getDataSet(edit.getName());
 					
 					// TODO try that it's also possible to overwrite when the types or dimensions differ

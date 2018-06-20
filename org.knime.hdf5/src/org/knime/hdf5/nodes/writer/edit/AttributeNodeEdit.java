@@ -49,7 +49,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	private int m_stringLength;
 	
-	// TODO enum
 	private boolean m_overwrite;
 
 	public AttributeNodeEdit(DefaultMutableTreeNode parent, FlowVariable var) {
@@ -141,25 +140,25 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	@Override
 	public void saveSettings(NodeSettingsWO settings) {
 		super.saveSettings(settings);
-		settings.addString("flowVariableName", m_flowVariableName);
+		settings.addString(SettingsKey.FLOW_VARIABLE_NAME.getKey(), m_flowVariableName);
 		
 		try {
-			settings.addDataType("knimeType", m_knimeType.getColumnDataType());
+			settings.addDataType(SettingsKey.KNIME_TYPE.getKey(), m_knimeType.getColumnDataType());
 		} catch (UnsupportedDataTypeException udte) {
-			settings.addDataType("knimeType", null);
+			settings.addDataType(SettingsKey.KNIME_TYPE.getKey(), null);
 		}
 		
-		settings.addString("hdfType", m_hdfType.toString());
-		settings.addBoolean("littleEndian", m_endian == Endian.LITTLE_ENDIAN);
-		settings.addBoolean("fixed", m_fixed);
-		settings.addInt("stringLength", m_stringLength);
-		settings.addBoolean("overwrite", m_overwrite);
+		settings.addString(SettingsKey.HDF_TYPE.getKey(), m_hdfType.toString());
+		settings.addBoolean(SettingsKey.LITTLE_ENDIAN.getKey(), m_endian == Endian.LITTLE_ENDIAN);
+		settings.addBoolean(SettingsKey.FIXED.getKey(), m_fixed);
+		settings.addInt(SettingsKey.STRING_LENGTH.getKey(), m_stringLength);
+		settings.addBoolean(SettingsKey.OVERWRITE.getKey(), m_overwrite);
 	}
 
 	public static AttributeNodeEdit loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
 		try {
-			AttributeNodeEdit edit = new AttributeNodeEdit(settings.getString("pathFromFile"), settings.getString("name"),
-					settings.getString("flowVariableName"), Hdf5KnimeDataType.getKnimeDataType(settings.getDataType("knimeType")));
+			AttributeNodeEdit edit = new AttributeNodeEdit(settings.getString(SettingsKey.PATH_FROM_FILE.getKey()), settings.getString(SettingsKey.NAME.getKey()),
+					settings.getString(SettingsKey.FLOW_VARIABLE_NAME.getKey()), Hdf5KnimeDataType.getKnimeDataType(settings.getDataType(SettingsKey.KNIME_TYPE.getKey())));
 			
 			edit.loadProperties(settings);
 			
@@ -172,8 +171,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	public static AttributeNodeEdit getEditFromSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
 		try {
-			AttributeNodeEdit edit = new AttributeNodeEdit(settings.getString("name"), settings.getString("flowVariableName"),
-					Hdf5KnimeDataType.getKnimeDataType(settings.getDataType("knimeType")));
+			AttributeNodeEdit edit = new AttributeNodeEdit(settings.getString(SettingsKey.NAME.getKey()), settings.getString(SettingsKey.FLOW_VARIABLE_NAME.getKey()),
+					Hdf5KnimeDataType.getKnimeDataType(settings.getDataType(SettingsKey.KNIME_TYPE.getKey())));
 			
 			edit.loadProperties(settings);
 			
@@ -185,15 +184,19 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 	
 	private void loadProperties(final NodeSettingsRO settings) throws InvalidSettingsException {
-		setHdfType(HdfDataType.valueOf(settings.getString("hdfType")));
-		setEndian(settings.getBoolean("littleEndian") ? Endian.LITTLE_ENDIAN : Endian.BIG_ENDIAN);
-		setFixed(settings.getBoolean("fixed"));
-		setStringLength(settings.getInt("stringLength"));
-		setOverwrite(settings.getBoolean("overwrite"));
+		setHdfType(HdfDataType.valueOf(settings.getString(SettingsKey.HDF_TYPE.getKey())));
+		setEndian(settings.getBoolean(SettingsKey.LITTLE_ENDIAN.getKey()) ? Endian.LITTLE_ENDIAN : Endian.BIG_ENDIAN);
+		setFixed(settings.getBoolean(SettingsKey.FIXED.getKey()));
+		setStringLength(settings.getInt(SettingsKey.STRING_LENGTH.getKey()));
+		setOverwrite(settings.getBoolean(SettingsKey.OVERWRITE.getKey()));
 	}
 	
+	@Override
 	public void addEditToNode(DefaultMutableTreeNode parentNode) {
-		parentNode.add(new DefaultMutableTreeNode(this));
+		DefaultMutableTreeNode node = new DefaultMutableTreeNode(this);
+		parentNode.add(node);
+		node.setAllowsChildren(false);
+		m_treeNode = node;
 	}
 	
 	public class AttributeNodeMenu extends JPopupMenu {
@@ -246,9 +249,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	                		} else {
 		                    	m_editTreeConfig.removeAttributeNodeEdit(edit);
 	                		}
-	                    	parent.remove(m_node);
 	        				((DefaultTreeModel) (m_tree.getModel())).reload();
-	        				m_tree.makeVisible(new TreePath(parent.getPath()));
+	        				TreePath path = new TreePath(parent.getPath());
+	        				path = parent.getChildCount() > 0 ? path.pathByAddingChild(parent.getFirstChild()) : path;
+	        				m_tree.makeVisible(path);
 						}
     				}
     			});

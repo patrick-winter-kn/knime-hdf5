@@ -28,10 +28,42 @@ import org.knime.core.node.NodeSettingsWO;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 
 public abstract class TreeNodeEdit {
+
+	protected static enum SettingsKey {
+		NAME("name"),
+		PATH_FROM_FILE("pathFromFile"),
+		KNIME_TYPE("knimeType"),
+		HDF_TYPE("hdfType"),
+		LITTLE_ENDIAN("littleEndian"),
+		FIXED("fixed"),
+		STRING_LENGTH("stringLength"),
+		COMPRESSION("compression"),
+		CHUNK_ROW_SIZE("chunkRowSize"),
+		OVERWRITE("overwrite"),
+		OVERWRITE_POLICY("overwritePolicy"),
+		GROUPS("groups"),
+		DATA_SETS("dataSets"),
+		ATTRIBUTES("attributes"),
+		COLUMNS("columns"),
+		FLOW_VARIABLE_NAME("flowVariableName"),
+		COLUMN_SPEC_TYPE("columnSpecType");
+
+		private String m_key;
+
+		private SettingsKey(String key) {
+			m_key = key;
+		}
+		
+		protected String getKey() {
+			return m_key;
+		}
+	}
 	
 	private final String m_pathFromFile;
 	
 	private String m_name;
+	
+	protected DefaultMutableTreeNode m_treeNode;
 
 	TreeNodeEdit(DefaultMutableTreeNode parent, String name) {
 		this(getPathFromFileFromParent(parent), name);
@@ -75,12 +107,16 @@ public abstract class TreeNodeEdit {
 		m_name = name;
 	}
 	
+	public DefaultMutableTreeNode getTreeNode() {
+		return m_treeNode;
+	}
+	
 	public String getPathFromFileWithoutEndSlash() {
 		return !m_pathFromFile.isEmpty() ? m_pathFromFile.substring(0, m_pathFromFile.length() - 1) : "";
 	}
 	
 	public void saveSettings(NodeSettingsWO settings) {
-		settings.addString("name", m_name);
+		settings.addString(SettingsKey.NAME.getKey(), m_name);
 	}
 
 	public static TreeNodeEdit loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {

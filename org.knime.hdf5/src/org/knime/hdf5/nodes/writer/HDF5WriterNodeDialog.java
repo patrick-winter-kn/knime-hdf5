@@ -38,7 +38,9 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.NotConfigurableException;
 import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
+import org.knime.core.node.defaultnodesettings.DialogComponentBoolean;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
+import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.FlowVariableListCellRenderer;
 import org.knime.core.node.workflow.FlowVariable;
@@ -48,6 +50,10 @@ import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 	
 	private SettingsModelString m_filePathSettings;
+	
+	private SettingsModelBoolean m_structureMustMatch;
+	
+	private SettingsModelBoolean m_saveColumnProperties;
 
 	private DefaultListModel<DataColumnSpec> m_columnSpecModel = new DefaultListModel<>();
 	
@@ -61,6 +67,19 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
      */
     public HDF5WriterNodeDialog() {
 		createFileChooser();
+		
+		m_structureMustMatch = SettingsFactory.createStructureMustMatchSettings();
+		DialogComponentBoolean structureMustMatch = new DialogComponentBoolean(m_structureMustMatch,
+				"Structure must match");
+		structureMustMatch.getComponentPanel()
+				.setBorder(BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "Advanced settings:"));
+		addDialogComponent(structureMustMatch);
+		
+		m_saveColumnProperties = SettingsFactory.createStructureMustMatchSettings();
+		DialogComponentBoolean saveColumnProperties = new DialogComponentBoolean(m_saveColumnProperties,
+				"Save column properties");
+		addDialogComponent(saveColumnProperties);
+		
 		
 		JPanel dataPanel = new JPanel();
 		addTab("Data", dataPanel);
@@ -96,7 +115,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 				if (new File(m_filePathSettings.getStringValue()).isFile() || !m_init) {
 					Hdf5File file = null;
 					try {
-						file = getFile(OverwritePolicy.OVERWRITE);
+						file = getFile(HDF5OverwritePolicy.OVERWRITE);
 						m_editTreePanel.updateTreeWithFile(file);
 						
 					} catch (IOException ioe) {
@@ -218,14 +237,14 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		});
     }
     
-    private Hdf5File getFile(OverwritePolicy policy) throws IOException {
+    private Hdf5File getFile(HDF5OverwritePolicy policy) throws IOException {
 		String filePath = m_filePathSettings.getStringValue();
 		
 		try {
 			return Hdf5File.createFile(filePath);
 			
 		} catch (IOException ioe) {
-			if (policy == OverwritePolicy.ABORT) {
+			if (policy == HDF5OverwritePolicy.ABORT) {
 				throw new IOException("Abort: " + ioe.getMessage());
 			} else {
 				return Hdf5File.openFile(filePath, Hdf5File.READ_WRITE_ACCESS);
@@ -256,7 +275,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		
 		Hdf5File file = null;
 		try {
-			file = getFile(OverwritePolicy.OVERWRITE);
+			file = getFile(HDF5OverwritePolicy.OVERWRITE);
 			m_editTreePanel.updateTreeWithFile(file);
 			
 		} catch (IOException ioe) {
@@ -264,11 +283,12 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		} finally {
 			file.close();
 		}
-
+	
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 		try {
 			editTreeConfig.loadConfiguration(settings);
 			m_editTreePanel.loadConfiguration(editTreeConfig);
+			
 		} catch (InvalidSettingsException ise) {
 			new NotConfigurableException(ise.getMessage());
 		}

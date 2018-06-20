@@ -6,10 +6,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 
 final class SettingsFactory {
 
+	static final String COLUMN_PROPERTY_NAMES = "knime.columnnames";
+	
+	static final String COLUMN_PROPERTY_TYPES = "knime.columntypes";
+	
 	private static final String OUTPUT_CONFIG_KEY = "_Output";
 	
 	private static final String OUTPUT_EDIT_TREE_CONFIG_KEY = "fileEditTree";
@@ -62,6 +67,26 @@ final class SettingsFactory {
 	 */
 	static SettingsModelString createFilePathSettings() {
 		return new SettingsModelString("filePath" + OUTPUT_CONFIG_KEY, "");
+	}
+	
+    /**
+	 * Factory method for the source setting of the CheckBox for structure match.
+	 * 
+	 * 
+	 * @return Source <code>SettingsModel</code>
+	 */
+	static SettingsModelBoolean createStructureMustMatchSettings() {
+		return new SettingsModelBoolean("structureMustMatch" + OUTPUT_CONFIG_KEY, false);
+	}
+	
+    /**
+	 * Factory method for the source setting of the CheckBox for saving column properties.
+	 * 
+	 * 
+	 * @return Source <code>SettingsModel</code>
+	 */
+	static SettingsModelBoolean createSaveColumnPropertiesSettings() {
+		return new SettingsModelBoolean("saveColumnProperties" + OUTPUT_CONFIG_KEY, false);
 	}
 	
     /** A new configuration to store the settings of the attribute filter. Also enables the type filter.

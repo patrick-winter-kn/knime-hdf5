@@ -72,25 +72,34 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		m_attributeEdits.add(edit);
 	}
 
-	private void removeGroupNodeEdit(GroupNodeEdit edit) {
+	public void removeGroupNodeEdit(GroupNodeEdit edit) {
 		m_groupEdits.remove(edit);
+		if (getTreeNode() != null) {
+			getTreeNode().remove(edit.getTreeNode());
+		}
 	}
 	
 	public void removeDataSetNodeEdit(DataSetNodeEdit edit) {
 		m_dataSetEdits.remove(edit);
+		if (getTreeNode() != null) {
+			getTreeNode().remove(edit.getTreeNode());
+		}
 	}
 	
 	public void removeAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.remove(edit);
+		if (getTreeNode() != null) {
+			getTreeNode().remove(edit.getTreeNode());
+		}
 	}
 	
 	@Override
 	public void saveSettings(NodeSettingsWO settings) {
 		super.saveSettings(settings);
 		
-        NodeSettingsWO groupSettings = settings.addNodeSettings("groups");
-        NodeSettingsWO dataSetSettings = settings.addNodeSettings("dataSets");
-        NodeSettingsWO attributeSettings = settings.addNodeSettings("attributes");
+        NodeSettingsWO groupSettings = settings.addNodeSettings(SettingsKey.GROUPS.getKey());
+        NodeSettingsWO dataSetSettings = settings.addNodeSettings(SettingsKey.DATA_SETS.getKey());
+        NodeSettingsWO attributeSettings = settings.addNodeSettings(SettingsKey.ATTRIBUTES.getKey());
         
         for (GroupNodeEdit edit : m_groupEdits) {
 	        NodeSettingsWO editSettings = groupSettings.addNodeSettings(edit.getName());
@@ -110,23 +119,23 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	
 	@SuppressWarnings("unchecked")
 	public static GroupNodeEdit loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		GroupNodeEdit edit = new GroupNodeEdit(settings.getString("pathFromFile"), settings.getString("name"));
+		GroupNodeEdit edit = new GroupNodeEdit(settings.getString(SettingsKey.PATH_FROM_FILE.getKey()), settings.getString(SettingsKey.NAME.getKey()));
 		
-        NodeSettingsRO groupSettings = settings.getNodeSettings("groups");
+        NodeSettingsRO groupSettings = settings.getNodeSettings(SettingsKey.GROUPS.getKey());
         Enumeration<NodeSettingsRO> groupEnum = groupSettings.children();
         while (groupEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = groupEnum.nextElement();
         	edit.addGroupNodeEdit(GroupNodeEdit.getEditFromSettings(editSettings));
         }
         
-        NodeSettingsRO dataSetSettings = settings.getNodeSettings("dataSets");
+        NodeSettingsRO dataSetSettings = settings.getNodeSettings(SettingsKey.DATA_SETS.getKey());
         Enumeration<NodeSettingsRO> dataSetEnum = dataSetSettings.children();
         while (dataSetEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = dataSetEnum.nextElement();
         	edit.addDataSetNodeEdit(DataSetNodeEdit.getEditFromSettings(editSettings));
         }
         
-        NodeSettingsRO attributeSettings = settings.getNodeSettings("attributes");
+        NodeSettingsRO attributeSettings = settings.getNodeSettings(SettingsKey.ATTRIBUTES.getKey());
         Enumeration<NodeSettingsRO> attributeEnum = attributeSettings.children();
         while (attributeEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = attributeEnum.nextElement();
@@ -138,23 +147,23 @@ public class GroupNodeEdit extends TreeNodeEdit {
 
 	@SuppressWarnings("unchecked")
 	public static GroupNodeEdit getEditFromSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		GroupNodeEdit edit = new GroupNodeEdit(settings.getString("name"));
+		GroupNodeEdit edit = new GroupNodeEdit(settings.getString(SettingsKey.NAME.getKey()));
 		
-        NodeSettingsRO groupSettings = settings.getNodeSettings("groups");
+        NodeSettingsRO groupSettings = settings.getNodeSettings(SettingsKey.GROUPS.getKey());
         Enumeration<NodeSettingsRO> groupEnum = groupSettings.children();
         while (groupEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = groupEnum.nextElement();
         	edit.addGroupNodeEdit(GroupNodeEdit.getEditFromSettings(editSettings));
         }
         
-        NodeSettingsRO dataSetSettings = settings.getNodeSettings("dataSets");
+        NodeSettingsRO dataSetSettings = settings.getNodeSettings(SettingsKey.DATA_SETS.getKey());
         Enumeration<NodeSettingsRO> dataSetEnum = dataSetSettings.children();
         while (dataSetEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = dataSetEnum.nextElement();
         	edit.addDataSetNodeEdit(DataSetNodeEdit.getEditFromSettings(editSettings));
         }
         
-        NodeSettingsRO attributeSettings = settings.getNodeSettings("attributes");
+        NodeSettingsRO attributeSettings = settings.getNodeSettings(SettingsKey.ATTRIBUTES.getKey());
         Enumeration<NodeSettingsRO> attributeEnum = attributeSettings.children();
         while (attributeEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = attributeEnum.nextElement();
@@ -164,9 +173,11 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		return edit;
 	}
 	
+	@Override
 	public void addEditToNode(DefaultMutableTreeNode parentNode) {
 		DefaultMutableTreeNode node = new DefaultMutableTreeNode(this);
 		parentNode.add(node);
+		m_treeNode = node;
 		
 		for (GroupNodeEdit edit : m_groupEdits) {
 	        edit.addEditToNode(node);
@@ -182,7 +193,6 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 	
 	// TODO maybe try to add it by using setComponentPopupMenu() to the respective tree node
-	
 	public static class GroupNodeMenu extends JPopupMenu {
 
     	private static final long serialVersionUID = -7709804406752499090L;
@@ -230,7 +240,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
                 		newEdit = new GroupNodeEdit(m_node, newName);
                     	m_editTreeConfig.addGroupNodeEdit(newEdit);
             		}
-                	m_node.add(new DefaultMutableTreeNode(newEdit));
+					newEdit.addEditToNode(m_node);
     				((DefaultTreeModel) (m_tree.getModel())).reload();
     				m_tree.makeVisible(new TreePath(m_node.getPath()).pathByAddingChild(m_node.getFirstChild()));
 				}
@@ -254,9 +264,10 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	                		} else {
 		                    	m_editTreeConfig.removeGroupNodeEdit(edit);
 	                		}
-	                    	parent.remove(m_node);
 	        				((DefaultTreeModel) (m_tree.getModel())).reload();
-	        				m_tree.makeVisible(new TreePath(parent.getPath()));
+	        				TreePath path = new TreePath(parent.getPath());
+	        				path = parent.getChildCount() > 0 ? path.pathByAddingChild(parent.getFirstChild()) : path;
+	        				m_tree.makeVisible(path);
 						}
     				}
     			});

@@ -17,7 +17,9 @@ import org.knime.core.node.NodeLogger;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
+import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
 
 import hdf.hdf5lib.H5;
@@ -164,6 +166,38 @@ abstract public class Hdf5TreeElement {
 		return attribute;
 	}
 	
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public <Type> boolean createAndWriteSimpleAttribute(final String name, Type[] values) throws IOException {
+		Hdf5Attribute<Type> attribute = null;
+		Hdf5DataType dataType = null;
+		
+		Class valuesType = values.getClass().getComponentType();
+		if (valuesType == Integer.class) {
+			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.INTEGER, Endian.BIG_ENDIAN),
+					Hdf5KnimeDataType.INTEGER, false, false, 0L);
+			
+		} else if (valuesType == Double.class) {
+			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.DOUBLE, Endian.BIG_ENDIAN),
+					Hdf5KnimeDataType.DOUBLE, false, false, 0L);
+			
+		} else if (valuesType == String.class) {
+			long stringLength = 0;
+			for (Type value : values) {
+				long length = ((String) value).length();
+				stringLength = length > stringLength ? length : stringLength;
+			}
+			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.STRING, Endian.BIG_ENDIAN),
+					Hdf5KnimeDataType.STRING, false, false, stringLength);
+		}
+		
+		if (dataType != null) {
+			attribute = (Hdf5Attribute<Type>) createAttribute(name, values.length, dataType);
+			return attribute.write(values);
+		}
+		
+		return false;
+	}
+	
 	public synchronized Hdf5Attribute<?> getAttribute(final String name) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
@@ -306,25 +340,22 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public Hdf5Attribute<?> createAndWriteAttributeFromFlowVariable(FlowVariable flowVariable, AttributeNodeEdit edit) throws IOException {
+	public boolean createAndWriteAttributeFromFlowVariable(FlowVariable flowVariable, AttributeNodeEdit edit) throws IOException {
 		long stringLength = edit.isFixed() ? edit.getStringLength() : flowVariable.getValueAsString().length();
 		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), edit.getKnimeType(), false, false, stringLength);
 
 		switch (flowVariable.getType()) {
 		case INTEGER:
 			Hdf5Attribute<Integer> attributeInteger = (Hdf5Attribute<Integer>) createAttribute(edit.getName(), 1L, dataType);
-			attributeInteger.write(new Integer[] { flowVariable.getIntValue() });
-			return attributeInteger;
+			return attributeInteger.write(new Integer[] { flowVariable.getIntValue() });
 			
 		case DOUBLE:
 			Hdf5Attribute<Double> attributeDouble = (Hdf5Attribute<Double>) createAttribute(edit.getName(), 1L, dataType);
-			attributeDouble.write(new Double[] { flowVariable.getDoubleValue() });
-			return attributeDouble;
+			return attributeDouble.write(new Double[] { flowVariable.getDoubleValue() });
 			
 		case STRING:
 			Hdf5Attribute<String> attributeString = (Hdf5Attribute<String>) createAttribute(edit.getName(), 1L, dataType);
-			attributeString.write(new String[] { flowVariable.getStringValue() });
-			return attributeString;
+			return attributeString.write(new String[] { flowVariable.getStringValue() });
 			
 		default:
 			throw new UnsupportedDataTypeException("Unknown knimeDataType");

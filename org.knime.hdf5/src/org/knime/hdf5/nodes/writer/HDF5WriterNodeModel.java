@@ -3,8 +3,7 @@ package org.knime.hdf5.nodes.writer;
 import java.io.File;
 import java.io.IOException;
 
-import javax.activation.UnsupportedDataTypeException;
-
+import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataRow;
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.container.CloseableRowIterator;
@@ -14,9 +13,11 @@ import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.ExecutionMonitor;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeCreationContext;
+import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeModel;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
+import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
@@ -30,11 +31,17 @@ public class HDF5WriterNodeModel extends NodeModel {
 
 	private SettingsModelString m_filePathSettings;
 	
+	private SettingsModelBoolean m_structureMustMatch;
+	
+	private SettingsModelBoolean m_saveColumnProperties;
+	
 	private EditTreeConfiguration m_editTreeConfig;
 	
 	protected HDF5WriterNodeModel() {
 		super(1, 0);
 		m_filePathSettings = SettingsFactory.createFilePathSettings();
+		m_structureMustMatch = SettingsFactory.createStructureMustMatchSettings();
+		m_saveColumnProperties = SettingsFactory.createStructureMustMatchSettings();
 		m_editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 	}
 	
@@ -47,34 +54,33 @@ public class HDF5WriterNodeModel extends NodeModel {
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
 		checkForErrors(m_filePathSettings);
 		
-		OverwritePolicy filePolicy = OverwritePolicy.OVERWRITE;
+		HDF5OverwritePolicy filePolicy = HDF5OverwritePolicy.OVERWRITE;
 		Hdf5File file = null;
-		
 		try {
 			file = getFile(filePolicy);
 
 			// TODO find a possibility to estimate exec.setProgress()
-			for (GroupNodeEdit edit : m_editTreeConfig.getGroupNodeEdits()) {
-				String pathFromFile = edit.getPathFromFileWithoutEndSlash();
-				Hdf5Group group = file.getGroupByPath(pathFromFile);
-				createGroupFromEdit(inData[0], exec, group, edit);
-			}
-			
-			for (DataSetNodeEdit edit : m_editTreeConfig.getDataSetNodeEdits()) {
-				String pathFromFile = edit.getPathFromFileWithoutEndSlash();
-				Hdf5Group group = file.getGroupByPath(pathFromFile);
-				createDataSetFromEdit(inData[0], exec, group, edit);
-			}
-			
-			for (AttributeNodeEdit edit : m_editTreeConfig.getAttributeNodeEdits()) {
-				String pathFromFile = edit.getPathFromFileWithoutEndSlash();
+			for (AttributeNodeEdit attributeEdit : m_editTreeConfig.getAttributeNodeEdits()) {
+				String pathFromFile = attributeEdit.getPathFromFileWithoutEndSlash();
 				Hdf5TreeElement treeElement = null;
 				try {
 					treeElement = file.getGroupByPath(pathFromFile);
 				} catch (IOException ioe) {
 					treeElement = file.getDataSetByPath(pathFromFile);
 				}
-				createAttributeFromEdit(treeElement, edit);
+				createAttributeFromEdit(treeElement, attributeEdit);
+			}
+			
+			for (DataSetNodeEdit dataSetEdit : m_editTreeConfig.getDataSetNodeEdits()) {
+				String pathFromFile = dataSetEdit.getPathFromFileWithoutEndSlash();
+				Hdf5Group group = file.getGroupByPath(pathFromFile);
+				createDataSetFromEdit(inData[0], exec, group, dataSetEdit);
+			}
+
+			for (GroupNodeEdit groupEdit : m_editTreeConfig.getGroupNodeEdits()) {
+				String pathFromFile = groupEdit.getPathFromFileWithoutEndSlash();
+				Hdf5Group group = file.getGroupByPath(pathFromFile);
+				createGroupFromEdit(inData[0], exec, group, groupEdit);
 			}
 			
 		} finally {
@@ -84,14 +90,14 @@ public class HDF5WriterNodeModel extends NodeModel {
 		return null;
 	}
 
-	private Hdf5File getFile(OverwritePolicy policy) throws IOException {
+	private Hdf5File getFile(HDF5OverwritePolicy policy) throws IOException {
 		String filePath = m_filePathSettings.getStringValue();
 		
 		try {
 			return Hdf5File.createFile(filePath);
 			
 		} catch (IOException ioe) {
-			if (policy == OverwritePolicy.ABORT) {
+			if (policy == HDF5OverwritePolicy.ABORT) {
 				throw new IOException("Abort: " + ioe.getMessage());
 			} else {
 				return Hdf5File.openFile(filePath, Hdf5File.READ_WRITE_ACCESS);
@@ -99,31 +105,43 @@ public class HDF5WriterNodeModel extends NodeModel {
 		}
 	}
 	
-	private void createGroupFromEdit(BufferedDataTable inputTable, ExecutionContext exec, Hdf5Group parent, GroupNodeEdit edit)
+	private boolean createGroupFromEdit(BufferedDataTable inputTable, ExecutionContext exec, Hdf5Group parent, GroupNodeEdit edit)
 			throws IOException, CanceledExecutionException {
+		boolean success = true;
 		Hdf5Group group = parent.createGroup(edit.getName());
 
-		for (GroupNodeEdit groupEdit : edit.getGroupNodeEdits()) {
-	        createGroupFromEdit(inputTable, exec, group, groupEdit);
+		for (AttributeNodeEdit attributeEdit : edit.getAttributeNodeEdits()) {
+			exec.checkCanceled();
+			success &= createAttributeFromEdit(group, attributeEdit);
 		}
 		
 		for (DataSetNodeEdit dataSetEdit : edit.getDataSetNodeEdits()) {
-	        createDataSetFromEdit(inputTable, exec, group, dataSetEdit);
+			exec.checkCanceled();
+			success &= createDataSetFromEdit(inputTable, exec, group, dataSetEdit);
 		}
 		
-		for (AttributeNodeEdit attributeEdit : edit.getAttributeNodeEdits()) {
-	        createAttributeFromEdit(group, attributeEdit);
+		for (GroupNodeEdit groupEdit : edit.getGroupNodeEdits()) {
+			exec.checkCanceled();
+			success &= createGroupFromEdit(inputTable, exec, group, groupEdit);
 		}
+		
+		return success;
 	}
 	
-	private void createDataSetFromEdit(BufferedDataTable inputTable, ExecutionContext exec, Hdf5Group parent, DataSetNodeEdit edit)
-			throws CanceledExecutionException, UnsupportedDataTypeException {
+	private boolean createDataSetFromEdit(BufferedDataTable inputTable, ExecutionContext exec, Hdf5Group parent, DataSetNodeEdit edit)
+			throws IOException, CanceledExecutionException {
+		boolean success = true;
 		Hdf5DataSet<?> dataSet = parent.createDataSetFromEdit(inputTable.size(), edit);
-
+		
+		for (AttributeNodeEdit attributeEdit : edit.getAttributeNodeEdits()) {
+			exec.checkCanceled();
+			success &= createAttributeFromEdit(dataSet, attributeEdit);
+		}
+		
 		DataTableSpec tableSpec = inputTable.getDataTableSpec();
-		int[] specIndex = new int[edit.getColumnSpecs().length];
-		for (int i = 0; i < specIndex.length; i++) {
-			specIndex[i] = tableSpec.findColumnIndex(edit.getColumnSpecs()[i].getName());
+		int[] specIndices = new int[edit.getColumnSpecs().length];
+		for (int i = 0; i < specIndices.length; i++) {
+			specIndices[i] = tableSpec.findColumnIndex(edit.getColumnSpecs()[i].getName());
 		}
 		
 		CloseableRowIterator iter = inputTable.iterator();
@@ -132,14 +150,33 @@ public class HDF5WriterNodeModel extends NodeModel {
 			exec.checkCanceled();
 			
 			DataRow row = iter.next();
-			dataSet.writeRowToDataSet(row, specIndex, rowId);
+			success &= dataSet.writeRowToDataSet(row, specIndices, rowId);
 			
 			rowId++;
 		}
+		
+		if (m_saveColumnProperties.getBooleanValue()) {
+			String[] columnNames = new String[specIndices.length];
+			String[] columnTypes = new String[specIndices.length];
+			for (int i = 0; i < columnNames.length; i++) {
+				DataColumnSpec spec = tableSpec.getColumnSpec(specIndices[i]);
+				columnNames[i] = spec.getName();
+				columnTypes[i] = spec.getType().getName();
+			}
+
+			try {
+				success &= dataSet.createAndWriteSimpleAttribute(SettingsFactory.COLUMN_PROPERTY_NAMES, columnNames);
+				success &= dataSet.createAndWriteSimpleAttribute(SettingsFactory.COLUMN_PROPERTY_TYPES, columnTypes);
+			} catch (IOException ioe) {
+				NodeLogger.getLogger("HDF5 Files").warn("Property attributes of dataSet \"" + dataSet.getPathFromFileWithName() + "\" could not be written completely");
+			}
+		}
+		
+		return success;
 	}
 	
-	private void createAttributeFromEdit(Hdf5TreeElement parent, AttributeNodeEdit edit) throws IOException {
-		parent.createAndWriteAttributeFromFlowVariable(getAvailableFlowVariables().get(edit.getFlowVariableName()), edit);
+	private boolean createAttributeFromEdit(Hdf5TreeElement parent, AttributeNodeEdit edit) throws IOException {
+		return parent.createAndWriteAttributeFromFlowVariable(getAvailableFlowVariables().get(edit.getFlowVariableName()), edit);
 	}
 	
 	@Override
@@ -169,6 +206,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 	@Override
 	protected void saveSettingsTo(NodeSettingsWO settings) {
 		m_filePathSettings.saveSettingsTo(settings);
+		m_structureMustMatch.saveSettingsTo(settings);
+		m_saveColumnProperties.saveSettingsTo(settings);
 		m_editTreeConfig.saveConfiguration(settings);
 	}
 
@@ -187,6 +226,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 	@Override
 	protected void loadValidatedSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
 		m_filePathSettings.loadSettingsFrom(settings);
+		m_structureMustMatch.loadSettingsFrom(settings);
+		m_saveColumnProperties.loadSettingsFrom(settings);
 		
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 		editTreeConfig.loadConfiguration(settings);
