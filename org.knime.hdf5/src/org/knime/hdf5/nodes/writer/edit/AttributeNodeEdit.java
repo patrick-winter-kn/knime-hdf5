@@ -198,6 +198,16 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		node.setAllowsChildren(false);
 		m_treeNode = node;
 	}
+
+	@Override
+	protected boolean getValidation() {
+		return super.getValidation();
+	}
+
+	@Override
+	protected boolean isInConflict(TreeNodeEdit edit) {
+		return edit instanceof AttributeNodeEdit && !edit.equals(this) && edit.getName().equals(getName());
+	}
 	
 	public class AttributeNodeMenu extends JPopupMenu {
 
@@ -353,6 +363,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				
 				((DefaultTreeModel) (m_tree.getModel())).reload();
 				m_tree.makeVisible(new TreePath(m_node.getPath()));
+				
+				edit.validate();
 			}
 		}
     }

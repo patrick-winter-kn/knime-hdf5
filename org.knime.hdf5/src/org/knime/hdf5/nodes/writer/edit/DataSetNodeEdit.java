@@ -175,10 +175,12 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		m_knimeType = m_knimeType != null && knimeType.getConvertibleHdfTypes().contains(m_knimeType.getEquivalentHdfType()) ? m_knimeType : knimeType;
 		m_hdfType = m_knimeType.getConvertibleHdfTypes().contains(m_hdfType) ? m_hdfType : m_knimeType.getEquivalentHdfType();
 		m_columnEdits.add(edit);
+		edit.validate();
 	}
 
 	public void addAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.add(edit);
+		edit.validate();
 	}
 
 	public void removeColumnNodeEdit(ColumnNodeEdit edit) {
@@ -312,6 +314,16 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		for (AttributeNodeEdit edit : m_attributeEdits) {
 	        edit.addEditToNode(node);
 		}
+	}
+	
+	@Override
+	protected boolean getValidation() {
+		return super.getValidation() && !getName().contains("/");
+	}
+
+	@Override
+	protected boolean isInConflict(TreeNodeEdit edit) {
+		return (edit instanceof DataSetNodeEdit || edit instanceof GroupNodeEdit) && !edit.equals(this) && edit.getName().equals(getName());
 	}
 	
 	public class DataSetNodeMenu extends JPopupMenu {
@@ -581,6 +593,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				
 				((DefaultTreeModel) (m_tree.getModel())).reload();
 				m_tree.makeVisible(new TreePath(((DefaultMutableTreeNode) m_node.getFirstChild()).getPath()));
+				
+				edit.validate();
 			}
 		}
     }

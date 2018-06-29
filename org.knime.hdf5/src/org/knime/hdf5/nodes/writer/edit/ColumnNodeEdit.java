@@ -64,6 +64,16 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		m_treeNode = node;
 	}
 	
+	@Override
+	protected boolean getValidation() {
+		return true;
+	}
+
+	@Override
+	protected boolean isInConflict(TreeNodeEdit edit) {
+		return false;
+	}
+	
 	public static class ColumnNodeMenu extends JPopupMenu {
 
 		private static final long serialVersionUID = 7696321716083384515L;

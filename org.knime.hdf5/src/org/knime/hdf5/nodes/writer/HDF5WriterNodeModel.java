@@ -27,6 +27,8 @@ import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.GroupNodeEdit;
 
+import hdf.hdf5lib.exceptions.HDF5LibraryException;
+
 public class HDF5WriterNodeModel extends NodeModel {
 
 	private SettingsModelString m_filePathSettings;
@@ -52,12 +54,11 @@ public class HDF5WriterNodeModel extends NodeModel {
 
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		checkForErrors(m_filePathSettings);
+		checkForErrors(m_filePathSettings, m_editTreeConfig);
 		
-		HDF5OverwritePolicy filePolicy = HDF5OverwritePolicy.OVERWRITE;
 		Hdf5File file = null;
 		try {
-			file = getFile(filePolicy);
+			file = getFile(HDF5OverwritePolicy.OVERWRITE);
 
 			// TODO find a possibility to estimate exec.setProgress()
 			for (AttributeNodeEdit attributeEdit : m_editTreeConfig.getAttributeNodeEdits()) {
@@ -106,7 +107,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 	}
 	
 	private boolean createGroupFromEdit(BufferedDataTable inputTable, ExecutionContext exec, Hdf5Group parent, GroupNodeEdit edit)
-			throws IOException, CanceledExecutionException {
+			throws IOException, CanceledExecutionException, HDF5LibraryException, NullPointerException {
 		boolean success = true;
 		Hdf5Group group = parent.createGroup(edit.getName());
 
@@ -129,7 +130,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 	}
 	
 	private boolean createDataSetFromEdit(BufferedDataTable inputTable, ExecutionContext exec, Hdf5Group parent, DataSetNodeEdit edit)
-			throws IOException, CanceledExecutionException {
+			throws IOException, CanceledExecutionException, HDF5LibraryException, NullPointerException {
 		boolean success = true;
 		Hdf5DataSet<?> dataSet = parent.createDataSetFromEdit(inputTable.size(), edit);
 		
@@ -165,8 +166,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 			}
 
 			try {
-				success &= dataSet.createAndWriteSimpleAttribute(SettingsFactory.COLUMN_PROPERTY_NAMES, columnNames);
-				success &= dataSet.createAndWriteSimpleAttribute(SettingsFactory.COLUMN_PROPERTY_TYPES, columnTypes);
+				success &= dataSet.createAndWriteAttribute(SettingsFactory.COLUMN_PROPERTY_NAMES, columnNames);
+				success &= dataSet.createAndWriteAttribute(SettingsFactory.COLUMN_PROPERTY_TYPES, columnTypes);
 			} catch (IOException ioe) {
 				NodeLogger.getLogger("HDF5 Files").warn("Property attributes of dataSet \"" + dataSet.getPathFromFileWithName() + "\" could not be written completely");
 			}
@@ -175,23 +176,44 @@ public class HDF5WriterNodeModel extends NodeModel {
 		return success;
 	}
 	
-	private boolean createAttributeFromEdit(Hdf5TreeElement parent, AttributeNodeEdit edit) throws IOException {
-		return parent.createAndWriteAttributeFromFlowVariable(getAvailableFlowVariables().get(edit.getFlowVariableName()), edit);
+	private boolean createAttributeFromEdit(Hdf5TreeElement parent, AttributeNodeEdit edit) throws IOException, HDF5LibraryException, NullPointerException {
+		return parent.createAndWriteAttribute(edit, getAvailableFlowVariables().get(edit.getFlowVariableName()));
 	}
 	
 	@Override
 	protected DataTableSpec[] configure(DataTableSpec[] inSpecs) throws InvalidSettingsException {
-		checkForErrors(m_filePathSettings);
+		checkForErrors(m_filePathSettings, m_editTreeConfig);
 		return null;
     }
 	
-	private static void checkForErrors(SettingsModelString filePathSettings) throws InvalidSettingsException {
+	private static void checkForErrors(SettingsModelString filePathSettings, EditTreeConfiguration editTreeConfig) throws InvalidSettingsException {
 		String filePath = filePathSettings.getStringValue();
 		if (filePath.trim().isEmpty()) {
 			throw new InvalidSettingsException("No file selected");
 		}
 		if (!new File(filePath).exists()) {
 			throw new InvalidSettingsException("The selected file \"" + filePath + "\" does not exist");
+		}
+		
+		for (AttributeNodeEdit attributeEdit : editTreeConfig.getAttributeNodeEdits()) {
+			if (!attributeEdit.isValid()) {
+				throw new InvalidSettingsException("The settings for attribute \"" + attributeEdit.getPathFromFile()
+						+ attributeEdit.getName() + "\" are not valid");
+			}
+		}
+		
+		for (DataSetNodeEdit dataSetEdit : editTreeConfig.getDataSetNodeEdits()) {
+			if (!dataSetEdit.isValid()) {
+				throw new InvalidSettingsException("The settings for dataSet \"" + dataSetEdit.getPathFromFile()
+						+ dataSetEdit.getName() + "\" are not valid");
+			}
+		}
+
+		for (GroupNodeEdit groupEdit : editTreeConfig.getGroupNodeEdits()) {
+			if (!groupEdit.isValid()) {
+				throw new InvalidSettingsException("The settings for group \"" + groupEdit.getPathFromFile()
+						+ groupEdit.getName() + "\" are not valid");
+			}
 		}
 	}
 
@@ -217,10 +239,10 @@ public class HDF5WriterNodeModel extends NodeModel {
 		filePathSettings.validateSettings(settings);
 		filePathSettings.loadSettingsFrom(settings);
 		
-		checkForErrors(filePathSettings);
-		
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 		editTreeConfig.loadConfiguration(settings);
+		
+		checkForErrors(filePathSettings, editTreeConfig);
 	}
 
 	@Override

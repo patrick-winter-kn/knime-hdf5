@@ -71,16 +71,16 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		m_structureMustMatch = SettingsFactory.createStructureMustMatchSettings();
 		DialogComponentBoolean structureMustMatch = new DialogComponentBoolean(m_structureMustMatch,
 				"Structure must match");
-		structureMustMatch.getComponentPanel()
-				.setBorder(BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "Advanced settings:"));
-		addDialogComponent(structureMustMatch);
-		
 		m_saveColumnProperties = SettingsFactory.createStructureMustMatchSettings();
 		DialogComponentBoolean saveColumnProperties = new DialogComponentBoolean(m_saveColumnProperties,
 				"Save column properties");
+		
+        createNewGroup("Advanced settings:");
+		addDialogComponent(structureMustMatch);
 		addDialogComponent(saveColumnProperties);
+        closeCurrentGroup();
 		
-		
+        
 		JPanel dataPanel = new JPanel();
 		addTab("Data", dataPanel);
 		dataPanel.setLayout(new BoxLayout(dataPanel, BoxLayout.X_AXIS));

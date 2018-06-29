@@ -62,14 +62,17 @@ public class GroupNodeEdit extends TreeNodeEdit {
 
 	private void addGroupNodeEdit(GroupNodeEdit edit) {
 		m_groupEdits.add(edit);
+		edit.validate();
 	}
 	
 	public void addDataSetNodeEdit(DataSetNodeEdit edit) {
 		m_dataSetEdits.add(edit);
+		edit.validate();
 	}
 	
 	public void addAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.add(edit);
+		edit.validate();
 	}
 
 	public void removeGroupNodeEdit(GroupNodeEdit edit) {
@@ -77,6 +80,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
 		}
+		// checkValidation(); for invalid siblings
 	}
 	
 	public void removeDataSetNodeEdit(DataSetNodeEdit edit) {
@@ -84,6 +88,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
 		}
+		// checkValidation(); for invalid siblings
 	}
 	
 	public void removeAttributeNodeEdit(AttributeNodeEdit edit) {
@@ -91,6 +96,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
 		}
+		// checkValidation(); for invalid siblings
 	}
 	
 	@Override
@@ -190,6 +196,16 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		for (AttributeNodeEdit edit : m_attributeEdits) {
 	        edit.addEditToNode(node);
 		}
+	}
+	
+	@Override
+	protected boolean getValidation() {
+		return super.getValidation() && !getName().contains("/");
+	}
+
+	@Override
+	protected boolean isInConflict(TreeNodeEdit edit) {
+		return (edit instanceof GroupNodeEdit || edit instanceof DataSetNodeEdit) && !edit.equals(this) && edit.getName().equals(getName());
 	}
 	
 	// TODO maybe try to add it by using setComponentPopupMenu() to the respective tree node
@@ -307,6 +323,8 @@ public class GroupNodeEdit extends TreeNodeEdit {
 				edit.setName(m_nameField.getText());
 				((DefaultTreeModel) (m_tree.getModel())).reload();
 				m_tree.makeVisible(new TreePath(m_node.getPath()));
+
+				edit.validate();
 			}
 		}
     }

@@ -64,6 +64,8 @@ public abstract class TreeNodeEdit {
 	private String m_name;
 	
 	protected DefaultMutableTreeNode m_treeNode;
+	
+	protected boolean m_valid;
 
 	TreeNodeEdit(DefaultMutableTreeNode parent, String name) {
 		this(getPathFromFileFromParent(parent), name);
@@ -106,9 +108,21 @@ public abstract class TreeNodeEdit {
 	public void setName(String name) {
 		m_name = name;
 	}
-	
 	public DefaultMutableTreeNode getTreeNode() {
 		return m_treeNode;
+	}
+
+	public boolean isValid() {
+		return m_valid;
+	}
+	
+	private void setValid(boolean valid) {
+		m_valid = valid;
+	}
+	
+	public boolean validate() {
+		setValid(getValidation());
+		return isValid();
 	}
 	
 	public String getPathFromFileWithoutEndSlash() {
@@ -124,6 +138,29 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public abstract void addEditToNode(DefaultMutableTreeNode parentNode);
+	
+	@SuppressWarnings("unchecked")
+	protected boolean getValidation() {
+		// TODO improve edit creation before
+		/*List<TreeNodeEdit> editsInConflict = new ArrayList<>();
+		List<DefaultMutableTreeNode> children = Collections.list(m_treeNode.getParent().children());
+		for (DefaultMutableTreeNode child : children) {
+			TreeNodeEdit edit = (TreeNodeEdit) child.getUserObject();
+			if (isInConflict(edit)) {
+				editsInConflict.add(edit);
+			}
+		}
+		if (!editsInConflict.isEmpty()) {
+			for (TreeNodeEdit edit : editsInConflict) {
+				edit.setValid(false);
+			}
+			return false;
+		}*/
+		
+		return true;
+	}
+	
+	protected abstract boolean isInConflict(TreeNodeEdit edit);
 	
 	protected static abstract class PropertiesDialog<Edit extends TreeNodeEdit> extends JDialog {
 

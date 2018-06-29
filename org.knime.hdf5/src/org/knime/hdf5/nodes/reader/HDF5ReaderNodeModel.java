@@ -5,8 +5,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.Map;
+import java.util.TreeMap;
 
 import javax.activation.UnsupportedDataTypeException;
 
@@ -212,7 +212,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		try {
 			if (failIfRowSizeDiffersSettings.getBooleanValue()) {
 				String[] dataSetPaths = dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
-				Set<Long> rowSizes = new TreeSet<>();
+				Map<Long, List<String>> rowSizes = new TreeMap<>();
 				for (String dataSetPath : dataSetPaths) {
 					Hdf5DataSet<?> dataSet = null;
 					try {
@@ -221,7 +221,12 @@ public class HDF5ReaderNodeModel extends NodeModel {
 						throw new InvalidSettingsException(ioe.getMessage(), ioe);
 					}
 					
-					rowSizes.add(dataSet.getDimensions()[0]);
+					long rowCount = dataSet.getDimensions()[0];
+					if (!rowSizes.containsKey(rowCount)) {
+						List<String> paths = new ArrayList<>();
+						rowSizes.put(rowCount, paths);
+					}
+					rowSizes.get(rowCount).add(dataSetPath);
 				}
 				if (rowSizes.size() > 1) {
 					throw new InvalidSettingsException("Found unequal row sizes " + rowSizes);

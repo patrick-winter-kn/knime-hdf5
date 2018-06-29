@@ -41,14 +41,17 @@ public class EditTreeConfiguration {
 
 	public void addGroupNodeEdit(GroupNodeEdit edit) {
 		m_groupEdits.add(edit);
+		edit.validate();
 	}
 	
 	public void addDataSetNodeEdit(DataSetNodeEdit edit) {
 		m_dataSetEdits.add(edit);
+		edit.validate();
 	}
 	
 	public void addAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.add(edit);
+		edit.validate();
 	}
 	
 	public void removeGroupNodeEdit(GroupNodeEdit edit) {
