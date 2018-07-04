@@ -391,6 +391,8 @@ public class Hdf5Attribute<Type> {
 	                for (int j = 0; j < dims.length; j++) {
 	                    dimension *= dims[j];
 	                }
+	            } else {
+	            	dimension = 0;
 	            }
 				
 				m_dimension = dimension;

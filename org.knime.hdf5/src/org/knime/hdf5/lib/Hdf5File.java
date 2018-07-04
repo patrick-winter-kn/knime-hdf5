@@ -99,6 +99,10 @@ public class Hdf5File extends Hdf5Group {
 		return file;
 	}
 	
+	public synchronized static boolean existsFile(final String filePath) {
+		return new File(filePath).exists();
+	}
+	
 	protected boolean isOpen() {
 		return m_accessors.containsKey(Thread.currentThread());
 	}

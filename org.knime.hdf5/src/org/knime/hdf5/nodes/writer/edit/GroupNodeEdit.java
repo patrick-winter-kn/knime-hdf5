@@ -40,7 +40,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		super(parent, name);
 	}
 	
-	private GroupNodeEdit(String name) {
+	protected GroupNodeEdit(String name) {
 		super(name);
 	}
 	
@@ -60,7 +60,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		return m_attributeEdits.toArray(new AttributeNodeEdit[] {});
 	}
 
-	private void addGroupNodeEdit(GroupNodeEdit edit) {
+	protected void addGroupNodeEdit(GroupNodeEdit edit) {
 		m_groupEdits.add(edit);
 		edit.validate();
 	}

@@ -38,6 +38,7 @@ import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
 import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.ColumnNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.GroupNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit;
 
@@ -68,9 +69,11 @@ public class EditTreePanel extends JPanel {
 			private final Icon newColumnIcon = loadIcon(EditTreePanel.class, "/icon/column_new.png");
 			private final Icon newAttributeIcon = loadIcon(EditTreePanel.class, "/icon/attribute_new.png");
 			private final Icon newDataSetIcon = loadIcon(EditTreePanel.class, "/icon/dataSet_new.png");
+			private final Icon newFileIcon = loadIcon(EditTreePanel.class, "/icon/file_new.png");
 			private final Icon newGroupIcon = loadIcon(EditTreePanel.class, "/icon/group_new.png");
 			private final Icon invalidAttributeIcon = loadIcon(EditTreePanel.class, "/icon/attribute_invalid.png");
 			private final Icon invalidDataSetIcon = loadIcon(EditTreePanel.class, "/icon/dataSet_invalid.png");
+			private final Icon invalidFileIcon = loadIcon(EditTreePanel.class, "/icon/file_invalid.png");
 			private final Icon invalidGroupIcon = loadIcon(EditTreePanel.class, "/icon/group_invalid.png");
 			
 			private Icon loadIcon(
@@ -136,10 +139,13 @@ public class EditTreePanel extends JPanel {
 							icon = edit.isValid() ? newAttributeIcon : invalidAttributeIcon;
 							
 						} else if (edit instanceof DataSetNodeEdit) {
-							icon = edit.isValid() ? newDataSetIcon : invalidDataSetIcon ;
+							icon = edit.isValid() ? newDataSetIcon : invalidDataSetIcon;
+							
+						} else if (edit instanceof FileNodeEdit) {
+							icon = edit.isValid() ? newFileIcon : invalidFileIcon;
 							
 						} else if (edit instanceof GroupNodeEdit) {
-							icon = edit.isValid() ? newGroupIcon : invalidGroupIcon ;
+							icon = edit.isValid() ? newGroupIcon : invalidGroupIcon;
 						}
 					}
 
@@ -280,6 +286,7 @@ public class EditTreePanel extends JPanel {
     			}
     		}
     		
+    		// TODO check if this method does not get called twice
     		private void createMenu(MouseEvent e) {
     			TreePath path = m_tree.getPathForLocation(e.getX(), e.getY());
 				if (path != null) {
@@ -326,11 +333,20 @@ public class EditTreePanel extends JPanel {
 	JTree getTree() {
 		return m_tree;
 	}
+	
+	void prepareForFile(FileNodeEdit edit) {
+		((DefaultTreeModel) m_tree.getModel()).setRoot(new DefaultMutableTreeNode(edit));
+		m_editTreeConfig.setFileNodeEdit(edit);
+	}
 
 	void updateTreeWithFile(Hdf5File file) {
 		DefaultMutableTreeNode root = new DefaultMutableTreeNode(file);
 		((DefaultTreeModel) m_tree.getModel()).setRoot(root);
 		addChildrenToNode(root);
+		if (root.getChildCount() > 0) {
+			TreePath path = new TreePath(root.getPath());
+			m_tree.makeVisible(path.pathByAddingChild(root.getFirstChild()));
+		}
 	}
     
     private void addChildrenToNode(DefaultMutableTreeNode parentNode) {
@@ -390,6 +406,9 @@ public class EditTreePanel extends JPanel {
     }
 
 	void saveConfiguration(EditTreeConfiguration editTreeConfig) {
+		if (m_editTreeConfig.getFileNodeEdit() != null) {
+			editTreeConfig.setFileNodeEdit(m_editTreeConfig.getFileNodeEdit());
+		}
 		for (GroupNodeEdit edit : m_editTreeConfig.getGroupNodeEdits()) {
 			editTreeConfig.addGroupNodeEdit(edit);
 		}
@@ -403,6 +422,10 @@ public class EditTreePanel extends JPanel {
 	
 	@SuppressWarnings("unchecked")
 	void loadConfiguration(EditTreeConfiguration editTreeConfig) {
+		if (editTreeConfig.getFileNodeEdit() != null) {
+			editTreeConfig.getFileNodeEdit().setEditAsRoot((DefaultTreeModel) m_tree.getModel());;
+		}
+		
 		for (GroupNodeEdit edit : editTreeConfig.getGroupNodeEdits()) {
 			String[] pathFromFile = edit.getPathFromFile().split("/");
 			DefaultMutableTreeNode node = (DefaultMutableTreeNode) m_tree.getModel().getRoot();

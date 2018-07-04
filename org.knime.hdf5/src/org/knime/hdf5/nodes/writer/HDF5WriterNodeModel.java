@@ -25,6 +25,7 @@ import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.GroupNodeEdit;
 
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
@@ -56,54 +57,76 @@ public class HDF5WriterNodeModel extends NodeModel {
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
 		checkForErrors(m_filePathSettings, m_editTreeConfig);
 		
-		Hdf5File file = null;
-		try {
-			file = getFile(HDF5OverwritePolicy.OVERWRITE);
-
-			// TODO find a possibility to estimate exec.setProgress()
-			for (AttributeNodeEdit attributeEdit : m_editTreeConfig.getAttributeNodeEdits()) {
-				String pathFromFile = attributeEdit.getPathFromFileWithoutEndSlash();
-				Hdf5TreeElement treeElement = null;
-				try {
-					treeElement = file.getGroupByPath(pathFromFile);
-				} catch (IOException ioe) {
-					treeElement = file.getDataSetByPath(pathFromFile);
+		String filePath = m_filePathSettings.getStringValue();
+		if (Hdf5File.existsFile(filePath)) {
+			Hdf5File file = null;
+			try {
+				file = Hdf5File.openFile(filePath, Hdf5File.READ_WRITE_ACCESS);
+				
+				// TODO find a possibility to estimate exec.setProgress()
+				for (AttributeNodeEdit attributeEdit : m_editTreeConfig.getAttributeNodeEdits()) {
+					String pathFromFile = attributeEdit.getPathFromFileWithoutEndSlash();
+					Hdf5TreeElement treeElement = null;
+					try {
+						treeElement = file.getGroupByPath(pathFromFile);
+					} catch (IOException ioe) {
+						treeElement = file.getDataSetByPath(pathFromFile);
+					}
+					createAttributeFromEdit(treeElement, attributeEdit);
 				}
-				createAttributeFromEdit(treeElement, attributeEdit);
-			}
-			
-			for (DataSetNodeEdit dataSetEdit : m_editTreeConfig.getDataSetNodeEdits()) {
-				String pathFromFile = dataSetEdit.getPathFromFileWithoutEndSlash();
-				Hdf5Group group = file.getGroupByPath(pathFromFile);
-				createDataSetFromEdit(inData[0], exec, group, dataSetEdit);
-			}
+				
+				for (DataSetNodeEdit dataSetEdit : m_editTreeConfig.getDataSetNodeEdits()) {
+					String pathFromFile = dataSetEdit.getPathFromFileWithoutEndSlash();
+					Hdf5Group group = file.getGroupByPath(pathFromFile);
+					createDataSetFromEdit(inData[0], exec, group, dataSetEdit);
+				}
 
-			for (GroupNodeEdit groupEdit : m_editTreeConfig.getGroupNodeEdits()) {
-				String pathFromFile = groupEdit.getPathFromFileWithoutEndSlash();
-				Hdf5Group group = file.getGroupByPath(pathFromFile);
-				createGroupFromEdit(inData[0], exec, group, groupEdit);
+				for (GroupNodeEdit groupEdit : m_editTreeConfig.getGroupNodeEdits()) {
+					String pathFromFile = groupEdit.getPathFromFileWithoutEndSlash();
+					Hdf5Group group = file.getGroupByPath(pathFromFile);
+					createGroupFromEdit(inData[0], exec, group, groupEdit);
+				}	
+			} finally {
+				if (file != null) {
+					file.close();
+				}
 			}
-			
-		} finally {
-			file.close();
+		} else if (m_editTreeConfig.getFileNodeEdit() != null) {
+			createFileFromEdit(inData[0], exec, m_editTreeConfig.getFileNodeEdit());
 		}
 		
 		return null;
 	}
-
-	private Hdf5File getFile(HDF5OverwritePolicy policy) throws IOException {
-		String filePath = m_filePathSettings.getStringValue();
+	
+	private boolean createFileFromEdit(BufferedDataTable inputTable, ExecutionContext exec, FileNodeEdit edit)
+			throws IOException, CanceledExecutionException, HDF5LibraryException, NullPointerException {
+		boolean success = true;
+		Hdf5File file = null;
 		
 		try {
-			return Hdf5File.createFile(filePath);
+			file = Hdf5File.createFile(edit.getFilePath());
+	
+			for (AttributeNodeEdit attributeEdit : edit.getAttributeNodeEdits()) {
+				exec.checkCanceled();
+				success &= createAttributeFromEdit(file, attributeEdit);
+			}
 			
-		} catch (IOException ioe) {
-			if (policy == HDF5OverwritePolicy.ABORT) {
-				throw new IOException("Abort: " + ioe.getMessage());
-			} else {
-				return Hdf5File.openFile(filePath, Hdf5File.READ_WRITE_ACCESS);
+			for (DataSetNodeEdit dataSetEdit : edit.getDataSetNodeEdits()) {
+				exec.checkCanceled();
+				success &= createDataSetFromEdit(inputTable, exec, file, dataSetEdit);
+			}
+			
+			for (GroupNodeEdit groupEdit : edit.getGroupNodeEdits()) {
+				exec.checkCanceled();
+				success &= createGroupFromEdit(inputTable, exec, file, groupEdit);
+			}
+		} finally {
+			if (file != null) {
+				file.close();
 			}
 		}
+		
+		return success;
 	}
 	
 	private boolean createGroupFromEdit(BufferedDataTable inputTable, ExecutionContext exec, Hdf5Group parent, GroupNodeEdit edit)
@@ -187,12 +210,8 @@ public class HDF5WriterNodeModel extends NodeModel {
     }
 	
 	private static void checkForErrors(SettingsModelString filePathSettings, EditTreeConfiguration editTreeConfig) throws InvalidSettingsException {
-		String filePath = filePathSettings.getStringValue();
-		if (filePath.trim().isEmpty()) {
+		if (filePathSettings.getStringValue().trim().isEmpty()) {
 			throw new InvalidSettingsException("No file selected");
-		}
-		if (!new File(filePath).exists()) {
-			throw new InvalidSettingsException("The selected file \"" + filePath + "\" does not exist");
 		}
 		
 		for (AttributeNodeEdit attributeEdit : editTreeConfig.getAttributeNodeEdits()) {

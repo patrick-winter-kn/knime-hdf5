@@ -11,12 +11,15 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.GroupNodeEdit;
 
 public class EditTreeConfiguration {
 	
 	private final String m_configRootName;
 
+	private FileNodeEdit m_fileEdit;
+	
 	private final List<GroupNodeEdit> m_groupEdits = new ArrayList<>();
 	
 	private final List<DataSetNodeEdit> m_dataSetEdits = new ArrayList<>();
@@ -25,6 +28,10 @@ public class EditTreeConfiguration {
 	
 	EditTreeConfiguration(String configRootName) {
 		m_configRootName = configRootName;
+	}
+
+	public FileNodeEdit getFileNodeEdit() {
+		return m_fileEdit;
 	}
 	
 	public GroupNodeEdit[] getGroupNodeEdits() {
@@ -39,6 +46,11 @@ public class EditTreeConfiguration {
 		return m_attributeEdits.toArray(new AttributeNodeEdit[] {});
 	}
 
+	public void setFileNodeEdit(FileNodeEdit edit) {
+		m_fileEdit = edit;
+		edit.validate();
+	}
+	
 	public void addGroupNodeEdit(GroupNodeEdit edit) {
 		m_groupEdits.add(edit);
 		edit.validate();
@@ -70,9 +82,14 @@ public class EditTreeConfiguration {
 	}
 	
 	void saveConfiguration(NodeSettingsWO settings) {
+        NodeSettingsWO fileSettings = settings.addNodeSettings(m_configRootName + "_File");
         NodeSettingsWO groupSettings = settings.addNodeSettings(m_configRootName + "_Groups");
         NodeSettingsWO dataSetSettings = settings.addNodeSettings(m_configRootName + "_DataSets");
         NodeSettingsWO attributeSettings = settings.addNodeSettings(m_configRootName + "_Attributes");
+        
+        if (m_fileEdit != null) {
+	        m_fileEdit.saveSettings(fileSettings);
+        }
         
         for (GroupNodeEdit edit : m_groupEdits) {
 	        NodeSettingsWO editSettings = groupSettings.addNodeSettings(edit.getPathFromFile() + edit.getName() + "/");
@@ -95,6 +112,12 @@ public class EditTreeConfiguration {
 	
 	@SuppressWarnings("unchecked")
 	void loadConfiguration(final NodeSettingsRO settings) throws InvalidSettingsException {
+		m_fileEdit = null;
+		if (settings.containsKey(m_configRootName + "_File")) {
+	        NodeSettingsRO fileSettings = settings.getNodeSettings(m_configRootName + "_File");
+	        setFileNodeEdit(FileNodeEdit.loadSettings(fileSettings));
+		}
+		
         m_groupEdits.clear();
         NodeSettingsRO groupSettings = settings.getNodeSettings(m_configRootName + "_Groups");
         Enumeration<NodeSettingsRO> groupEnum = groupSettings.children();

@@ -32,6 +32,7 @@ public abstract class TreeNodeEdit {
 	protected static enum SettingsKey {
 		NAME("name"),
 		PATH_FROM_FILE("pathFromFile"),
+		FILE_PATH("filePath"),
 		KNIME_TYPE("knimeType"),
 		HDF_TYPE("hdfType"),
 		LITTLE_ENDIAN("littleEndian"),

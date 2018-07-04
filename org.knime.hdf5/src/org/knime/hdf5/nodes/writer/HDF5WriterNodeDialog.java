@@ -6,7 +6,6 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
@@ -26,6 +25,7 @@ import javax.swing.JTextField;
 import javax.swing.TransferHandler;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.tree.DefaultMutableTreeNode;
 
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataTableSpec;
@@ -40,12 +40,14 @@ import org.knime.core.node.NotConfigurableException;
 import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
 import org.knime.core.node.defaultnodesettings.DialogComponentBoolean;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
+import org.knime.core.node.defaultnodesettings.DialogComponentLabel;
 import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.FlowVariableListCellRenderer;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
+import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 	
@@ -66,7 +68,31 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
      * set the desired columns.
      */
     public HDF5WriterNodeDialog() {
-		createFileChooser();
+		m_filePathSettings = SettingsFactory.createFilePathSettings();
+		FlowVariableModel filePathFvm = super.createFlowVariableModel(m_filePathSettings);
+		DialogComponentFileChooser fileChooser = new DialogComponentFileChooser(m_filePathSettings, "outputFilePathHistory",
+				JFileChooser.SAVE_DIALOG, false, filePathFvm, ".h5|.hdf5");
+		
+		DialogComponentLabel fileInfoLabel = new DialogComponentLabel("");
+		fileChooser.getModel().addChangeListener(new ChangeListener() {
+			
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				String filePath = m_filePathSettings.getStringValue();
+				if (filePath.endsWith(".h5") || filePath.endsWith(".hdf5")) {
+					fileInfoLabel.setText("Info: File " + (Hdf5File.existsFile(filePath) ? "exists" : "does not exist"));
+					
+				} else {
+					fileInfoLabel.setText("Error: File ending is not valid");
+				}
+			}
+		});
+		
+        createNewGroup("Output file:");
+		addDialogComponent(fileChooser);
+		addDialogComponent(fileInfoLabel);
+        closeCurrentGroup();
+        
 		
 		m_structureMustMatch = SettingsFactory.createStructureMustMatchSettings();
 		DialogComponentBoolean structureMustMatch = new DialogComponentBoolean(m_structureMustMatch,
@@ -96,37 +122,40 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		dataPanel.add(outputPanel);
 		outputPanel.setLayout(new BoxLayout(outputPanel, BoxLayout.Y_AXIS));
 		outputPanel.setBorder(BorderFactory.createTitledBorder(" Output "));
-		outputPanel.add(m_editTreePanel);
-	}
-    
-    private void createFileChooser() {
-		m_filePathSettings = SettingsFactory.createFilePathSettings();
-		FlowVariableModel filePathFvm = super.createFlowVariableModel(m_filePathSettings);
-		DialogComponentFileChooser fileChooser = new DialogComponentFileChooser(m_filePathSettings, "outputFilePathHistory",
-				JFileChooser.SAVE_DIALOG, false, filePathFvm, ".h5|.hdf5");
-		fileChooser.setBorderTitle("Output file:");
-		addDialogComponent(fileChooser);
-		fileChooser.getModel().addChangeListener(new ChangeListener() {
-
-			private boolean m_init = false;
+		JButton updateButton = new JButton("update file");
+		updateButton.addActionListener(new ActionListener() {
 			
 			@Override
-			public void stateChanged(ChangeEvent e) {
-				if (new File(m_filePathSettings.getStringValue()).isFile() || !m_init) {
+			public void actionPerformed(ActionEvent e) {
+				String filePath = m_filePathSettings.getStringValue();
+				if (Hdf5File.existsFile(filePath) && filePathChanged(filePath)) {
 					Hdf5File file = null;
 					try {
-						file = getFile(HDF5OverwritePolicy.OVERWRITE);
+						file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
 						m_editTreePanel.updateTreeWithFile(file);
 						
 					} catch (IOException ioe) {
-						// TODO exception (should never occur)
+						// TODO exception
 					} finally {
-						file.close();
+						if (file != null) {
+							file.close();
+						}
 					}
-			        m_init = true;
+				} else {
+					m_editTreePanel.prepareForFile(new FileNodeEdit(filePath));
 				}
 			}
+			
+			private boolean filePathChanged(String curFilePath) {
+				Object rootObject = ((DefaultMutableTreeNode) m_editTreePanel.getTree().getModel().getRoot()).getUserObject();
+				if (rootObject instanceof FileNodeEdit) {
+					return !curFilePath.equals(((FileNodeEdit) rootObject).getFilePath());
+				}
+				return true;
+			}
 		});
+		outputPanel.add(updateButton);
+		outputPanel.add(m_editTreePanel);
 	}
     
     private void addListToPanel(SpecInfo specInfo, JPanel panel) {
@@ -237,21 +266,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		});
     }
     
-    private Hdf5File getFile(HDF5OverwritePolicy policy) throws IOException {
-		String filePath = m_filePathSettings.getStringValue();
-		
-		try {
-			return Hdf5File.createFile(filePath);
-			
-		} catch (IOException ioe) {
-			if (policy == HDF5OverwritePolicy.ABORT) {
-				throw new IOException("Abort: " + ioe.getMessage());
-			} else {
-				return Hdf5File.openFile(filePath, Hdf5File.READ_WRITE_ACCESS);
-			}
-		}
-	}
-    
     /**
      * Calls the update method of the underlying filter panel.
      * @param settings the node settings to read from
@@ -275,13 +289,15 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		
 		Hdf5File file = null;
 		try {
-			file = getFile(HDF5OverwritePolicy.OVERWRITE);
+			file = Hdf5File.openFile(m_filePathSettings.getStringValue(), Hdf5File.READ_ONLY_ACCESS);
 			m_editTreePanel.updateTreeWithFile(file);
 			
 		} catch (IOException ioe) {
-			// TODO exception (should never occur)
+			// TODO exception
 		} finally {
-			file.close();
+			if (file != null) {
+				file.close();
+			}
 		}
 	
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
