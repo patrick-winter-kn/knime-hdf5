@@ -82,12 +82,12 @@ public class EditTreeConfiguration {
 	}
 	
 	void saveConfiguration(NodeSettingsWO settings) {
-        NodeSettingsWO fileSettings = settings.addNodeSettings(m_configRootName + "_File");
         NodeSettingsWO groupSettings = settings.addNodeSettings(m_configRootName + "_Groups");
         NodeSettingsWO dataSetSettings = settings.addNodeSettings(m_configRootName + "_DataSets");
         NodeSettingsWO attributeSettings = settings.addNodeSettings(m_configRootName + "_Attributes");
         
         if (m_fileEdit != null) {
+            NodeSettingsWO fileSettings = settings.addNodeSettings(m_configRootName + "_File");
 	        m_fileEdit.saveSettings(fileSettings);
         }
         

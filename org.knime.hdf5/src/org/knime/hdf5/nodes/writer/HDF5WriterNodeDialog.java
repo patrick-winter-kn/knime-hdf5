@@ -1,13 +1,18 @@
 package org.knime.hdf5.nodes.writer;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -15,9 +20,9 @@ import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.Icon;
 import javax.swing.JButton;
-import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
+import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -30,7 +35,6 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.DataValue;
-import org.knime.core.data.util.ListModelFilterUtils;
 import org.knime.core.node.FlowVariableModel;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeDialogPane;
@@ -57,9 +61,9 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 	
 	private SettingsModelBoolean m_saveColumnProperties;
 
-	private DefaultListModel<DataColumnSpec> m_columnSpecModel = new DefaultListModel<>();
+	private ListPanel m_columnSpecPanel = new ListPanel();
 	
-	private DefaultListModel<FlowVariable> m_flowVariableSpecModel = new DefaultListModel<>();
+	private ListPanel m_flowVariableSpecPanel = new ListPanel();
 	
 	private EditTreePanel m_editTreePanel = new EditTreePanel();
 	
@@ -159,46 +163,14 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 	}
     
     private void addListToPanel(SpecInfo specInfo, JPanel panel) {
-    	JPanel listPanel = new JPanel(new BorderLayout());
+    	ListPanel listPanel = specInfo == SpecInfo.COLUMN_SPECS ? m_columnSpecPanel
+				: (specInfo == SpecInfo.FLOW_VARIABLE_SPECS ? m_flowVariableSpecPanel : null);
     	panel.add(listPanel);
-		listPanel.setBorder(BorderFactory.createTitledBorder(specInfo == SpecInfo.COLUMN_SPECS ? "Columns:" : "Flow Variables:"));
+		listPanel.setBorder(BorderFactory.createTitledBorder(specInfo == SpecInfo.COLUMN_SPECS ? "Columns:"
+				: (specInfo == SpecInfo.FLOW_VARIABLE_SPECS ? "Flow Variables:" : "")));
 
-		DefaultListModel<?> listModel = specInfo == SpecInfo.COLUMN_SPECS ? m_columnSpecModel : m_flowVariableSpecModel;
-    	JList<?> list = new JList<>(listModel);
-		list.setVisibleRowCount(-1);
-		final JScrollPane jsp = new JScrollPane(list);
-		listPanel.add(jsp, BorderLayout.CENTER);
-
-		JPanel searchPanel = new JPanel(new BorderLayout());
-        listPanel.add(searchPanel, BorderLayout.NORTH);
-        searchPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        
-		JTextField searchField = new JTextField(4);
-        JButton searchButton = new JButton("Search");
-        JCheckBox markAllHits = new JCheckBox("Select all search hits");
-        searchPanel.add(searchField, BorderLayout.CENTER);
-        searchPanel.add(searchButton, BorderLayout.EAST);
-        searchPanel.add(markAllHits, BorderLayout.PAGE_END);
-        
-        ActionListener actionListener = new ActionListener() {
-            @Override
-            public void actionPerformed(final ActionEvent e) {
-                ListModelFilterUtils.onSearch(list, listModel, searchField.getText(),
-                    markAllHits.isSelected());
-            }
-        };
-        searchField.addActionListener(actionListener);
-        searchButton.addActionListener(actionListener);
-        
-        ActionListener actionListenerAll = new ActionListener() {
-            @Override
-            public void actionPerformed(final ActionEvent e) {
-                list.clearSelection();
-                ListModelFilterUtils.onSearch(list, listModel, searchField.getText(),
-                    markAllHits.isSelected());
-            }
-        };
-        markAllHits.addActionListener(actionListenerAll);
+    	JList<Object> list = new JList<>();
+    	listPanel.setList(list);
 
 		list.setCellRenderer(new DefaultListCellRenderer() {
 
@@ -266,6 +238,58 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		});
     }
     
+	private void initListModel(SpecInfo specInfo, Object[] listElements) {
+		ListPanel listPanel = specInfo == SpecInfo.COLUMN_SPECS ? m_columnSpecPanel : m_flowVariableSpecPanel;
+		DefaultListModel<Object> listModel = new DefaultListModel<>();
+		for (Object elem : listElements) {
+			listModel.addElement(elem);
+		}
+		listPanel.getList().setModel(listModel);
+		
+		JPanel searchPanel = new JPanel(new BorderLayout());
+        listPanel.add(searchPanel, BorderLayout.NORTH);
+        searchPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        
+		JTextField searchField = new JTextField(4);
+        searchPanel.add(searchField, BorderLayout.CENTER);
+        
+        JButton searchButton = new JButton("Search");
+        searchPanel.add(searchButton, BorderLayout.EAST);
+        
+        JLabel searchError = new JLabel();
+        searchPanel.add(searchError, BorderLayout.PAGE_END);
+        searchError.setForeground(Color.RED);
+
+        ActionListener actionListener = new ActionListener() {
+        	
+            @Override
+            public void actionPerformed(final ActionEvent e) {
+            	listModel.clear();
+				String searchText = searchField.getText();
+				try {
+	            	Pattern searchRegex = Pattern.compile(!searchText.equals("") ? searchText : ".*");
+	            	for (Object elem : listElements) {
+	            		String text = elem instanceof DataColumnSpec ? ((DataColumnSpec) elem).getName()
+	            				: (elem instanceof FlowVariable ? ((FlowVariable) elem).getName() : "");
+	            		
+	            		if (searchRegex.matcher(text).matches()) {
+	            			listModel.addElement(elem);
+	            		}
+	            	}
+	            	searchError.setText("");
+	            			
+				} catch (PatternSyntaxException pse) {
+					for (Object elem : listElements) {
+						listModel.addElement(elem);
+					}
+					searchError.setText("Error in regex at index " + pse.getIndex());
+				}
+            }
+        };
+        searchField.addActionListener(actionListener);
+        searchButton.addActionListener(actionListener);
+    }
+    
     /**
      * Calls the update method of the underlying filter panel.
      * @param settings the node settings to read from
@@ -276,17 +300,16 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     @Override
 	public void loadAdditionalSettingsFrom(final NodeSettingsRO settings,
             final DataTableSpec[] specs) throws NotConfigurableException {
-    	m_columnSpecModel.clear();
-    	for (int i = 0; i < specs[0].getNumColumns(); i++) {
-        	m_columnSpecModel.addElement(specs[0].getColumnSpec(i));
+    	DataColumnSpec[] colSpecs = new DataColumnSpec[specs[0].getNumColumns()];
+    	for (int i = 0; i < colSpecs.length; i++) {
+        	colSpecs[i] = specs[0].getColumnSpec(i);
     	}
-
-    	m_flowVariableSpecModel.clear();
-    	FlowVariable[] flowVariables = getAvailableFlowVariables().values().toArray(new FlowVariable[] {});
-		for (FlowVariable flowVariable : flowVariables) {
-			m_flowVariableSpecModel.add(0, flowVariable);
-		}
-		
+    	initListModel(SpecInfo.COLUMN_SPECS, colSpecs);
+    	
+    	List<?> vars = new ArrayList<>(getAvailableFlowVariables().values());
+    	Collections.reverse(vars);
+    	initListModel(SpecInfo.FLOW_VARIABLE_SPECS, vars.toArray());
+    	
 		Hdf5File file = null;
 		try {
 			file = Hdf5File.openFile(m_filePathSettings.getStringValue(), Hdf5File.READ_ONLY_ACCESS);
@@ -315,5 +338,30 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 		m_editTreePanel.saveConfiguration(editTreeConfig);
 		editTreeConfig.saveConfiguration(settings);
+    }
+    
+    private static class ListPanel extends JPanel {
+    	
+		private static final long serialVersionUID = -4510553262535977610L;
+		
+		private JList<Object> m_list;
+    	
+    	private ListPanel() {
+    		super(new BorderLayout());
+    	}
+
+    	private JList<Object> getList() {
+    		return m_list;
+    	}
+    	
+    	private void setList(JList<Object> list) {
+    		if (m_list != null) {
+    			remove(m_list);
+    		}
+    		m_list = list;
+    		final JScrollPane jsp = new JScrollPane(list);
+    		add(jsp, BorderLayout.CENTER);
+    		// list.setVisibleRowCount(-1);
+    	}
     }
 }

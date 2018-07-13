@@ -113,8 +113,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 						attr.read();
 					}
 					
-					int attrNum = attr.getValue().length;
-					if (attrNum == 1) {
+					if (attr.getDimension() == 1) {
 						if (attr.getType().isKnimeType(Hdf5KnimeDataType.INTEGER)) {
 							pushFlowVariableInt(attrPath, (Integer) attr.getValue()[0]);
 							

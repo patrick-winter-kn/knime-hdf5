@@ -211,25 +211,14 @@ abstract public class Hdf5TreeElement {
 			}
 		}
 		
-		long stringLength = edit.isFixed() ? edit.getStringLength() : flowVariable.getValueAsString().length();
-		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), edit.getKnimeType(), false, false, stringLength);
+		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), edit.getKnimeType(), false, false, edit.getStringLength());
 		
-		switch (flowVariable.getType()) {
-		case INTEGER:
-			Hdf5Attribute<Integer> attributeInteger = (Hdf5Attribute<Integer>) createAttribute(edit.getName(), 1L, dataType);
-			return attributeInteger.write(new Integer[] { flowVariable.getIntValue() });
-			
-		case DOUBLE:
-			Hdf5Attribute<Double> attributeDouble = (Hdf5Attribute<Double>) createAttribute(edit.getName(), 1L, dataType);
-			return attributeDouble.write(new Double[] { flowVariable.getDoubleValue() });
-			
-		case STRING:
-			Hdf5Attribute<String> attributeString = (Hdf5Attribute<String>) createAttribute(edit.getName(), 1L, dataType);
-			return attributeString.write(new String[] { flowVariable.getStringValue() });
-			
-		default:
-			throw new UnsupportedDataTypeException("Unknown knimeDataType");
+		Object[] values = Hdf5Attribute.getFlowVariableValues(flowVariable);
+		Hdf5Attribute<Object> attribute = (Hdf5Attribute<Object>) createAttribute(edit.getName(), values.length, dataType);
+		if (!edit.isCompoundAsArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
+			return attribute.write(new String[] { flowVariable.getStringValue() });
 		}
+		return attribute.write(values);
 	}
 	
 	public synchronized Hdf5Attribute<?> getAttribute(final String name) throws IOException {
@@ -270,21 +259,27 @@ abstract public class Hdf5TreeElement {
 	public Hdf5Attribute<?> getAttributeByPath(final String path) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
-		if (path.contains("/")) {
-			String name = path.substring(path.lastIndexOf("/") + 1);
+		if (path.matches(".*(?<!\\\\)/.*")) {
+			int firstSlashInName = path.indexOf("\\/");
+			String pathWithFirstPartOfName = firstSlashInName == -1 ? path : path.substring(0, firstSlashInName);
+			int pathStringLength = pathWithFirstPartOfName.lastIndexOf("/");
+			String name = path.substring(pathStringLength + 1);
+			name = name.replaceAll("\\\\/", "/");
+			
 			if (isGroup()) {
-				String pathWithoutName = path.substring(0, path.length() - name.length() - 1);
+				String pathWithoutName = path.substring(0, pathStringLength);
+				Hdf5TreeElement treeElement = null;
+				
 				try {
-					Hdf5DataSet<?> dataSet = ((Hdf5Group) this).getDataSetByPath(pathWithoutName);
-					attribute = dataSet.getAttribute(name);
-					
+					treeElement = ((Hdf5Group) this).getDataSetByPath(pathWithoutName);
 				} catch (IOException ioe) {
-					Hdf5Group group = ((Hdf5Group) this).getGroupByPath(pathWithoutName);
-					attribute = group.getAttribute(name);
+					treeElement = ((Hdf5Group) this).getGroupByPath(pathWithoutName);
 				}
+				
+				attribute = treeElement.getAttribute(name);
 			}
 		} else {
-			attribute = getAttribute(path);
+			attribute = getAttribute(path.replaceAll("\\\\/", "/"));
 		}
 		
 		return attribute;
@@ -365,6 +360,7 @@ abstract public class Hdf5TreeElement {
 				
 				try {
 					Hdf5DataType dataType = findAttributeType(name);
+					name = name.replaceAll("(?<!\\\\)/", "\\\\/");
 					paths.put(path + name, dataType);
 					
 				} catch (IllegalArgumentException iae) {
@@ -469,7 +465,7 @@ abstract public class Hdf5TreeElement {
 					dataspaceId = H5.H5Aget_space(attributeId);
 				}
 				
-				if (dataspaceId >= 0) {
+				/*if (dataspaceId >= 0) {
 					int rank = H5.H5Sget_simple_extent_ndims(dataspaceId);
 					if (rank > 0) {
 						long[] dims = new long[rank];
@@ -484,7 +480,7 @@ abstract public class Hdf5TreeElement {
 	                    }
 	                }
 		            H5.H5Sclose(dataspaceId);
-				}
+				}*/
 				
 				long typeId = H5.H5Aget_type(attributeId);
 				classId = H5.H5Tget_class(typeId);

@@ -3,6 +3,8 @@ package org.knime.hdf5.nodes.writer.edit;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Frame;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
@@ -126,7 +128,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		return m_stringLength;
 	}
 
-	private void setStringLength(int stringLength) {
+	public void setStringLength(int stringLength) {
 		m_stringLength = stringLength;
 	}
 
@@ -410,7 +412,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	    	
 			private DataSetPropertiesDialog(String title) {
 				super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, m_tree), title);
-				setMinimumSize(new Dimension(400, 500));
+				setMinimumSize(new Dimension(450, 500));
 
 				addProperty("Name: ", m_nameField);
 				
@@ -431,12 +433,21 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				
 				JPanel stringLengthField = new JPanel();
 				ButtonGroup stringLengthGroup = new ButtonGroup();
-				stringLengthField.add(m_stringLengthAuto);
+				stringLengthField.setLayout(new GridBagLayout());
+				GridBagConstraints constraints = new GridBagConstraints();
+				constraints.fill = GridBagConstraints.HORIZONTAL;
+				constraints.gridx = 0;
+				constraints.gridy = 0;
+				constraints.weightx = 0.0;
+				stringLengthField.add(m_stringLengthAuto, constraints);
 				stringLengthGroup.add(m_stringLengthAuto);
 				m_stringLengthAuto.setSelected(true);
-				stringLengthField.add(m_stringLengthFixed);
+				constraints.gridx++;
+				stringLengthField.add(m_stringLengthFixed, constraints);
 				stringLengthGroup.add(m_stringLengthFixed);
-				stringLengthField.add(m_stringLengthSpinner);
+				constraints.gridx++;
+				constraints.weightx = 1.0;
+				stringLengthField.add(m_stringLengthSpinner, constraints);
 				m_stringLengthSpinner.setEnabled(false);
 				m_stringLengthFixed.addChangeListener(new ChangeListener() {
 					
@@ -523,6 +534,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		                return dl.getIndex() != -1;
 		            }
 
+		            // TODO also use exportDone()
 					public boolean importData(TransferHandler.TransferSupport info) {
 		                if (!info.isDrop()) {
 		                    return false;

@@ -3,6 +3,7 @@ package org.knime.hdf5.nodes.writer;
 import java.io.File;
 import java.io.IOException;
 
+import org.knime.core.data.DataCell;
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataRow;
 import org.knime.core.data.DataTableSpec;
@@ -19,10 +20,12 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
+import org.knime.core.node.port.PortType;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.Hdf5TreeElement;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
@@ -41,7 +44,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 	private EditTreeConfiguration m_editTreeConfig;
 	
 	protected HDF5WriterNodeModel() {
-		super(1, 0);
+		super(new PortType[] { BufferedDataTable.TYPE_OPTIONAL }, new PortType[] {});
 		m_filePathSettings = SettingsFactory.createFilePathSettings();
 		m_structureMustMatch = SettingsFactory.createStructureMustMatchSettings();
 		m_saveColumnProperties = SettingsFactory.createStructureMustMatchSettings();
@@ -155,6 +158,31 @@ public class HDF5WriterNodeModel extends NodeModel {
 	private boolean createDataSetFromEdit(BufferedDataTable inputTable, ExecutionContext exec, Hdf5Group parent, DataSetNodeEdit edit)
 			throws IOException, CanceledExecutionException, HDF5LibraryException, NullPointerException {
 		boolean success = true;
+		
+		if (edit.getHdfType() == HdfDataType.STRING) {
+			int stringLength = 0;
+			
+			CloseableRowIterator iter = inputTable.iterator();
+			while (iter.hasNext()) {
+				exec.checkCanceled();
+				
+				DataRow row = iter.next();
+				for (int i = 0; i < row.getNumCells(); i++) {
+					DataCell cell = row.getCell(i);
+					int newStringLength = cell.toString().length();
+					stringLength = newStringLength > stringLength ? newStringLength : stringLength;
+				}
+			}
+
+			if (!edit.isFixed()) {
+				edit.setStringLength(stringLength);
+				
+			} else if (stringLength > edit.getStringLength()) {
+				NodeLogger.getLogger(getClass()).warn("Fixed string length has been changed from " + edit.getStringLength() + " to " + stringLength);
+				edit.setStringLength(stringLength);
+			}
+		}
+		
 		Hdf5DataSet<?> dataSet = parent.createDataSetFromEdit(inputTable.size(), edit);
 		
 		for (AttributeNodeEdit attributeEdit : edit.getAttributeNodeEdits()) {

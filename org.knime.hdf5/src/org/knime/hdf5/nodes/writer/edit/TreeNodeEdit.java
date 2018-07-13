@@ -35,9 +35,12 @@ public abstract class TreeNodeEdit {
 		FILE_PATH("filePath"),
 		KNIME_TYPE("knimeType"),
 		HDF_TYPE("hdfType"),
+		COMPOUND_AS_ARRAY_POSSIBLE("compoundAsArrayPossible"),
+		COMPOUND_AS_ARRAY_USED("compoundAsArrayUsed"),
 		LITTLE_ENDIAN("littleEndian"),
 		FIXED("fixed"),
 		STRING_LENGTH("stringLength"),
+		COMPOUND_ITEM_STRING_LENGTH("compoundItemStringLength"),
 		COMPRESSION("compression"),
 		CHUNK_ROW_SIZE("chunkRowSize"),
 		OVERWRITE("overwrite"),
@@ -72,29 +75,34 @@ public abstract class TreeNodeEdit {
 		this(getPathFromFileFromParent(parent), name);
 	}
 	
-	TreeNodeEdit(String name) {
-		m_pathFromFile = null;
-		m_name = name;
-	}
-	
 	TreeNodeEdit(String pathFromFile, String name) {
 		m_pathFromFile = pathFromFile;
 		m_name = name;
 	}
+	
+	TreeNodeEdit(String name) {
+		m_pathFromFile = null;
+		m_name = name;
+	}
 
 	private static String getPathFromFileFromParent(DefaultMutableTreeNode parent) {
-		String pathFromFile = "";
-		for (TreeNode treeNode : parent.getPath()) {
-			Object userObject = ((DefaultMutableTreeNode) treeNode).getUserObject();
-			if (userObject instanceof Hdf5TreeElement) {
-				Hdf5TreeElement treeElement = (Hdf5TreeElement) userObject;
-				if (!treeElement.isFile()) {
-					pathFromFile += treeElement.getName() + "/";
+		String pathFromFile = null;
+		
+		if (parent != null) {
+			pathFromFile = "";
+			for (TreeNode treeNode : parent.getPath()) {
+				Object userObject = ((DefaultMutableTreeNode) treeNode).getUserObject();
+				if (userObject instanceof Hdf5TreeElement) {
+					Hdf5TreeElement treeElement = (Hdf5TreeElement) userObject;
+					if (!treeElement.isFile()) {
+						pathFromFile += treeElement.getName() + "/";
+					}
+				} else if (userObject instanceof TreeNodeEdit) {
+					pathFromFile += ((TreeNodeEdit) userObject).getName() + "/";
 				}
-			} else if (userObject instanceof TreeNodeEdit) {
-				pathFromFile += ((TreeNodeEdit) userObject).getName() + "/";
 			}
 		}
+		
 		return pathFromFile;
 	}
 

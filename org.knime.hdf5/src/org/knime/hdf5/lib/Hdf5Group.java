@@ -369,9 +369,8 @@ public class Hdf5Group extends Hdf5TreeElement {
 	public Hdf5DataSet<?> createDataSetFromEdit(long rows, DataSetNodeEdit edit) {
 		Hdf5DataSet<?> dataSet = null;
 		
-		long stringLength = edit.isFixed() ? edit.getStringLength() : Hdf5HdfDataType.DEFAULT_STRING_LENGTH;
 		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), 
-				edit.getKnimeType(), false, true, stringLength);
+				edit.getKnimeType(), false, true, edit.getStringLength());
 		long[] dims = new long[] { rows, edit.getColumnSpecs().length };
 		
 		try {

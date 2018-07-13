@@ -71,8 +71,6 @@ public class Hdf5HdfDataType {
 		LITTLE_ENDIAN, BIG_ENDIAN
 	}
 	
-	public static final long DEFAULT_STRING_LENGTH = 63L;
-	
 	private static final Map<HdfDataType, Hdf5HdfDataType> BIG_ENDIAN_TYPES = new HashMap<>();
 
 	private static final Map<HdfDataType, Hdf5HdfDataType> LITTLE_ENDIAN_TYPES = new HashMap<>();

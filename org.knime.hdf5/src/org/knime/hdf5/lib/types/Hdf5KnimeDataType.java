@@ -46,8 +46,23 @@ public enum Hdf5KnimeDataType {
 		default:
 			// TODO see if useless
 			return null;
-			//throw new UnsupportedDataTypeException("Unknown knimeDataType");
+			//throw new UnsupportedDataTypeException("Unknown dataType of flowVariable");
 		}
+	}
+	
+	public static Hdf5KnimeDataType getKnimeDataType(Object[] values)/* throws UnsupportedDataTypeException*/ {
+		Class<?> type = values.getClass().getComponentType();
+		if (type == Integer.class) {
+			return INTEGER;
+		} else if (type == Long.class) {
+			return LONG;
+		} else if (type == Double.class) {
+			return DOUBLE;
+		} else if (type == String.class) {
+			return STRING;
+		}
+		return null;
+		//throw new UnsupportedDataTypeException("Unknown knimeDataType");
 	}
 	
 	public DataType getColumnDataType() throws UnsupportedDataTypeException {
