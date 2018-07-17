@@ -205,13 +205,14 @@ abstract public class Hdf5TreeElement {
 				deleteAttribute(edit.getName());
 				
 			} else {
-				IOException ioe = new IOException("Abort: attribute \"" + getPathFromFileWithName() + edit.getName() + "\" already exists");
+				IOException ioe = new IOException("Abort: attribute \"" + edit.getName() + "\" in \"" + getPathFromFileWithName() + "\" already exists");
 				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 				return false;
 			}
 		}
 		
-		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), edit.getKnimeType(), false, false, edit.getStringLength());
+		long stringLength = edit.isCompoundAsArrayUsed() ? edit.getCompoundItemStringLength() : edit.getStringLength();
+		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), edit.getKnimeType(), false, false, stringLength);
 		
 		Object[] values = Hdf5Attribute.getFlowVariableValues(flowVariable);
 		Hdf5Attribute<Object> attribute = (Hdf5Attribute<Object>) createAttribute(edit.getName(), values.length, dataType);
@@ -241,7 +242,7 @@ abstract public class Hdf5TreeElement {
 					attribute = Hdf5Attribute.openAttribute(this, name);
 					
 				} else {
-					throw new IOException("Attribute \"" + getPathFromFileWithName() + name + "\" does not exist");
+					throw new IOException("Attribute \"" + name + "\" in \"" + getPathFromFileWithName() + "\" does not exist");
 				}
 			} catch (HDF5LibraryException | NullPointerException hlnpe) {
 				NodeLogger.getLogger("HDF5 Files").error("Existence of attribute could not be checked", hlnpe);
@@ -451,7 +452,6 @@ abstract public class Hdf5TreeElement {
 		
 		if (attrExists) {
 			long attributeId = -1;
-			long dataspaceId = -1;
 			long classId = -1;
 			int size = 0;
 			Endian endian = null;
@@ -460,28 +460,6 @@ abstract public class Hdf5TreeElement {
 
 			try {
 				attributeId = H5.H5Aopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
-
-				if (attributeId >= 0) {
-					dataspaceId = H5.H5Aget_space(attributeId);
-				}
-				
-				/*if (dataspaceId >= 0) {
-					int rank = H5.H5Sget_simple_extent_ndims(dataspaceId);
-					if (rank > 0) {
-						long[] dims = new long[rank];
-						H5.H5Sget_simple_extent_dims(dataspaceId, dims, null);
-	                    for (int j = 0; j < dims.length; j++) {
-	                    	if (dims[j] == 0) {
-		                    	H5.H5Aclose(attributeId);
-	    			            H5.H5Sclose(dataspaceId);
-	    			            throw new UnsupportedDataTypeException("Array of Attribute \"" 
-	    								+ getPathFromFileWithName(true) + name + "\" has length 0");
-		    				}
-	                    }
-	                }
-		            H5.H5Sclose(dataspaceId);
-				}*/
-				
 				long typeId = H5.H5Aget_type(attributeId);
 				classId = H5.H5Tget_class(typeId);
 				size = (int) H5.H5Tget_size(typeId);

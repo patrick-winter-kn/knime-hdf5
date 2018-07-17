@@ -81,7 +81,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_hdfType = knimeType.getEquivalentHdfType();
 		m_compoundAsArrayPossible = m_compoundItemStringLength != m_stringLength;
 		m_compoundAsArrayUsed = m_compoundAsArrayPossible;
-		m_stringLength = m_compoundItemStringLength;
 	}
 
 	public AttributeNodeEdit(FlowVariable var) {
@@ -155,7 +154,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_stringLength = stringLength;
 	}
 
-	private int getCompoundItemStringLength() {
+	public int getCompoundItemStringLength() {
 		return m_compoundItemStringLength;
 	}
 
@@ -359,7 +358,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 							if (!selected) {
 								m_typeField.setSelectedItem(HdfDataType.STRING);
 							}
-							m_stringLengthSpinner.setValue((Integer) (selected ? m_compoundItemStringLength : m_stringLength));
+							m_stringLengthSpinner.setValue(selected ? m_compoundItemStringLength : m_stringLength);
 						}
 					});
 				} else {
@@ -380,14 +379,12 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				constraints.weightx = 0.0;
 				stringLengthField.add(m_stringLengthAuto, constraints);
 				stringLengthGroup.add(m_stringLengthAuto);
-				m_stringLengthAuto.setSelected(true);
 				constraints.gridx++;
 				stringLengthField.add(m_stringLengthFixed, constraints);
 				stringLengthGroup.add(m_stringLengthFixed);
 				constraints.gridx++;
 				constraints.weightx = 1.0;
 				stringLengthField.add(m_stringLengthSpinner, constraints);
-				m_stringLengthSpinner.setEnabled(false);
 				m_stringLengthFixed.addChangeListener(new ChangeListener() {
 					
 					@Override
@@ -401,7 +398,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				ButtonGroup overwriteGroup = new ButtonGroup();
 				overwriteField.add(m_overwriteNo);
 				overwriteGroup.add(m_overwriteNo);
-				m_overwriteNo.setSelected(true);
 				overwriteField.add(m_overwriteYes);
 				overwriteGroup.add(m_overwriteYes);
 				addProperty("Overwrite: ", overwriteField);
@@ -415,7 +411,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				m_endianField.setSelectedItem(edit.getEndian());
 				m_stringLengthAuto.setSelected(!edit.isFixed());
 				m_stringLengthFixed.setSelected(edit.isFixed());
-				m_stringLengthSpinner.setValue(edit.getStringLength());
+				m_stringLengthSpinner.setValue(edit.isCompoundAsArrayUsed() ? edit.getCompoundItemStringLength() : edit.getStringLength());
 				m_overwriteNo.setSelected(!edit.isOverwrite());
 				m_overwriteYes.setSelected(edit.isOverwrite());
 			}
@@ -428,7 +424,11 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				edit.setCompoundAsArrayUsed(m_compoundAsArrayField.isSelected());
 				edit.setEndian((Endian) m_endianField.getSelectedItem());
 				edit.setFixed(m_stringLengthFixed.isSelected());
-				edit.setStringLength((Integer) m_stringLengthSpinner.getValue());
+				if (edit.isCompoundAsArrayUsed()) {
+					edit.setCompoundItemStringLength((Integer) m_stringLengthSpinner.getValue());
+				} else {
+					edit.setStringLength((Integer) m_stringLengthSpinner.getValue());
+				}
 				edit.setOverwrite(m_overwriteYes.isSelected());
 				
 				((DefaultTreeModel) (m_tree.getModel())).reload();

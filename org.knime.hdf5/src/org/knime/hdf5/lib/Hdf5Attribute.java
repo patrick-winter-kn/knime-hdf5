@@ -45,10 +45,7 @@ public class Hdf5Attribute<Type> {
 			
 		} else if (name.equals("")) {
 			throw new IllegalArgumentException("name cannot be the Empty String");
-			
-		} /*else if (name.contains("/")) {
-			throw new IllegalArgumentException("name \"" + name + "\" cannot contain '/'");
-		}*/
+		}
 		
 		m_name = name;
 		m_type = type;
@@ -74,8 +71,8 @@ public class Hdf5Attribute<Type> {
 		case STRING:
 			return new Hdf5Attribute<String>(parent, name, type);
 		default:
-			NodeLogger.getLogger("HDF5 Files").warn("Attribute \""
-					+ parent.getPathFromFileWithName() + name + "\" has an unknown dataType");
+			NodeLogger.getLogger("HDF5 Files").warn("Attribute \"" + name + "\" in \""
+					+ parent.getPathFromFileWithName() + "\" has an unknown dataType");
 			return null;
 		}
 	}
@@ -95,8 +92,8 @@ public class Hdf5Attribute<Type> {
         	attribute.setOpen(true);
         	
         } catch (HDF5Exception | NullPointerException | IllegalArgumentException | IllegalStateException hnpiaise) {
-            NodeLogger.getLogger("HDF5 Files").error("Attribute \""
-					+ parent.getPathFromFileWithName() + name + "\" could not be created: "
+            NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + name + "\" in \""
+            		+ parent.getPathFromFileWithName() + "\" could not be created successfully: "
             		+ hnpiaise.getMessage(), hnpiaise);
 			/* attribute stays null */
         }
@@ -116,8 +113,8 @@ public class Hdf5Attribute<Type> {
         	
         } catch (UnsupportedDataTypeException | NullPointerException
         		| IllegalArgumentException | IllegalStateException udtnpiaise) {
-            NodeLogger.getLogger("HDF5 Files").error("Attribute \""
-					+ parent.getPathFromFileWithName() + name + "\" could not be opened: "
+            NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + name + "\" in \""
+            		+ parent.getPathFromFileWithName() + "\" could not be opened: "
 					+ udtnpiaise.getMessage(), udtnpiaise);
 			/* attribute stays null */
         }
@@ -125,7 +122,6 @@ public class Hdf5Attribute<Type> {
 		return attribute;
 	}
 
-	// TODO use a new class instead of Object[]
 	public static Object[] getFlowVariableValues(FlowVariable flowVariable) throws UnsupportedDataTypeException {
 		switch (flowVariable.getType()) {
 		case INTEGER:
@@ -135,14 +131,14 @@ public class Hdf5Attribute<Type> {
 			return new Double[] { flowVariable.getDoubleValue() };
 			
 		case STRING:
-			String attr = flowVariable.getStringValue();
+			String attr = flowVariable.getStringValue().trim();
 			try {
-				if (attr.matches("\\[.*\\] \\(.*\\)")) {
+				if (attr.matches("\\[.*\\] \\(.*\\) *")) {
 					String[] parts = attr.split("\\] \\(");
 					if (parts.length == 2) {
 						String value = parts[0].substring(1);
 						String type = parts[1].substring(0, parts[1].length() - 1);
-						String[] stringValues = value.split(", ");
+						String[] stringValues = value.isEmpty() ? new String[0] : value.split(", ");
 						
 						if (type.equals(Hdf5KnimeDataType.INTEGER.toString())) {
 							Integer[] intValues = new Integer[stringValues.length];
@@ -163,7 +159,7 @@ public class Hdf5Attribute<Type> {
 						} 
 					} else {
 						NodeLogger.getLogger(Hdf5Attribute.class).warn("FlowVariable " + flowVariable.getName()
-								+ " has incompatible array format (too many '] (' sequences)");
+								+ " has incompatible array format (needs exactly one '] (' sequence)");
 					}
 				}
 			} catch (NumberFormatException nfe) {
@@ -279,37 +275,38 @@ public class Hdf5Attribute<Type> {
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public boolean write(final Type[] value) {
         try {
-        	if (m_type.isHdfType(HdfDataType.STRING)) {
-    			int dim = (int) m_dimension;
-	            long stringLength = m_type.getHdfType().getStringLength();
-				byte[] dataIn = new byte[dim * ((int) stringLength + 1)];
-				
-				for (int i = 0; i < dim; i++) {
-					char[] dataChar = value[i].toString().toCharArray();
-					
-					for (int j = 0; j < dataChar.length; j++) {
-						dataIn[i * ((int) stringLength + 1) + j] = (byte) dataChar[j];
-					}
-				}
-				
-				H5.H5Awrite(m_attributeId, m_type.getConstants()[1], dataIn);
-				
-			} else if (m_type.hdfTypeEqualsKnimeType()) {
-				H5.H5Awrite(m_attributeId, m_type.getConstants()[1], value);
-				
-			} else {
-    			int dim = (int) m_dimension;
-				Object[] dataIn = (Object[]) m_type.getHdfType().createArray(dim);
-	
-				Class hdfClass = m_type.getHdfClass();
-				Class knimeClass = m_type.getKnimeClass();
-				for (int i = 0; i < dataIn.length; i++) {
-					dataIn[i] = (Type) m_type.knimeToHdf(knimeClass,
-							knimeClass.cast(value[i]), hdfClass);
-				}
-				
-	            H5.H5Awrite(m_attributeId, m_type.getConstants()[1], dataIn);
-			}
+			int dim = (int) m_dimension;
+        	if (dim > 0) {
+            	if (m_type.isHdfType(HdfDataType.STRING)) {
+    	            long stringLength = m_type.getHdfType().getStringLength();
+    				byte[] dataIn = new byte[dim * ((int) stringLength + 1)];
+    				
+    				for (int i = 0; i < dim; i++) {
+    					char[] dataChar = value[i].toString().toCharArray();
+    					
+    					for (int j = 0; j < dataChar.length; j++) {
+    						dataIn[i * ((int) stringLength + 1) + j] = (byte) dataChar[j];
+    					}
+    				}
+    				
+    				H5.H5Awrite(m_attributeId, m_type.getConstants()[1], dataIn);
+    				
+    			} else if (m_type.hdfTypeEqualsKnimeType()) {
+    				H5.H5Awrite(m_attributeId, m_type.getConstants()[1], value);
+    				
+    			} else {
+    				Object[] dataIn = (Object[]) m_type.getHdfType().createArray(dim);
+    	
+    				Class hdfClass = m_type.getHdfClass();
+    				Class knimeClass = m_type.getKnimeClass();
+    				for (int i = 0; i < dataIn.length; i++) {
+    					dataIn[i] = (Type) m_type.knimeToHdf(knimeClass,
+    							knimeClass.cast(value[i]), hdfClass);
+    				}
+    				
+    	            H5.H5Awrite(m_attributeId, m_type.getConstants()[1], dataIn);
+    			}
+        	}
         	
 			m_value = value;
 			return true;
@@ -353,13 +350,13 @@ public class Hdf5Attribute<Type> {
 						H5.H5Aread(m_attributeId, m_type.getConstants()[1], dataRead);
 						
 						dataOut = (Type[]) new String[dim];
-						char[][] dataChar = new char[dim][(int) stringLength + 1];
+						char[][] dataChar = new char[dim][(int) stringLength];
 						for (int i = 0; i < dataChar.length; i++) {
 							for (int j = 0; j < dataChar[0].length; j++) {
 								dataChar[i][j] = (char) dataRead[i * ((int) stringLength + 1) + j];
 							}
 							
-							dataOut[i] = (Type) String.copyValueOf(dataChar[i]);
+							dataOut[i] = (Type) String.copyValueOf(dataChar[i]).trim();
 						}
 					}
 				} else if (m_type.hdfTypeEqualsKnimeType()) {

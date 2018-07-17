@@ -29,8 +29,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	private long[] m_dimensions;
 	
-	private boolean m_dimsAvailable;
-	
 	private int m_compressionLevel;
 	
 	private long m_chunkRowSize;
@@ -132,17 +130,35 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	/**
-	 * calculates the number of values/cells which can be saved in the dimensions array
+	 * Calculates the number of rows.
+	 * 
+	 * @return product of the numbers in the dimensions array 
+	 */
+	public long numberOfRows() {
+		return m_dimensions.length > 0 ? m_dimensions[0] : 1;
+	}
+	
+	/**
+	 * Calculates the number of multi-dimensional columns.
+	 * 
+	 * @return product of the numbers in the dimensions array 
+	 */
+	public long numberOfColumns() {
+		return numberOfValuesFrom(m_dimensions.length > 0 ? 1 : 0);
+	}
+	
+	/**
+	 * Calculates the number of values/cells which can be saved in the dimensions array.
 	 * 
 	 * @return product of the numbers in the dimensions array 
 	 */
 	public long numberOfValues() {
-		return numberOfValuesRange(0, getDimensions().length);
+		return numberOfValuesFrom(0);
 	}
 	
 	/**
-	 * calculates the number of values/cells which can be saved within the range <br>
-	 * { fromIndex - getDimensions().length - 1 } of the dimensions array
+	 * Calculates the number of values/cells which can be saved within the range <br>
+	 * { fromIndex, ..., getDimensions().length - 1 } of the dimensions array.
 	 * 
 	 * @param fromIndex inclusive
 	 * @return product of the numbers in the dimensions array in this range 
@@ -152,8 +168,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 
 	/**
-	 * calculates the number of values/cells which can be saved within the range <br>
-	 * { fromIndex, ..., toIndex - 1 } of the dimensions array
+	 * Calculates the number of values/cells which can be saved within the range <br>
+	 * { fromIndex, ..., toIndex - 1 } of the dimensions array.
 	 * 
 	 * @param fromIndex inclusive
 	 * @param toIndex exclusive
@@ -203,14 +219,13 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	private long selectChunkOfRows(long fromRow, long toRow) throws HDF5Exception, NullPointerException {
-		long memSpaceId = H5.H5Screate_simple(m_dimensions.length - 1,
-        		Arrays.copyOfRange(m_dimensions, 1, m_dimensions.length), null);
+		long memSpaceId = HDF5Constants.H5P_DEFAULT;
+		
+		// check if dataSet is not scalar
+		if (m_dimensions.length > 0) {
+			memSpaceId = H5.H5Screate_simple(m_dimensions.length - 1,
+					Arrays.copyOfRange(m_dimensions, 1, m_dimensions.length), null);
         
-        /*
-         * using chunks for reading dataSets is only possible with available (more than 0) dimensions
-         * according to H5.H5Sget_simple_extent_dims() (method is used when dataSet is being read)
-         */
-        if (m_dimsAvailable) {
         	long[] offset = new long[m_dimensions.length];
 			offset[0] = fromRow;
 			long[] count = m_dimensions.clone();
@@ -251,7 +266,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	                            HDF5Constants.H5P_DEFAULT, dataIn);
 	                
 	    			} else {
-						Object[] dataWrite = (Object[]) m_type.getHdfType().createArray((int) numberOfValuesFrom(1));
+						Object[] dataWrite = (Object[]) m_type.getHdfType().createArray((int) numberOfColumns());
 			            
 						Class hdfClass = m_type.getHdfClass();
 						Class knimeClass = m_type.getKnimeClass();
@@ -262,8 +277,10 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			            H5.H5Dwrite(getElementId(), m_type.getConstants()[1],
 			            		memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, dataWrite);
 					}
-	    			
-					H5.H5Sclose(memSpaceId);
+
+					if (memSpaceId != HDF5Constants.H5P_DEFAULT) {
+						H5.H5Sclose(memSpaceId);
+					}
 					
 	    			return true;
 	    			
@@ -280,7 +297,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	@SuppressWarnings("unchecked")
 	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowId) throws UnsupportedDataTypeException {
-		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfValuesFrom(1));
+		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfColumns());
 		
 		for (int i = 0; i < dataIn.length; i++) {
 			dataIn[i] = getValueFromDataCell(row.getCell(specIndices[i]));
@@ -328,7 +345,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			throw new UnsupportedDataTypeException("Unknown knimeDataType");
 		}
 		
-		throw new UnsupportedDataTypeException("Unsupported combination of dataCellDataType and knimeDataType");
+		if (dataCell instanceof MissingCell) {
+			throw new UnsupportedDataTypeException("Cannot find value from MissingCell");
+		}
+		
+		throw new UnsupportedDataTypeException("Unsupported combination of dataCellDataType and knimeDataType while reading from dataCell");
 	}
 	
 	public Type[] readRow(long rowId) {
@@ -347,7 +368,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		
 		try {
 	        if (isOpen()) {
-	        	dataOut = (Type[]) m_type.getKnimeType().createArray((int) numberOfValuesFrom(1));
+	        	dataOut = (Type[]) m_type.getKnimeType().createArray((int) numberOfColumns());
 
 	            long memSpaceId = selectChunkOfRows(fromRow, toRow);
 				
@@ -371,7 +392,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		                    HDF5Constants.H5P_DEFAULT, dataOut);
 					
 				} else {
-					Object[] dataRead = (Object[]) m_type.getHdfType().createArray((int) numberOfValuesFrom(1));
+					Object[] dataRead = (Object[]) m_type.getHdfType().createArray((int) numberOfColumns());
 		            H5.H5Dread(getElementId(), m_type.getConstants()[1],
 		            		memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, dataRead);
 		            
@@ -382,7 +403,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 					}
 				}
 				
-				H5.H5Sclose(memSpaceId);
+				if (memSpaceId != HDF5Constants.H5P_DEFAULT) {
+					H5.H5Sclose(memSpaceId);
+				}
 			} else {
                 throw new IllegalStateException("DataSet \"" + getPathFromFileWithName() + "\" is not open: data could not be read");
         	}
@@ -394,8 +417,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	public void extendRow(List<DataCell> row, long rowId) throws UnsupportedDataTypeException {
-		long rowNum = m_dimensions[0];
-		int colNum = (int) numberOfValuesFrom(1);
+		long rowNum = numberOfRows();
+		int colNum = (int) numberOfColumns();
 		
 		if (rowId < rowNum) {
 			try {
@@ -457,9 +480,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		
 		// Create the dataSpace for the dataSet.
         try {
-            m_dataspaceId = H5.H5Screate_simple(m_dimensions.length,
-            		m_dimensions, null);
-			m_dimsAvailable = m_dimensions.length != 0;
+            m_dataspaceId = m_dimensions.length == 0 ? H5.H5Screate(HDF5Constants.H5S_SCALAR)
+        			: H5.H5Screate_simple(m_dimensions.length, m_dimensions, null);
             
         } catch (HDF5Exception | NullPointerException hnpe) {
             NodeLogger.getLogger("HDF5 Files").error("DataSpace could not be created", hnpe);
@@ -513,13 +535,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				int ndims = H5.H5Sget_simple_extent_ndims(m_dataspaceId);
 				long[] dimensions = new long[ndims];
 				H5.H5Sget_simple_extent_dims(m_dataspaceId, dimensions, null);
-
-				m_dimsAvailable = dimensions.length != 0;
-				if (!m_dimsAvailable) {
-					NodeLogger.getLogger("HDF5 Files").warn("DataSet \"" + getPathFromFileWithName() + "\" has 0 dimensions. "
-							+ "Dimensions are set to dims = new long[]{ 1L } now.");
-					dimensions = new long[]{ 1L };
-				}
 				
 				m_dimensions = dimensions;
 				

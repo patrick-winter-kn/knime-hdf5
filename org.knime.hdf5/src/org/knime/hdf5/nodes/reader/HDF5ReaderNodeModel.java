@@ -74,8 +74,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			for (int i = 0; i < dataSetPaths.length; i++) {
 				dataSets[i] = file.getDataSetByPath(dataSetPaths[i]);
 
-				long rowSize = dataSets[i].getDimensions()[0];
-				maxRows = rowSize > maxRows ? rowSize : maxRows;
+				long rowCount = dataSets[i].numberOfRows();
+				maxRows = rowCount > maxRows ? rowCount : maxRows;
 			}
 
 			for (long i = 0; i < maxRows; i++) {
@@ -170,6 +170,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 							} while (dataSet.nextColumnDims(colDims));
 		
 						} else {
+							// also do this for dataSet.getDimensions().length == 0 which means that the dataSet is scalar
 							colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
 						}
 					} catch (UnsupportedDataTypeException udte) {
@@ -220,7 +221,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 						throw new InvalidSettingsException(ioe.getMessage(), ioe);
 					}
 					
-					long rowCount = dataSet.getDimensions()[0];
+					long rowCount = dataSet.numberOfRows();
 					if (!rowSizes.containsKey(rowCount)) {
 						List<String> paths = new ArrayList<>();
 						rowSizes.put(rowCount, paths);
