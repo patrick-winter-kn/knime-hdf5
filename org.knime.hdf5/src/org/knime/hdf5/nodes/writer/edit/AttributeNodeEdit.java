@@ -6,6 +6,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.Map;
 
 import javax.activation.UnsupportedDataTypeException;
 import javax.swing.ButtonGroup;
@@ -26,23 +27,22 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
+import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
+import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
-import org.knime.hdf5.nodes.writer.EditTreeConfiguration;
 
 public class AttributeNodeEdit extends TreeNodeEdit {
-
+	
 	private final AttributeNodeMenu m_attributeEditMenu;
 	
-	private final String m_flowVariableName; 
-	
-	private final Hdf5KnimeDataType m_knimeType;
+	private Hdf5KnimeDataType m_knimeType;
 	
 	private HdfDataType m_hdfType;
 
@@ -60,10 +60,57 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	private boolean m_overwrite;
 
-	public AttributeNodeEdit(DefaultMutableTreeNode parent, FlowVariable var) {
-		super(parent, var.getName().replaceAll("\\\\/", "/"));
-		m_attributeEditMenu = new AttributeNodeMenu(true);
-		m_flowVariableName = var.getName();
+	public AttributeNodeEdit(FlowVariable var, TreeNodeEdit parent) {
+		this(var.getName(), parent, var.getName().replaceAll("\\\\/", "/"), Hdf5KnimeDataType.getKnimeDataType(var.getType()));
+		analyseFlowVariable(var);
+		m_editAction = EditAction.CREATE;
+	}
+
+	public AttributeNodeEdit(AttributeNodeEdit copyAttribute, TreeNodeEdit parent) {
+		this(copyAttribute.getInputPathFromFileWithName(), parent, copyAttribute.getName(), copyAttribute.getKnimeType());
+		m_editAction = EditAction.COPY;
+	}
+
+	public AttributeNodeEdit(Hdf5Attribute<?> attribute, TreeNodeEdit parent) {
+		this(attribute.getPathFromFileWithName(), parent, attribute.getName(), attribute.getType().getKnimeType());
+		m_hdfType = m_knimeType.getEquivalentHdfType();
+		m_endian = Endian.LITTLE_ENDIAN;
+		m_stringLength = (int) attribute.getType().getHdfType().getStringLength();
+		m_editAction = EditAction.NO_ACTION;
+		setHdfObject(attribute);
+	}
+
+	AttributeNodeEdit(String inputPathFromFileWithName, TreeNodeEdit parent, String name, Hdf5KnimeDataType knimetype) {
+		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name);
+		m_attributeEditMenu = new AttributeNodeMenu();
+		m_knimeType = knimetype;
+		if (parent instanceof GroupNodeEdit) {
+			((GroupNodeEdit) parent).addAttributeNodeEdit(this);
+			
+		} else if (parent instanceof DataSetNodeEdit) {
+			((DataSetNodeEdit) parent).addAttributeNodeEdit(this);
+			
+		} else {
+			throw new IllegalArgumentException("Error for \"" + getOutputPathFromFileWithName()
+					+ "\": AttributeNodeEdits can only exist in GroupNodeEdits or DataSetNodeEdits");
+		}
+	}
+	
+	AttributeNodeEdit(String inputPathFromFileWithName, GroupNodeEdit parent, String name, Hdf5KnimeDataType knimetype) {
+		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name);
+		m_attributeEditMenu = new AttributeNodeMenu();
+		m_knimeType = knimetype;
+		parent.addAttributeNodeEdit(this);
+	}
+	
+	AttributeNodeEdit(String inputPathFromFileWithName, DataSetNodeEdit parent, String name, Hdf5KnimeDataType knimetype) {
+		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name);
+		m_attributeEditMenu = new AttributeNodeMenu();
+		m_knimeType = knimetype;
+		parent.addAttributeNodeEdit(this);
+	}
+	
+	private void analyseFlowVariable(FlowVariable var) {
 		Hdf5KnimeDataType knimeType = Hdf5KnimeDataType.getKnimeDataType(var.getType());
 		m_endian = Endian.LITTLE_ENDIAN;
 		m_stringLength = var.getValueAsString().length();
@@ -82,30 +129,11 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_compoundAsArrayPossible = m_compoundItemStringLength != m_stringLength;
 		m_compoundAsArrayUsed = m_compoundAsArrayPossible;
 	}
-
-	public AttributeNodeEdit(FlowVariable var) {
-		this(null, var);
-	}
-
-	private AttributeNodeEdit(String pathFromFile, String name, String varName, Hdf5KnimeDataType knimetype) {
-		super(pathFromFile, name);
-		m_attributeEditMenu = new AttributeNodeMenu(true);
-		m_flowVariableName = varName;
-		m_knimeType = knimetype;
-	}
-	
-	private AttributeNodeEdit(String name, String varName, Hdf5KnimeDataType knimetype) {
-		this(null, name, varName, knimetype);
-	}
 	
 	public AttributeNodeMenu getAttributeEditMenu() {
 		return m_attributeEditMenu;
 	}
-
-	public String getFlowVariableName() {
-		return m_flowVariableName;
-	}
-
+	
 	public Hdf5KnimeDataType getKnimeType() {
 		return m_knimeType;
 	}
@@ -173,7 +201,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	@Override
 	public void saveSettings(NodeSettingsWO settings) {
 		super.saveSettings(settings);
-		settings.addString(SettingsKey.FLOW_VARIABLE_NAME.getKey(), m_flowVariableName);
 		
 		try {
 			settings.addDataType(SettingsKey.KNIME_TYPE.getKey(), m_knimeType.getColumnDataType());
@@ -191,35 +218,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		settings.addBoolean(SettingsKey.OVERWRITE.getKey(), m_overwrite);
 	}
 
-	public static AttributeNodeEdit loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		try {
-			AttributeNodeEdit edit = new AttributeNodeEdit(settings.getString(SettingsKey.PATH_FROM_FILE.getKey()), settings.getString(SettingsKey.NAME.getKey()),
-					settings.getString(SettingsKey.FLOW_VARIABLE_NAME.getKey()), Hdf5KnimeDataType.getKnimeDataType(settings.getDataType(SettingsKey.KNIME_TYPE.getKey())));
-			
-			edit.loadProperties(settings);
-			
-			return edit;
-			
-		} catch (UnsupportedDataTypeException udte) {
-			throw new InvalidSettingsException(udte.getMessage());
-		}
-	}
-	
-	public static AttributeNodeEdit getEditFromSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		try {
-			AttributeNodeEdit edit = new AttributeNodeEdit(settings.getString(SettingsKey.NAME.getKey()), settings.getString(SettingsKey.FLOW_VARIABLE_NAME.getKey()),
-					Hdf5KnimeDataType.getKnimeDataType(settings.getDataType(SettingsKey.KNIME_TYPE.getKey())));
-			
-			edit.loadProperties(settings);
-			
-			return edit;
-			
-		} catch (UnsupportedDataTypeException udte) {
-			throw new InvalidSettingsException(udte.getMessage());
-		}
-	}
-	
-	private void loadProperties(final NodeSettingsRO settings) throws InvalidSettingsException {
+	@Override
+	protected void loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
+		super.loadSettings(settings);
+		
 		setHdfType(HdfDataType.valueOf(settings.getString(SettingsKey.HDF_TYPE.getKey())));
 		setCompoundAsArrayPossible(settings.getBoolean(SettingsKey.COMPOUND_AS_ARRAY_POSSIBLE.getKey()));
 		setCompoundAsArrayUsed(settings.getBoolean(SettingsKey.COMPOUND_AS_ARRAY_USED.getKey()));
@@ -234,7 +236,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	public void addEditToNode(DefaultMutableTreeNode parentNode) {
 		DefaultMutableTreeNode node = new DefaultMutableTreeNode(this);
 		parentNode.add(node);
-		node.setAllowsChildren(false);
+		//node.setAllowsChildren(false);
 		m_treeNode = node;
 	}
 
@@ -247,6 +249,29 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	protected boolean isInConflict(TreeNodeEdit edit) {
 		return edit instanceof AttributeNodeEdit && !edit.equals(this) && edit.getName().equals(getName());
 	}
+
+	@Override
+	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+		FlowVariable var = flowVariables.get(getInputPathFromFileWithName());
+		Hdf5Attribute<?> attribute = ((Hdf5TreeElement) getParent().getHdfObject()).createAndWriteAttribute(this, var);
+		setHdfObject(attribute);
+		return attribute != null;
+	}
+
+	@Override
+	protected boolean copyAction() {
+		return false;
+	}
+
+	@Override
+	protected boolean deleteAction() {
+		return false;
+	}
+
+	@Override
+	protected boolean modifyAction() {
+		return false;
+	}
 	
 	public class AttributeNodeMenu extends JPopupMenu {
 
@@ -256,62 +281,56 @@ public class AttributeNodeEdit extends TreeNodeEdit {
     	
     	private JTree m_tree;
     	
-    	private EditTreeConfiguration m_editTreeConfig;
-    	
     	private DefaultMutableTreeNode m_node;
     	
-		private AttributeNodeMenu(boolean fromTreeNodeEdit) {
-    		if (fromTreeNodeEdit) {
-	    		JMenuItem itemEdit = new JMenuItem("Edit attribute properties");
-	    		itemEdit.addActionListener(new ActionListener() {
-					
-					@Override
-					public void actionPerformed(ActionEvent e) {
-						if (m_propertiesDialog == null) {
-							m_propertiesDialog = new AttributePropertiesDialog("Attribute properties");
-						}
-						
-						m_propertiesDialog.initPropertyItems((AttributeNodeEdit) m_node.getUserObject());
-						m_propertiesDialog.setVisible(true);
+		private AttributeNodeMenu() {
+    		JMenuItem itemEdit = new JMenuItem("Edit attribute properties");
+    		itemEdit.addActionListener(new ActionListener() {
+				
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					if (m_propertiesDialog == null) {
+						m_propertiesDialog = new AttributePropertiesDialog("Attribute properties");
 					}
-				});
-	    		add(itemEdit);
-    		}
+					
+					m_propertiesDialog.initPropertyItems((AttributeNodeEdit) m_node.getUserObject());
+					m_propertiesDialog.setVisible(true);
+				}
+			});
+    		add(itemEdit);
     		
-    		if (fromTreeNodeEdit) {
-        		JMenuItem itemDelete = new JMenuItem("Delete attribute");
-        		itemDelete.addActionListener(new ActionListener() {
-    				
-    				@Override
-    				public void actionPerformed(ActionEvent e) {
-						Object userObject = m_node.getUserObject();
-						if (userObject instanceof AttributeNodeEdit) {
-							AttributeNodeEdit edit = (AttributeNodeEdit) userObject;
-	                    	DefaultMutableTreeNode parent = (DefaultMutableTreeNode) m_node.getParent();
-	                    	Object parentObject = parent.getUserObject();
-	                    	if (parentObject instanceof DataSetNodeEdit) {
-	    						((DataSetNodeEdit) parentObject).removeAttributeNodeEdit(edit);
-	                    		
-	                		} else if (parentObject instanceof GroupNodeEdit) {
-	    						((GroupNodeEdit) parentObject).removeAttributeNodeEdit(edit);
-	                    		
-	                		} else {
-		                    	m_editTreeConfig.removeAttributeNodeEdit(edit);
-	                		}
-	        				((DefaultTreeModel) (m_tree.getModel())).reload();
-	        				TreePath path = new TreePath(parent.getPath());
-	        				path = parent.getChildCount() > 0 ? path.pathByAddingChild(parent.getFirstChild()) : path;
-	        				m_tree.makeVisible(path);
-						}
-    				}
-    			});
-        		add(itemDelete);
-    		}
+    		JMenuItem itemDelete = new JMenuItem("Delete attribute");
+    		itemDelete.addActionListener(new ActionListener() {
+				
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					Object userObject = m_node.getUserObject();
+					if (userObject instanceof AttributeNodeEdit) {
+						AttributeNodeEdit edit = (AttributeNodeEdit) userObject;
+                    	DefaultMutableTreeNode parent = (DefaultMutableTreeNode) m_node.getParent();
+                    	Object parentObject = parent.getUserObject();
+                    	if (edit.getEditAction().isCreateOrCopyAction()) {
+                        	if (parentObject instanceof DataSetNodeEdit) {
+        						((DataSetNodeEdit) parentObject).removeAttributeNodeEdit(edit);
+                    		} else if (parentObject instanceof GroupNodeEdit) {
+        						((GroupNodeEdit) parentObject).removeAttributeNodeEdit(edit);	
+                    		} 
+                    	} else {
+                    		edit.setEditAction(EditAction.DELETE);
+                    	}
+                    	
+        				((DefaultTreeModel) (m_tree.getModel())).reload();
+        				TreePath path = new TreePath(parent.getPath());
+        				path = parent.getChildCount() > 0 ? path.pathByAddingChild(parent.getFirstChild()) : path;
+        				m_tree.makeVisible(path);
+					}
+				}
+			});
+    		add(itemDelete);
     	}
 		
-		public void initMenu(JTree tree, EditTreeConfiguration editTreeConfig, DefaultMutableTreeNode node) {
+		public void initMenu(JTree tree, DefaultMutableTreeNode node) {
 			m_tree = tree;
-			m_editTreeConfig = editTreeConfig;
 			m_node = node;
 		}
 		

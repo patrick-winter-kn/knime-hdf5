@@ -10,10 +10,6 @@ import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 
 final class SettingsFactory {
-
-	static final String COLUMN_PROPERTY_NAMES = "knime.columnnames";
-	
-	static final String COLUMN_PROPERTY_TYPES = "knime.columntypes";
 	
 	private static final String OUTPUT_CONFIG_KEY = "_Output";
 	

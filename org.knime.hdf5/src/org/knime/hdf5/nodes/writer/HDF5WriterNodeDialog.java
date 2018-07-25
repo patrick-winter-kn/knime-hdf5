@@ -3,6 +3,7 @@ package org.knime.hdf5.nodes.writer;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
@@ -72,7 +73,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
      * set the desired columns.
      */
     public HDF5WriterNodeDialog() {
-		m_filePathSettings = SettingsFactory.createFilePathSettings();
+    	m_filePathSettings = SettingsFactory.createFilePathSettings();
 		FlowVariableModel filePathFvm = super.createFlowVariableModel(m_filePathSettings);
 		DialogComponentFileChooser fileChooser = new DialogComponentFileChooser(m_filePathSettings, "outputFilePathHistory",
 				JFileChooser.SAVE_DIALOG, false, filePathFvm, ".h5|.hdf5");
@@ -113,6 +114,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
         
 		JPanel dataPanel = new JPanel();
 		addTab("Data", dataPanel);
+		dataPanel.setMinimumSize(new Dimension(800, 500));
 		dataPanel.setLayout(new BoxLayout(dataPanel, BoxLayout.X_AXIS));
 
 		JPanel inputPanel = new JPanel();
@@ -132,22 +134,24 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				String filePath = m_filePathSettings.getStringValue();
-				if (Hdf5File.existsFile(filePath) && filePathChanged(filePath)) {
-					Hdf5File file = null;
-					try {
-						file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-						m_editTreePanel.updateTreeWithFile(file);
-						
-					} catch (IOException ioe) {
-						// TODO exception
-					} finally {
-						if (file != null) {
-							file.close();
+				//if (filePathChanged(filePath)) {
+					if (Hdf5File.existsFile(filePath)) {
+						Hdf5File file = null;
+						try {
+							file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+							m_editTreePanel.updateTreeWithExistingFile(file);
+							
+						} catch (IOException ioe) {
+							// TODO exception
+						} finally {
+							if (file != null) {
+								file.close();
+							}
 						}
+					} else {
+						m_editTreePanel.updateTreeWithNewFile(filePath);
 					}
-				} else {
-					m_editTreePanel.prepareForFile(new FileNodeEdit(filePath));
-				}
+				//}
 			}
 			
 			private boolean filePathChanged(String curFilePath) {
@@ -308,26 +312,28 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	Collections.reverse(vars);
     	initListModel(SpecInfo.FLOW_VARIABLE_SPECS, vars.toArray());
     	
-		Hdf5File file = null;
-		try {
-			file = Hdf5File.openFile(m_filePathSettings.getStringValue(), Hdf5File.READ_ONLY_ACCESS);
-			m_editTreePanel.updateTreeWithFile(file);
-			
-		} catch (IOException ioe) {
-			// TODO exception
-		} finally {
-			if (file != null) {
-				file.close();
+    	if (!m_filePathSettings.getStringValue().trim().isEmpty()) {
+			Hdf5File file = null;
+			try {
+				file = Hdf5File.openFile(m_filePathSettings.getStringValue(), Hdf5File.READ_ONLY_ACCESS);
+				m_editTreePanel.updateTreeWithExistingFile(file);
+				
+			} catch (IOException ioe) {
+				// TODO exception
+			} finally {
+				if (file != null) {
+					file.close();
+				}
 			}
-		}
-	
-		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
-		try {
-			editTreeConfig.loadConfiguration(settings);
-			m_editTreePanel.loadConfiguration(editTreeConfig);
-			
-		} catch (InvalidSettingsException ise) {
-			new NotConfigurableException(ise.getMessage());
+		
+			EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
+			try {
+				editTreeConfig.loadConfiguration(settings);
+				m_editTreePanel.loadConfiguration(editTreeConfig);
+				
+			} catch (InvalidSettingsException ise) {
+				new NotConfigurableException(ise.getMessage());
+			}
 		}
     }
     

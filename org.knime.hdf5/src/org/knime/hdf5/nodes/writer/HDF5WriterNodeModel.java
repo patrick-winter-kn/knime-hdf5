@@ -3,35 +3,21 @@ package org.knime.hdf5.nodes.writer;
 import java.io.File;
 import java.io.IOException;
 
-import org.knime.core.data.DataCell;
-import org.knime.core.data.DataColumnSpec;
-import org.knime.core.data.DataRow;
 import org.knime.core.data.DataTableSpec;
-import org.knime.core.data.container.CloseableRowIterator;
 import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.CanceledExecutionException;
 import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.ExecutionMonitor;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeCreationContext;
-import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeModel;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.port.PortType;
-import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
-import org.knime.hdf5.lib.Hdf5Group;
-import org.knime.hdf5.lib.Hdf5TreeElement;
-import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
-import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
-import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
-import org.knime.hdf5.nodes.writer.edit.GroupNodeEdit;
-
-import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class HDF5WriterNodeModel extends NodeModel {
 
@@ -59,8 +45,21 @@ public class HDF5WriterNodeModel extends NodeModel {
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
 		checkForErrors(m_filePathSettings, m_editTreeConfig);
+
+		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
+		try {
+			fileEdit.doAction(inData[0], getAvailableFlowVariables(), m_saveColumnProperties.getBooleanValue());
+		} finally {
+			if (fileEdit.getHdfObject() != null) {
+				((Hdf5File) fileEdit.getHdfObject()).close();
+			}
+		}
 		
+		
+		
+		/*
 		String filePath = m_filePathSettings.getStringValue();
+		
 		if (Hdf5File.existsFile(filePath)) {
 			Hdf5File file = null;
 			try {
@@ -68,7 +67,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 				
 				// TODO find a possibility to estimate exec.setProgress()
 				for (AttributeNodeEdit attributeEdit : m_editTreeConfig.getAttributeNodeEdits()) {
-					String pathFromFile = attributeEdit.getPathFromFileWithoutEndSlash();
+					String pathFromFile = attributeEdit.getOutputPathFromFileWithoutEndSlash();
 					Hdf5TreeElement treeElement = null;
 					try {
 						treeElement = file.getGroupByPath(pathFromFile);
@@ -79,13 +78,13 @@ public class HDF5WriterNodeModel extends NodeModel {
 				}
 				
 				for (DataSetNodeEdit dataSetEdit : m_editTreeConfig.getDataSetNodeEdits()) {
-					String pathFromFile = dataSetEdit.getPathFromFileWithoutEndSlash();
+					String pathFromFile = dataSetEdit.getOutputPathFromFileWithoutEndSlash();
 					Hdf5Group group = file.getGroupByPath(pathFromFile);
 					createDataSetFromEdit(inData[0], exec, group, dataSetEdit);
 				}
 
 				for (GroupNodeEdit groupEdit : m_editTreeConfig.getGroupNodeEdits()) {
-					String pathFromFile = groupEdit.getPathFromFileWithoutEndSlash();
+					String pathFromFile = groupEdit.getOutputPathFromFileWithoutEndSlash();
 					Hdf5Group group = file.getGroupByPath(pathFromFile);
 					createGroupFromEdit(inData[0], exec, group, groupEdit);
 				}	
@@ -97,10 +96,10 @@ public class HDF5WriterNodeModel extends NodeModel {
 		} else if (m_editTreeConfig.getFileNodeEdit() != null) {
 			createFileFromEdit(inData[0], exec, m_editTreeConfig.getFileNodeEdit());
 		}
-		
+		*/
 		return null;
 	}
-	
+	/*
 	private boolean createFileFromEdit(BufferedDataTable inputTable, ExecutionContext exec, FileNodeEdit edit)
 			throws IOException, CanceledExecutionException, HDF5LibraryException, NullPointerException {
 		boolean success = true;
@@ -134,8 +133,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 	
 	private boolean createGroupFromEdit(BufferedDataTable inputTable, ExecutionContext exec, Hdf5Group parent, GroupNodeEdit edit)
 			throws IOException, CanceledExecutionException, HDF5LibraryException, NullPointerException {
-		boolean success = true;
 		Hdf5Group group = parent.createGroup(edit.getName());
+		boolean success = group != null;
 
 		for (AttributeNodeEdit attributeEdit : edit.getAttributeNodeEdits()) {
 			exec.checkCanceled();
@@ -228,9 +227,9 @@ public class HDF5WriterNodeModel extends NodeModel {
 	}
 	
 	private boolean createAttributeFromEdit(Hdf5TreeElement parent, AttributeNodeEdit edit) throws IOException, HDF5LibraryException, NullPointerException {
-		return parent.createAndWriteAttribute(edit, getAvailableFlowVariables().get(edit.getFlowVariableName()));
+		return edit.doAction(getAvailableFlowVariables().get(edit.getInputPathFromFileWithName()));
 	}
-	
+	*/
 	@Override
 	protected DataTableSpec[] configure(DataTableSpec[] inSpecs) throws InvalidSettingsException {
 		checkForErrors(m_filePathSettings, m_editTreeConfig);
@@ -242,25 +241,10 @@ public class HDF5WriterNodeModel extends NodeModel {
 			throw new InvalidSettingsException("No file selected");
 		}
 		
-		for (AttributeNodeEdit attributeEdit : editTreeConfig.getAttributeNodeEdits()) {
-			if (!attributeEdit.isValid()) {
-				throw new InvalidSettingsException("The settings for attribute \"" + attributeEdit.getPathFromFile()
-						+ attributeEdit.getName() + "\" are not valid");
-			}
-		}
-		
-		for (DataSetNodeEdit dataSetEdit : editTreeConfig.getDataSetNodeEdits()) {
-			if (!dataSetEdit.isValid()) {
-				throw new InvalidSettingsException("The settings for dataSet \"" + dataSetEdit.getPathFromFile()
-						+ dataSetEdit.getName() + "\" are not valid");
-			}
-		}
-
-		for (GroupNodeEdit groupEdit : editTreeConfig.getGroupNodeEdits()) {
-			if (!groupEdit.isValid()) {
-				throw new InvalidSettingsException("The settings for group \"" + groupEdit.getPathFromFile()
-						+ groupEdit.getName() + "\" are not valid");
-			}
+		// TODO find causes for invalid things
+		FileNodeEdit fileEdit = editTreeConfig.getFileNodeEdit();
+		if (!fileEdit.isValid()) {
+			throw new InvalidSettingsException("The settings for file \"" + fileEdit.getFilePath() + "\" are not valid");
 		}
 	}
 

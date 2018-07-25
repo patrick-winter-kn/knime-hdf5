@@ -140,11 +140,11 @@ abstract public class Hdf5TreeElement {
 	 * @return
 	 */
 	public String getPathFromFileWithName(boolean endSlash) {
-		return isFile() ? (endSlash ? "/" : "") : getPathFromFile() + getName() + "/";
+		return (isFile() ? "" : getPathFromFile() + getName()) + (endSlash ? "/" : "");
 	}
 	
 	public String getPathFromFileWithName() {
-		return getPathFromFileWithName(true);
+		return getPathFromFileWithName(false);
 	}
 	
 	public synchronized Hdf5Attribute<?> createAttribute(final String name, final long dimension, final Hdf5DataType type) throws IOException {
@@ -199,27 +199,37 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public boolean createAndWriteAttribute(AttributeNodeEdit edit, FlowVariable flowVariable) throws IOException, HDF5LibraryException, NullPointerException {
-		if (existsAttribute(edit.getName())) {
-			if (edit.isOverwrite()) {
-				deleteAttribute(edit.getName());
-				
-			} else {
-				IOException ioe = new IOException("Abort: attribute \"" + edit.getName() + "\" in \"" + getPathFromFileWithName() + "\" already exists");
-				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-				return false;
+	public Hdf5Attribute<Object> createAndWriteAttribute(AttributeNodeEdit edit, FlowVariable flowVariable) {
+		boolean success = false;
+		Hdf5Attribute<Object> attribute = null;
+		
+		try {
+			if (existsAttribute(edit.getName())) {
+				if (edit.isOverwrite()) {
+					deleteAttribute(edit.getName());
+					
+				} else {
+					IOException ioe = new IOException("Abort: attribute \"" + edit.getName() + "\" in \"" + getPathFromFileWithName() + "\" already exists");
+					NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+					return null;
+				}
 			}
+			
+			long stringLength = edit.isCompoundAsArrayUsed() ? edit.getCompoundItemStringLength() : edit.getStringLength();
+			Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), edit.getKnimeType(), false, false, stringLength);
+
+			Object[] values = Hdf5Attribute.getFlowVariableValues(flowVariable);
+			attribute = (Hdf5Attribute<Object>) createAttribute(edit.getName(), values.length, dataType);
+			if (!edit.isCompoundAsArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
+				success = attribute.write(new String[] { flowVariable.getStringValue() });
+			} else {
+				success = attribute.write(values);
+			}
+		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
+			NodeLogger.getLogger(getClass()).error(hlionpe.getMessage(), hlionpe);
 		}
 		
-		long stringLength = edit.isCompoundAsArrayUsed() ? edit.getCompoundItemStringLength() : edit.getStringLength();
-		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), edit.getKnimeType(), false, false, stringLength);
-		
-		Object[] values = Hdf5Attribute.getFlowVariableValues(flowVariable);
-		Hdf5Attribute<Object> attribute = (Hdf5Attribute<Object>) createAttribute(edit.getName(), values.length, dataType);
-		if (!edit.isCompoundAsArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
-			return attribute.write(new String[] { flowVariable.getStringValue() });
-		}
-		return attribute.write(values);
+		return success ? attribute : null;
 	}
 	
 	public synchronized Hdf5Attribute<?> getAttribute(final String name) throws IOException {

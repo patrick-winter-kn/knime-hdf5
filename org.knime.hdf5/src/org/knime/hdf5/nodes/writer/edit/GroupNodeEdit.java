@@ -5,10 +5,13 @@ import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Map;
 
+import javax.activation.UnsupportedDataTypeException;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
@@ -19,33 +22,52 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
+import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.InvalidSettingsException;
+import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
-import org.knime.hdf5.nodes.writer.EditTreeConfiguration;
+import org.knime.core.node.workflow.FlowVariable;
+import org.knime.hdf5.lib.Hdf5Group;
+import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 public class GroupNodeEdit extends TreeNodeEdit {
 
-	public static final GroupNodeMenu GROUP_EDIT_MENU = new GroupNodeMenu(true);
-	
-	public static final GroupNodeMenu GROUP_MENU = new GroupNodeMenu(false);
+	private final GroupNodeMenu m_groupNodeMenu;
 	
 	private final List<GroupNodeEdit> m_groupEdits = new ArrayList<>();
 	
 	private final List<DataSetNodeEdit> m_dataSetEdits = new ArrayList<>();
 	
 	private final List<AttributeNodeEdit> m_attributeEdits = new ArrayList<>();
-	
-	private GroupNodeEdit(DefaultMutableTreeNode parent, String name) {
-		super(parent, name);
+
+	public GroupNodeEdit(GroupNodeEdit parent, String name) {
+		this((GroupNodeEdit) null, parent, name);
+		m_editAction = EditAction.CREATE;
 	}
 	
-	protected GroupNodeEdit(String name) {
-		super(name);
+	public GroupNodeEdit(GroupNodeEdit copyGroup, GroupNodeEdit parent, String name) {
+		this(copyGroup != null ? copyGroup.getInputPathFromFileWithName() : null, parent, name);
+		m_editAction = EditAction.COPY;
+		// TODO add elements in this group
 	}
 	
-	private GroupNodeEdit(String pathFromFile, String name) {
-		super(pathFromFile, name);
+	public GroupNodeEdit(Hdf5Group group, GroupNodeEdit parent) {
+		this(group.getPathFromFileWithName(), parent, group.getName());
+		m_editAction = EditAction.NO_ACTION;
+		setHdfObject(group);
+	}
+	
+	protected GroupNodeEdit(String inputPathFromFileWithName, GroupNodeEdit parent, String name) {
+		super(inputPathFromFileWithName, parent != null ? parent.getOutputPathFromFileWithName() : null, name);
+		m_groupNodeMenu = new GroupNodeMenu();
+		if (parent != null) {
+			parent.addGroupNodeEdit(this);
+		}
+	}
+	
+	public GroupNodeMenu getGroupEditMenu() {
+		return m_groupNodeMenu;
 	}
 	
 	public GroupNodeEdit[] getGroupNodeEdits() {
@@ -60,18 +82,21 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		return m_attributeEdits.toArray(new AttributeNodeEdit[] {});
 	}
 
-	protected void addGroupNodeEdit(GroupNodeEdit edit) {
+	public void addGroupNodeEdit(GroupNodeEdit edit) {
 		m_groupEdits.add(edit);
+		edit.setParent(this);
 		edit.validate();
 	}
 	
 	public void addDataSetNodeEdit(DataSetNodeEdit edit) {
 		m_dataSetEdits.add(edit);
+		edit.setParent(this);
 		edit.validate();
 	}
 	
 	public void addAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.add(edit);
+		edit.setParent(this);
 		edit.validate();
 	}
 
@@ -108,75 +133,64 @@ public class GroupNodeEdit extends TreeNodeEdit {
         NodeSettingsWO attributeSettings = settings.addNodeSettings(SettingsKey.ATTRIBUTES.getKey());
         
         for (GroupNodeEdit edit : m_groupEdits) {
-	        NodeSettingsWO editSettings = groupSettings.addNodeSettings(edit.getName());
-			edit.saveSettings(editSettings);
+        	if (edit.getEditAction() != EditAction.NO_ACTION) {
+    	        NodeSettingsWO editSettings = groupSettings.addNodeSettings(edit.getName());
+    			edit.saveSettings(editSettings);
+        	}
 		}
 		
 		for (DataSetNodeEdit edit : m_dataSetEdits) {
-	        NodeSettingsWO editSettings = dataSetSettings.addNodeSettings(edit.getName());
-			edit.saveSettings(editSettings);
+        	if (edit.getEditAction() != EditAction.NO_ACTION) {
+		        NodeSettingsWO editSettings = dataSetSettings.addNodeSettings(edit.getName());
+				edit.saveSettings(editSettings);
+        	}
 		}
 		
 		for (AttributeNodeEdit edit : m_attributeEdits) {
-	        NodeSettingsWO editSettings = attributeSettings.addNodeSettings(edit.getName());
-			edit.saveSettings(editSettings);
+        	if (edit.getEditAction() != EditAction.NO_ACTION) {
+		        NodeSettingsWO editSettings = attributeSettings.addNodeSettings(edit.getName());
+				edit.saveSettings(editSettings);
+        	}
 		}
 	}
-	
-	@SuppressWarnings("unchecked")
-	public static GroupNodeEdit loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		GroupNodeEdit edit = new GroupNodeEdit(settings.getString(SettingsKey.PATH_FROM_FILE.getKey()), settings.getString(SettingsKey.NAME.getKey()));
-		
-        NodeSettingsRO groupSettings = settings.getNodeSettings(SettingsKey.GROUPS.getKey());
-        Enumeration<NodeSettingsRO> groupEnum = groupSettings.children();
-        while (groupEnum.hasMoreElements()) {
-        	NodeSettingsRO editSettings = groupEnum.nextElement();
-        	edit.addGroupNodeEdit(GroupNodeEdit.getEditFromSettings(editSettings));
-        }
-        
-        NodeSettingsRO dataSetSettings = settings.getNodeSettings(SettingsKey.DATA_SETS.getKey());
-        Enumeration<NodeSettingsRO> dataSetEnum = dataSetSettings.children();
-        while (dataSetEnum.hasMoreElements()) {
-        	NodeSettingsRO editSettings = dataSetEnum.nextElement();
-        	edit.addDataSetNodeEdit(DataSetNodeEdit.getEditFromSettings(editSettings));
-        }
-        
-        NodeSettingsRO attributeSettings = settings.getNodeSettings(SettingsKey.ATTRIBUTES.getKey());
-        Enumeration<NodeSettingsRO> attributeEnum = attributeSettings.children();
-        while (attributeEnum.hasMoreElements()) {
-        	NodeSettingsRO editSettings = attributeEnum.nextElement();
-        	edit.addAttributeNodeEdit(AttributeNodeEdit.getEditFromSettings(editSettings));
-        }
-		
-		return edit;
-	}
 
+	@Override
 	@SuppressWarnings("unchecked")
-	public static GroupNodeEdit getEditFromSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		GroupNodeEdit edit = new GroupNodeEdit(settings.getString(SettingsKey.NAME.getKey()));
+	protected void loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
+		super.loadSettings(settings);
 		
-        NodeSettingsRO groupSettings = settings.getNodeSettings(SettingsKey.GROUPS.getKey());
+		NodeSettingsRO groupSettings = settings.getNodeSettings(SettingsKey.GROUPS.getKey());
         Enumeration<NodeSettingsRO> groupEnum = groupSettings.children();
         while (groupEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = groupEnum.nextElement();
-        	edit.addGroupNodeEdit(GroupNodeEdit.getEditFromSettings(editSettings));
+        	GroupNodeEdit edit = new GroupNodeEdit(editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()), this, 
+        			editSettings.getString(SettingsKey.NAME.getKey()));
+            edit.loadSettings(editSettings);
         }
         
         NodeSettingsRO dataSetSettings = settings.getNodeSettings(SettingsKey.DATA_SETS.getKey());
         Enumeration<NodeSettingsRO> dataSetEnum = dataSetSettings.children();
         while (dataSetEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = dataSetEnum.nextElement();
-        	edit.addDataSetNodeEdit(DataSetNodeEdit.getEditFromSettings(editSettings));
+        	DataSetNodeEdit edit = new DataSetNodeEdit(editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()), this,
+        			editSettings.getString(SettingsKey.NAME.getKey()));
+    		edit.loadSettings(editSettings);
         }
         
         NodeSettingsRO attributeSettings = settings.getNodeSettings(SettingsKey.ATTRIBUTES.getKey());
         Enumeration<NodeSettingsRO> attributeEnum = attributeSettings.children();
         while (attributeEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = attributeEnum.nextElement();
-        	edit.addAttributeNodeEdit(AttributeNodeEdit.getEditFromSettings(editSettings));
+        	try {
+    			AttributeNodeEdit edit = new AttributeNodeEdit(editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()), this,
+    					editSettings.getString(SettingsKey.NAME.getKey()),
+    					Hdf5KnimeDataType.getKnimeDataType(editSettings.getDataType(SettingsKey.KNIME_TYPE.getKey())));
+    			edit.loadSettings(editSettings);
+    			
+    		} catch (UnsupportedDataTypeException udte) {
+    			throw new InvalidSettingsException(udte.getMessage());
+    		}
         }
-		
-		return edit;
 	}
 	
 	@Override
@@ -184,7 +198,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		DefaultMutableTreeNode node = new DefaultMutableTreeNode(this);
 		parentNode.add(node);
 		m_treeNode = node;
-		
+		/*
 		for (GroupNodeEdit edit : m_groupEdits) {
 	        edit.addEditToNode(node);
 		}
@@ -195,7 +209,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		
 		for (AttributeNodeEdit edit : m_attributeEdits) {
 	        edit.addEditToNode(node);
-		}
+		}*/
 	}
 	
 	@Override
@@ -207,93 +221,125 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	protected boolean isInConflict(TreeNodeEdit edit) {
 		return (edit instanceof GroupNodeEdit || edit instanceof DataSetNodeEdit) && !edit.equals(this) && edit.getName().equals(getName());
 	}
+
+	@Override
+	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+		try {
+			Hdf5Group group = ((Hdf5Group) getParent().getHdfObject()).createGroup(getName());
+			setHdfObject(group);
+			return group != null;
+			
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+			return false;
+		}
+	}
 	
-	// TODO maybe try to add it by using setComponentPopupMenu() to the respective tree node
-	public static class GroupNodeMenu extends JPopupMenu {
+	@Override
+	protected boolean copyAction() {
+		return false;
+	}
+
+	@Override
+	protected boolean deleteAction() {
+		return false;
+	}
+
+	@Override
+	protected boolean modifyAction() {
+		return false;
+	}
+
+	@Override
+	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+		boolean success = super.doAction(inputTable, flowVariables, saveColumnProperties);
+		
+		for (AttributeNodeEdit attributeEdit : getAttributeNodeEdits()) {
+			success &= attributeEdit.doAction(inputTable, flowVariables, saveColumnProperties);
+		}
+		
+		for (DataSetNodeEdit dataSetEdit : getDataSetNodeEdits()) {
+			success &= dataSetEdit.doAction(inputTable, flowVariables, saveColumnProperties);
+		}
+		
+		for (GroupNodeEdit groupEdit : getGroupNodeEdits()) {
+			success &= groupEdit.doAction(inputTable, flowVariables, saveColumnProperties);
+		}
+		
+		return success;
+	}
+	
+	// TODO maybe try to add it by using setComponentPopupMenu() to the respective tree node; FileNodeEdit should upd the JTree
+	public class GroupNodeMenu extends JPopupMenu {
 
     	private static final long serialVersionUID = -7709804406752499090L;
 
-    	private static GroupPropertiesDialog propertiesDialog;
+    	private GroupPropertiesDialog m_propertiesDialog;
     	
     	private JTree m_tree;
     	
-    	private EditTreeConfiguration m_editTreeConfig;
-    	
     	private DefaultMutableTreeNode m_node;
     	
-		private GroupNodeMenu(boolean fromTreeNodeEdit) {
-    		if (fromTreeNodeEdit) {
+		private GroupNodeMenu() {
+			if (!(GroupNodeEdit.this instanceof FileNodeEdit)) {
 	    		JMenuItem itemEdit = new JMenuItem("Edit group properties");
 	    		itemEdit.addActionListener(new ActionListener() {
 					
 					@Override
 					public void actionPerformed(ActionEvent e) {
-						if (propertiesDialog == null) {
-							propertiesDialog = new GroupPropertiesDialog("Group properties");
+						if (m_propertiesDialog == null) {
+							m_propertiesDialog = new GroupPropertiesDialog("Group properties");
 						}
 						
-						propertiesDialog.initPropertyItems((GroupNodeEdit) m_node.getUserObject());
-						propertiesDialog.setVisible(true);
+						m_propertiesDialog.initPropertyItems((GroupNodeEdit) m_node.getUserObject());
+						m_propertiesDialog.setVisible(true);
 					}
 				});
 	    		add(itemEdit);
-    		}
+			}
     		
     		JMenuItem itemCreate = new JMenuItem("Create group");
     		itemCreate.addActionListener(new ActionListener() {
 				
 				@Override
 				public void actionPerformed(ActionEvent e) {
-					String newName = "group[" + m_node.getChildCount() + "]";
-					Object userObject = m_node.getUserObject();
-					GroupNodeEdit newEdit = null;
-					if (userObject instanceof GroupNodeEdit) {
-						GroupNodeEdit edit = (GroupNodeEdit) userObject;
-                		newEdit = new GroupNodeEdit(newName);
-                		edit.addGroupNodeEdit(newEdit);
-                		
-            		} else {
-                		newEdit = new GroupNodeEdit(m_node, newName);
-                    	m_editTreeConfig.addGroupNodeEdit(newEdit);
-            		}
-					newEdit.addEditToNode(m_node);
+					String newName = getUniqueName(m_node, "group");
+					GroupNodeEdit newEdit = new GroupNodeEdit((GroupNodeEdit) m_node.getUserObject(), newName);
+                    newEdit.addEditToNode(m_node);
+                    
     				((DefaultTreeModel) (m_tree.getModel())).reload();
     				m_tree.makeVisible(new TreePath(m_node.getPath()).pathByAddingChild(m_node.getFirstChild()));
 				}
 			});
     		add(itemCreate);
     		
-    		if (fromTreeNodeEdit) {
-        		JMenuItem itemDelete = new JMenuItem("Delete group");
-        		itemDelete.addActionListener(new ActionListener() {
-    				
-    				@Override
-    				public void actionPerformed(ActionEvent e) {
-						Object userObject = m_node.getUserObject();
-						if (userObject instanceof GroupNodeEdit) {
-							GroupNodeEdit edit = (GroupNodeEdit) userObject;
-	                    	DefaultMutableTreeNode parent = (DefaultMutableTreeNode) m_node.getParent();
-	                    	Object parentObject = parent.getUserObject();
-	                    	if (parentObject instanceof GroupNodeEdit) {
-	    						((GroupNodeEdit) parentObject).removeGroupNodeEdit(edit);
-	                    		
-	                		} else {
-		                    	m_editTreeConfig.removeGroupNodeEdit(edit);
-	                		}
-	        				((DefaultTreeModel) (m_tree.getModel())).reload();
-	        				TreePath path = new TreePath(parent.getPath());
-	        				path = parent.getChildCount() > 0 ? path.pathByAddingChild(parent.getFirstChild()) : path;
-	        				m_tree.makeVisible(path);
-						}
-    				}
-    			});
-        		add(itemDelete);
-    		}
+    		JMenuItem itemDelete = new JMenuItem("Delete group");
+    		itemDelete.addActionListener(new ActionListener() {
+				
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					Object userObject = m_node.getUserObject();
+					if (userObject instanceof GroupNodeEdit) {
+						GroupNodeEdit edit = (GroupNodeEdit) userObject;
+                    	DefaultMutableTreeNode parent = (DefaultMutableTreeNode) m_node.getParent();
+                    	if (edit.getEditAction().isCreateOrCopyAction()) {
+	                    	((GroupNodeEdit) parent.getUserObject()).removeGroupNodeEdit(edit);
+                    	} else {
+                    		edit.setEditAction(EditAction.DELETE);
+                    	}
+        				
+                    	((DefaultTreeModel) (m_tree.getModel())).reload();
+        				TreePath path = new TreePath(parent.getPath());
+        				path = parent.getChildCount() > 0 ? path.pathByAddingChild(parent.getFirstChild()) : path;
+        				m_tree.makeVisible(path);
+					}
+				}
+			});
+    		add(itemDelete);
     	}
 		
-		public void initMenu(JTree tree, EditTreeConfiguration editTreeConfig, DefaultMutableTreeNode node) {
+		public void initMenu(JTree tree, DefaultMutableTreeNode node) {
 			m_tree = tree;
-			m_editTreeConfig = editTreeConfig;
 			m_node = node;
 		}
 		
