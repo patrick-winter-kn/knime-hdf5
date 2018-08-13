@@ -67,7 +67,7 @@ public class EditTreePanel extends JPanel {
 
 			private final String[] itemNames = { "column", "attribute", "dataSet", "file", "group" };
 			
-			private final String[] stateNames = { "idle", "new", "modify", "delete", "invalid" };
+			private final String[] stateNames = { "idle", "new", "delete", "invalid" };
 			
 			private final Icon[][] icons = loadAllIcons();
 			
@@ -76,7 +76,10 @@ public class EditTreePanel extends JPanel {
 				
 				for (int i = 0; i < itemNames.length; i++) {
 					for (int j = 0; j < stateNames.length; j++) {
-						loadedIcons[i][j] = loadIcon(EditTreePanel.class, "/icon/" + itemNames[i] + "_" + stateNames[j] + ".png");
+						String iconName = itemNames[i] + "_" + stateNames[j];
+						if (!iconName.equals("file_delete")) {
+							loadedIcons[i][j] = loadIcon(EditTreePanel.class, "/icon/" + iconName + ".png");
+						}
 					}
 				}
 				
@@ -114,11 +117,10 @@ public class EditTreePanel extends JPanel {
 			
 			private int getStateId(TreeNodeEdit edit) {
 				EditAction editAction = edit.getEditAction();
-				return !edit.isValid() ? 4 : 
-					(editAction == TreeNodeEdit.EditAction.NO_ACTION ? 0 : 
+				return !edit.isValid() ? 3 : 
+					(editAction == TreeNodeEdit.EditAction.NO_ACTION || editAction == TreeNodeEdit.EditAction.MODIFY ? 0 : 
 					(editAction.isCreateOrCopyAction() ? 1 :
-					(editAction == TreeNodeEdit.EditAction.MODIFY ? 2 :
-					(editAction == TreeNodeEdit.EditAction.DELETE ? 3 : -1))));
+					(editAction == TreeNodeEdit.EditAction.DELETE ? 2 : -1)));
 			}
 			
 			@Override
@@ -137,7 +139,7 @@ public class EditTreePanel extends JPanel {
 					
 					if (nodeObject instanceof TreeNodeEdit) {
 						TreeNodeEdit edit = (TreeNodeEdit) nodeObject;
-						text = edit.getName();
+						text = (edit.getEditAction() == TreeNodeEdit.EditAction.MODIFY ? "*" : "") + edit.getName();
 						icon = icons[getItemId(edit)][getStateId(edit)];
 						setBackground(edit.isValid() ? Color.WHITE : Color.RED);
 					}
@@ -367,8 +369,12 @@ public class EditTreePanel extends JPanel {
 		m_editTreeConfig.setFileNodeEdit(fileEdit);
 		fileEdit.setEditAsRoot((DefaultTreeModel) m_tree.getModel());
 		addChildrenToNodeOfEdit(fileEdit);
-
-		DefaultMutableTreeNode root = fileEdit.getTreeNode();
+		
+		showChildrenOfRoot();
+	}
+	
+	private void showChildrenOfRoot() {
+		DefaultMutableTreeNode root = m_editTreeConfig.getFileNodeEdit().getTreeNode();
 		if (root.getChildCount() > 0) {
 			TreePath path = new TreePath(root.getPath());
 			m_tree.makeVisible(path.pathByAddingChild(root.getFirstChild()));
@@ -446,8 +452,12 @@ public class EditTreePanel extends JPanel {
 	}
 	
 	void loadConfiguration(EditTreeConfiguration editTreeConfig) {
-		editTreeConfig.getFileNodeEdit().setEditAsRoot((DefaultTreeModel) m_tree.getModel());
+		// editTreeConfig.getFileNodeEdit().setEditAsRoot((DefaultTreeModel) m_tree.getModel());
+		// m_editTreeConfig = editTreeConfig;
+
+		m_editTreeConfig.getFileNodeEdit().integrate(editTreeConfig.getFileNodeEdit());
 		
-		m_editTreeConfig = editTreeConfig;
+		((DefaultTreeModel) (m_tree.getModel())).reload();
+		showChildrenOfRoot();
 	}
 }

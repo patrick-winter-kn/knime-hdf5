@@ -21,13 +21,13 @@ public class FileNodeEdit extends GroupNodeEdit {
 	
 	public FileNodeEdit(Hdf5File file) {
 		this(file.getFilePath());
-		m_editAction = EditAction.NO_ACTION;
+		setEditAction(EditAction.NO_ACTION);
 		setHdfObject(file);
 	}
 	
 	public FileNodeEdit(String filePath) {
 		super(null, filePath.substring(filePath.lastIndexOf(File.separator) + 1));
-		m_editAction = EditAction.CREATE;
+		setEditAction(EditAction.CREATE);
 		m_filePath = filePath;
 	}
 	
@@ -54,9 +54,10 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	public void setEditAsRoot(DefaultTreeModel treeModel) {
-		DefaultMutableTreeNode node = new DefaultMutableTreeNode(this);
-		treeModel.setRoot(node);
-		m_treeNode = node;
+		if (m_treeNode == null) {
+			m_treeNode = new DefaultMutableTreeNode(this);
+		}
+		treeModel.setRoot(m_treeNode);
 		/*
 		for (GroupNodeEdit edit : getGroupNodeEdits()) {
 	        edit.addEditToNode(node);
@@ -108,7 +109,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	protected boolean modifyAction() {
 		return false;
 	}
-
+	
 	@Override
 	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
 		try {

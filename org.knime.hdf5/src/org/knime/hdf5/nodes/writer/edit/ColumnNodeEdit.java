@@ -24,12 +24,12 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 
 	public ColumnNodeEdit(ColumnNodeEdit column, DataSetNodeEdit parent) {
 		this(column.getColumnSpec(), parent, false);
-		m_editAction = EditAction.COPY;
+		setEditAction(EditAction.COPY);
 	}
 	
 	public ColumnNodeEdit(DataColumnSpec columnSpec, DataSetNodeEdit parent, boolean isCreate) {
 		this(columnSpec.getName(), columnSpec, parent);
-		m_editAction = isCreate ? EditAction.CREATE : EditAction.NO_ACTION;
+		setEditAction(isCreate ? EditAction.CREATE : EditAction.NO_ACTION);
 	}
 	
 	ColumnNodeEdit(String inputPathFromFileWithName, DataColumnSpec columnSpec, DataSetNodeEdit parent) {
@@ -56,10 +56,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	public void addEditToNode(DefaultMutableTreeNode parentNode) {
-		DefaultMutableTreeNode node = new DefaultMutableTreeNode(this);
-		parentNode.add(node);
+		if (m_treeNode == null) {
+			m_treeNode = new DefaultMutableTreeNode(this);
+		}
+		parentNode.add(m_treeNode);
 		//node.setAllowsChildren(false);
-		m_treeNode = node;
 	}
 	
 	@Override
@@ -101,7 +102,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
     	private DefaultMutableTreeNode m_node;
     	
 		private ColumnNodeMenu() {
-    		JMenuItem itemDelete = new JMenuItem("Delete column");
+    		JMenuItem itemDelete = new JMenuItem("Delete");
     		itemDelete.addActionListener(new ActionListener() {
 				
 				@Override

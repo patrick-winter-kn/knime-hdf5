@@ -116,7 +116,7 @@ public abstract class TreeNodeEdit {
 	
 	private Object m_hdfObject;
 	
-	protected EditAction m_editAction = EditAction.NO_ACTION;
+	private EditAction m_editAction = EditAction.NO_ACTION;
 	
 	protected boolean m_valid;
 
@@ -200,6 +200,9 @@ public abstract class TreeNodeEdit {
 	
 	protected void setEditAction(EditAction editAction) {
 		m_editAction = editAction;
+		if (m_parent != null && m_parent.getEditAction() == EditAction.NO_ACTION && m_editAction != EditAction.NO_ACTION) {
+			m_parent.setEditAction(EditAction.MODIFY);
+		}
 	}
 
 	public boolean isValid() {
@@ -211,12 +214,16 @@ public abstract class TreeNodeEdit {
 	}
 	
 	protected String getOutputPathFromFileWithName() {
-		return m_outputPathFromFile + "/" + m_name;
+		return (m_outputPathFromFile != null ? m_outputPathFromFile + "/" : "") + m_name;
 	}
 	
 	public boolean validate() {
 		setValid(getValidation());
 		return isValid();
+	}
+	
+	protected void updateParentEditAction() {
+		setEditAction(getEditAction());
 	}
 	
 	public String getOutputPathFromFileWithoutEndSlash() {

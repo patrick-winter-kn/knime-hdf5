@@ -133,14 +133,11 @@ abstract public class Hdf5TreeElement {
 	
 	/**
 	 * 
-	 * @param endSlash (only relevant if treeElement is an {@code Hdf5File})
-	 * set to {@code true} if an {@code '/'} should be added to the path. <br>
-	 * If the treeElement is not an {@code Hdf5File}, the {@code '/'} will always be
-	 * added (even if {@code endSlash == false}).
+	 * @param endSlash {@code true} if an {@code '/'} should be added after the name and if it is no {@code Hdf5File}
 	 * @return
 	 */
 	public String getPathFromFileWithName(boolean endSlash) {
-		return (isFile() ? "" : getPathFromFile() + getName()) + (endSlash ? "/" : "");
+		return (isFile() ? "" : getPathFromFile() + getName() + (endSlash ? "/" : ""));
 	}
 	
 	public String getPathFromFileWithName() {
@@ -324,7 +321,7 @@ abstract public class Hdf5TreeElement {
 	
 	void addAttribute(Hdf5Attribute<?> attribute) {
 		m_attributes.add(attribute);
-		attribute.setPathFromFile(getPathFromFileWithName(false));
+		attribute.setPathFromFile(getPathFromFileWithName(true));
 		attribute.setParent(this);
 	}
 	
@@ -363,7 +360,7 @@ abstract public class Hdf5TreeElement {
 		Map<String, Hdf5DataType> paths = new LinkedHashMap<>();
 		
 		if (isOpen()) {
-			String path = getPathFromFileWithName(false);
+			String path = getPathFromFileWithName(true);
 			
 			Iterator<String> iterAttr = loadAttributeNames().iterator();
 			while (iterAttr.hasNext()) {

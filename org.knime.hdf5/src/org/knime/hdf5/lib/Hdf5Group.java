@@ -278,13 +278,13 @@ public class Hdf5Group extends Hdf5TreeElement {
 	
 	private void addGroup(Hdf5Group group) {
 		m_groups.add(group);
-		group.setPathFromFile(getPathFromFileWithName(false));
+		group.setPathFromFile(getPathFromFileWithName(true));
 		group.setParent(this);
 	}
 
 	void addDataSet(Hdf5DataSet<?> dataSet) {
 		m_dataSets.add(dataSet);
-		dataSet.setPathFromFile(getPathFromFileWithName(false));
+		dataSet.setPathFromFile(getPathFromFileWithName(true));
 		dataSet.setParent(this);
 	}
 
@@ -331,7 +331,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		Map<String, Hdf5DataType> paths = new LinkedHashMap<>();
 		
 		if (isOpen()) {
-			String path = getPathFromFileWithName(false);
+			String path = getPathFromFileWithName(true);
 			
 			Iterator<String> iterDS = loadDataSetNames().iterator();
 			while (iterDS.hasNext()) {
