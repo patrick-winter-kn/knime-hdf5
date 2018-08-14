@@ -35,6 +35,7 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
+import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
@@ -64,25 +65,43 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 
 	public AttributeNodeEdit(FlowVariable var, TreeNodeEdit parent) {
 		this(var.getName(), parent, var.getName().replaceAll("\\\\/", "/"), Hdf5KnimeDataType.getKnimeDataType(var.getType()));
-		analyseFlowVariable(var);
+		updatePropertiesFromFlowVariable(var);
 		setEditAction(EditAction.CREATE);
 	}
 
 	public AttributeNodeEdit(AttributeNodeEdit copyAttribute, TreeNodeEdit parent) {
 		this(copyAttribute.getInputPathFromFileWithName(), parent, copyAttribute.getName(), copyAttribute.getKnimeType());
-		setEditAction(EditAction.COPY);
+		m_hdfType = copyAttribute.getHdfType();
+		m_compoundAsArrayPossible = copyAttribute.isCompoundAsArrayPossible();
+		m_compoundAsArrayUsed = copyAttribute.isCompoundAsArrayUsed();
+		m_endian = copyAttribute.getEndian();
+		m_fixed = copyAttribute.isFixed();
+		m_stringLength = copyAttribute.getStringLength();
+		m_compoundItemStringLength = copyAttribute.getCompoundItemStringLength();
+		m_overwrite = copyAttribute.isOverwrite();
+		setEditAction(copyAttribute.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
 	}
 
 	public AttributeNodeEdit(Hdf5Attribute<?> attribute, TreeNodeEdit parent) {
-		this(attribute.getPathFromFileWithName(), parent, attribute.getName(), attribute.getType().getKnimeType());
+		this(attribute.getPathFromFile() + attribute.getName().replaceAll("/", "\\\\/"), parent, attribute.getName(), attribute.getType().getKnimeType());
 		m_hdfType = m_knimeType.getEquivalentHdfType();
 		m_endian = Endian.LITTLE_ENDIAN;
-		m_stringLength = (int) attribute.getType().getHdfType().getStringLength();
+		
+		if (attribute.getType().isHdfType(HdfDataType.STRING)) {
+			m_stringLength = (int) attribute.getType().getHdfType().getStringLength();
+		} else {
+			Object[] values = attribute.getValue() == null ? attribute.read() : attribute.getValue();
+			for (Object value : values) {
+				int newStringLength = value.toString().length();
+				m_stringLength = newStringLength > m_stringLength ? newStringLength : m_stringLength;
+			}
+		}
+		
 		setEditAction(EditAction.NO_ACTION);
 		setHdfObject(attribute);
 	}
 
-	AttributeNodeEdit(String inputPathFromFileWithName, TreeNodeEdit parent, String name, Hdf5KnimeDataType knimetype) {
+	private AttributeNodeEdit(String inputPathFromFileWithName, TreeNodeEdit parent, String name, Hdf5KnimeDataType knimetype) {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name);
 		m_attributeEditMenu = new AttributeNodeMenu();
 		m_knimeType = knimetype;
@@ -112,7 +131,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		parent.addAttributeNodeEdit(this);
 	}
 	
-	private void analyseFlowVariable(FlowVariable var) {
+	private void updatePropertiesFromFlowVariable(FlowVariable var) {
 		Hdf5KnimeDataType knimeType = Hdf5KnimeDataType.getKnimeDataType(var.getType());
 		m_endian = Endian.LITTLE_ENDIAN;
 		m_stringLength = var.getValueAsString().length();
@@ -121,7 +140,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			knimeType = Hdf5KnimeDataType.getKnimeDataType(values);
 			for (Object value : values) {
 				int newStringLength = value.toString().length();
-				m_compoundItemStringLength = newStringLength > m_compoundItemStringLength ? newStringLength : m_compoundItemStringLength;;
+				m_compoundItemStringLength = newStringLength > m_compoundItemStringLength ? newStringLength : m_compoundItemStringLength;
 			}
 		} catch (UnsupportedDataTypeException e) {
 			m_compoundItemStringLength = m_stringLength;
@@ -146,6 +165,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 
 	private void setHdfType(HdfDataType hdfType) {
 		m_hdfType = hdfType;
+	}
+	
+	private boolean isCompoundAsArrayPossible() {
+		return m_compoundAsArrayPossible;
 	}
 	
 	private void setCompoundAsArrayPossible(boolean compoundAsArrayPossible) {
@@ -226,7 +249,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		
     	try {
 	        if (!getEditAction().isCreateOrCopyAction()) {
-	        	setHdfObject(((Hdf5TreeElement) getParent().getHdfObject()).getAttribute(getName()));
+	        	setHdfObject(((Hdf5TreeElement) getParent().getHdfObject()).getAttribute(
+	        			Hdf5Attribute.getPathAndName(getInputPathFromFileWithName())[1]));
 	        }
 		} catch (IOException ioe) {
 			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
@@ -248,7 +272,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			m_treeNode = new DefaultMutableTreeNode(this);
 		}
 		parentNode.add(m_treeNode);
-		//node.setAllowsChildren(false);
 	}
 
 	@Override
@@ -268,24 +291,70 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		if (!parent.isFile()) {
 			parent.open();
 		}
-		Hdf5Attribute<?> attribute = parent.createAndWriteAttribute(this, var);
-		setHdfObject(attribute);
-		return attribute != null;
+		Hdf5Attribute<?> newAttribute = parent.createAndWriteAttribute(this, var);
+		setHdfObject(newAttribute);
+		return newAttribute != null;
 	}
 
 	@Override
 	protected boolean copyAction() {
-		return false;
+		Hdf5Attribute<?> copyAttribute = null;
+		try {
+			copyAttribute = ((Hdf5File) getRoot().getHdfObject()).getAttributeByPath(getInputPathFromFileWithName());
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+		}
+
+		Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
+		if (!parent.isFile()) {
+			parent.open();
+		}
+		Hdf5Attribute<?> newAttribute = parent.createAndWriteAttribute(this, copyAttribute);
+		setHdfObject(newAttribute);
+		
+		return newAttribute != null;
 	}
 
 	@Override
 	protected boolean deleteAction() {
-		return false;
+		Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
+		if (!parent.isFile()) {
+			parent.open();
+		}
+		
+		boolean success = parent.deleteAttribute(Hdf5Attribute.getPathAndName(getInputPathFromFileWithName())[1]) >= 0;
+		if (success) {
+			setHdfObject((Hdf5Attribute<?>) null);
+		}
+		
+		return success;
 	}
 
 	@Override
 	protected boolean modifyAction() {
-		return false;
+		// TODO maybe find a way without deleting and recreating it
+		Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
+		if (!parent.isFile()) {
+			parent.open();
+		}
+		
+		String oldName = Hdf5Attribute.getPathAndName(getInputPathFromFileWithName())[1];
+		Hdf5Attribute<?> tempAttribute = null;
+		try {
+			tempAttribute = parent.copyAttribute(TreeNodeEdit.getUniqueName(parent.loadAttributeNames(), oldName), parent.getAttribute(oldName));
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+		}
+		boolean success = tempAttribute != null;
+		success &= parent.deleteAttribute(oldName) >= 0;
+		
+		Hdf5Attribute<?> newAttribute = parent.createAndWriteAttribute(this, tempAttribute);
+		setHdfObject(newAttribute);
+		success &= newAttribute != null;
+
+		success &= parent.deleteAttribute(tempAttribute.getName()) >= 0;
+		
+		return success;
 	}
 	
 	public class AttributeNodeMenu extends JPopupMenu {
@@ -468,6 +537,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				((DefaultTreeModel) (m_tree.getModel())).reload();
 				m_tree.makeVisible(new TreePath(m_node.getPath()));
 				
+				edit.setEditAction(EditAction.MODIFY);
 				edit.validate();
 			}
 		}

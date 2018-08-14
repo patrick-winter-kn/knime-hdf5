@@ -22,9 +22,9 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	private final DataColumnSpec m_columnSpec;
 
-	public ColumnNodeEdit(ColumnNodeEdit column, DataSetNodeEdit parent) {
-		this(column.getColumnSpec(), parent, false);
-		setEditAction(EditAction.COPY);
+	public ColumnNodeEdit(ColumnNodeEdit copyColumn, DataSetNodeEdit parent) {
+		this(copyColumn.getColumnSpec(), parent, false);
+		setEditAction(copyColumn.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
 	}
 	
 	public ColumnNodeEdit(DataColumnSpec columnSpec, DataSetNodeEdit parent, boolean isCreate) {
@@ -60,7 +60,6 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 			m_treeNode = new DefaultMutableTreeNode(this);
 		}
 		parentNode.add(m_treeNode);
-		//node.setAllowsChildren(false);
 	}
 	
 	@Override

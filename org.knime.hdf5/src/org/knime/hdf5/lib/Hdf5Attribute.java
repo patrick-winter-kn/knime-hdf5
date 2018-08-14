@@ -172,6 +172,18 @@ public class Hdf5Attribute<Type> {
 		}
 	}
 	
+	public static String[] getPathAndName(String pathWithName) {
+		int firstSlashInName = pathWithName.indexOf("\\/");
+		String pathWithFirstPartOfName = firstSlashInName == -1 ? pathWithName : pathWithName.substring(0, firstSlashInName);
+		int pathStringLength = pathWithFirstPartOfName.lastIndexOf("/");
+		
+		String name = pathWithName.substring(pathStringLength + 1);
+		name = name.replaceAll("\\\\/", "/");
+		String pathWithoutName = pathWithName.substring(0, pathStringLength);
+		
+		return new String[] { pathWithoutName, name };
+	}
+	
 	long getAttributeId() {
 		return m_attributeId;
 	}

@@ -43,13 +43,13 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	private final List<AttributeNodeEdit> m_attributeEdits = new ArrayList<>();
 
 	public GroupNodeEdit(GroupNodeEdit parent, String name) {
-		this((GroupNodeEdit) null, parent, name);
+		this((String) null, parent, name);
 		setEditAction(EditAction.CREATE);
 	}
 	
-	public GroupNodeEdit(GroupNodeEdit copyGroup, GroupNodeEdit parent, String name) {
-		this(copyGroup != null ? copyGroup.getInputPathFromFileWithName() : null, parent, name);
-		setEditAction(EditAction.COPY);
+	public GroupNodeEdit(GroupNodeEdit copyGroup, GroupNodeEdit parent) {
+		this(copyGroup.getInputPathFromFileWithName(), parent, copyGroup.getName());
+		setEditAction(copyGroup.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
 		// TODO add elements in this group
 	}
 	
@@ -482,6 +482,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 				((DefaultTreeModel) (m_tree.getModel())).reload();
 				m_tree.makeVisible(new TreePath(m_node.getPath()));
 
+				edit.setEditAction(EditAction.MODIFY);
 				edit.validate();
 			}
 		}

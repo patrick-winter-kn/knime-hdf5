@@ -170,6 +170,10 @@ public class Hdf5HdfDataType {
 		return new Hdf5HdfDataType(type, endian);
 	}
 	
+	public static Hdf5HdfDataType createCopyFrom(Hdf5HdfDataType copyHdfType) {
+		return getInstance(copyHdfType.getType(), copyHdfType.getEndian());
+	}
+	
 	void createHdfDataTypeString(final long stringLength) {
 		if (m_type == HdfDataType.STRING) {
 			try {
@@ -264,6 +268,6 @@ public class Hdf5HdfDataType {
 	
 	@Override
 	public String toString() {
-		return m_type.toString() + " " + m_endian.toString();
+		return m_type.toString() + "," + m_endian.toString();
 	}
 }

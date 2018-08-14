@@ -32,8 +32,6 @@ import javax.swing.TransferHandler;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.TreePath;
 
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataTableSpec;
@@ -130,7 +128,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		dataPanel.add(outputPanel);
 		outputPanel.setLayout(new BoxLayout(outputPanel, BoxLayout.Y_AXIS));
 		outputPanel.setBorder(BorderFactory.createTitledBorder(" Output "));
-		JButton updateButton = new JButton("update/reset file config");
+		JButton updateButton = new JButton("update file path/reset config");
 		updateButton.addActionListener(new ActionListener() {
 			
 			@Override

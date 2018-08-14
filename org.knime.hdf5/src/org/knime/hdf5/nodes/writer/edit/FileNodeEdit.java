@@ -113,8 +113,12 @@ public class FileNodeEdit extends GroupNodeEdit {
 	@Override
 	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
 		try {
-			setHdfObject(Hdf5File.openFile(getFilePath(), Hdf5File.READ_WRITE_ACCESS));
-			return getHdfObject() != null && super.doAction(inputTable, flowVariables, saveColumnProperties);
+			boolean success = true;
+			if (!getEditAction().isCreateOrCopyAction()) {
+				setHdfObject(Hdf5File.openFile(getFilePath(), Hdf5File.READ_WRITE_ACCESS));
+				success = getHdfObject() != null;
+			}
+			return success && super.doAction(inputTable, flowVariables, saveColumnProperties);
 			
 		} catch (IOException ioe) {
 			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);

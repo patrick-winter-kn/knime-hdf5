@@ -97,7 +97,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	public DataSetNodeEdit(DataSetNodeEdit copyDataSet, GroupNodeEdit parent) {
 		this(copyDataSet.getInputPathFromFileWithName(), parent, copyDataSet.getName());
-		setEditAction(EditAction.COPY);
+		setEditAction(copyDataSet.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
 		// TODO add columns
 	}
 
@@ -782,7 +782,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				
 				((DefaultTreeModel) (m_tree.getModel())).reload();
 				m_tree.makeVisible(new TreePath(((DefaultMutableTreeNode) m_node.getFirstChild()).getPath()));
-				
+
+				edit.setEditAction(EditAction.MODIFY);
 				edit.validate();
 			}
 		}

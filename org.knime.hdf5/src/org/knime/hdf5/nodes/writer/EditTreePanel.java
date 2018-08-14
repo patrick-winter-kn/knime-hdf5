@@ -164,7 +164,6 @@ public class EditTreePanel extends JPanel {
             }
         	
 			protected Transferable createTransferable(JComponent comp) {
-				m_copyEdits.clear();
                 if (comp instanceof JTree) {
                 	JTree tree = (JTree) comp;
                 	for (TreePath path : tree.getSelectionPaths()) {
@@ -181,17 +180,17 @@ public class EditTreePanel extends JPanel {
                 
                 if (info.isDataFlavorSupported(DataFlavor.stringFlavor) && path != null) {
                 	Object nodeObject = ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject();
-                	if (nodeObject instanceof TreeNodeEdit) {
+                	if (!m_copyEdits.isEmpty() && nodeObject instanceof TreeNodeEdit) {
                     	TreeNodeEdit edit = (TreeNodeEdit) nodeObject;
-        				boolean pasteDataSet = edit instanceof DataSetNodeEdit;
-        				boolean pasteGroup = edit instanceof GroupNodeEdit;
+        				boolean pasteToDataSet = edit instanceof DataSetNodeEdit;
+        				boolean pasteToGroup = edit instanceof GroupNodeEdit;
         				
         				for (TreeNodeEdit copyEdit : m_copyEdits) {
-            				pasteDataSet &= copyEdit instanceof ColumnNodeEdit || copyEdit instanceof AttributeNodeEdit;
-            				pasteGroup &= copyEdit instanceof DataSetNodeEdit || copyEdit instanceof GroupNodeEdit || copyEdit instanceof AttributeNodeEdit;
+            				pasteToDataSet &= copyEdit instanceof ColumnNodeEdit || copyEdit instanceof AttributeNodeEdit;
+            				pasteToGroup &= copyEdit instanceof DataSetNodeEdit || copyEdit instanceof GroupNodeEdit || copyEdit instanceof AttributeNodeEdit;
         				}
 
-                        return pasteDataSet || pasteGroup;
+                        return pasteToDataSet || pasteToGroup;
                 	}
                 	
                 	return true;
@@ -278,30 +277,37 @@ public class EditTreePanel extends JPanel {
             	TreeNodeEdit edit = (TreeNodeEdit) parent.getUserObject();
             	
 				for (TreeNodeEdit copyEdit : m_copyEdits) {
+					TreeNodeEdit newEdit = null;
 					if (edit instanceof GroupNodeEdit) {
 						GroupNodeEdit groupEdit = (GroupNodeEdit) edit;
 						if (copyEdit instanceof AttributeNodeEdit) {
-							groupEdit.addAttributeNodeEdit((AttributeNodeEdit) copyEdit);
+							newEdit = new AttributeNodeEdit((AttributeNodeEdit) copyEdit, groupEdit);
 						} else if (copyEdit instanceof DataSetNodeEdit) {
-							groupEdit.addDataSetNodeEdit((DataSetNodeEdit) copyEdit);
+							newEdit = new DataSetNodeEdit((DataSetNodeEdit) copyEdit, groupEdit);
 						} else if (copyEdit instanceof GroupNodeEdit) {
-							groupEdit.addGroupNodeEdit((GroupNodeEdit) copyEdit);
+							newEdit = new GroupNodeEdit((GroupNodeEdit) copyEdit, groupEdit);
 						}
             		} else if (edit instanceof DataSetNodeEdit) {
             			DataSetNodeEdit dataSetEdit = (DataSetNodeEdit) edit;
             			if (copyEdit instanceof AttributeNodeEdit) {
-							dataSetEdit.addAttributeNodeEdit((AttributeNodeEdit) copyEdit);
+							newEdit = new AttributeNodeEdit((AttributeNodeEdit) copyEdit, dataSetEdit);
 						} else if (copyEdit instanceof ColumnNodeEdit) {
-							dataSetEdit.addColumnNodeEdit((ColumnNodeEdit) copyEdit);
+							newEdit = new ColumnNodeEdit((ColumnNodeEdit) copyEdit, dataSetEdit);
 						};
             		}
-    				copyEdit.addEditToNode(parent);
+					newEdit.addEditToNode(parent);
 				}
 				
 				((DefaultTreeModel) (m_tree.getModel())).reload();
 				m_tree.makeVisible(path.pathByAddingChild(parent.getFirstChild()));
 				
 				return true;
+			}
+			
+			@Override
+			protected void exportDone(JComponent source, Transferable data, int action) {
+				super.exportDone(source, data, action);
+				m_copyEdits.clear();
 			}
         });
     	m_tree.setDropMode(DropMode.ON_OR_INSERT);
@@ -413,7 +419,6 @@ public class EditTreePanel extends JPanel {
 						DataColumnSpec spec = new DataColumnSpecCreator("col" + (i + 1), parentDataSet.getType().getKnimeType().getColumnDataType()).createSpec();
 						ColumnNodeEdit columnEdit = new ColumnNodeEdit(spec, (DataSetNodeEdit) parentEdit, false);
 						columnEdit.addEditToNode(parentEdit.getTreeNode());
-		    			//columnEdit.getTreeNode().setAllowsChildren(false);
 	        			
 					} catch (UnsupportedDataTypeException udte) {
 						NodeLogger.getLogger("HDF5 Files").error(udte.getMessage(), udte);
@@ -424,7 +429,6 @@ public class EditTreePanel extends JPanel {
 					DataColumnSpec spec = new DataColumnSpecCreator("col", parentDataSet.getType().getKnimeType().getColumnDataType()).createSpec();
 					ColumnNodeEdit columnEdit = new ColumnNodeEdit(spec, (DataSetNodeEdit) parentEdit, false);
 					columnEdit.addEditToNode(parentEdit.getTreeNode());
-	    			//columnEdit.getTreeNode().setAllowsChildren(false);
         			
 				} catch (UnsupportedDataTypeException udte) {
 					NodeLogger.getLogger("HDF5 Files").error(udte.getMessage(), udte);
@@ -435,10 +439,9 @@ public class EditTreePanel extends JPanel {
 		Hdf5TreeElement parentElement = (Hdf5TreeElement) parentObject;
     	try {
     		for (String attributeName : parentElement.loadAttributeNames()) {
-    			Hdf5Attribute<?> attribute = parentElement.getAttribute(attributeName);
+    			Hdf5Attribute<?> attribute = parentElement.updateAttribute(attributeName);
     			AttributeNodeEdit attributeEdit = new AttributeNodeEdit(attribute, parentEdit);
     			attributeEdit.addEditToNode(parentEdit.getTreeNode());
-    			//attributeEdit.getTreeNode().setAllowsChildren(false);
     		}
     	} catch (IOException ioe) {
     		// TODO exception
@@ -452,9 +455,6 @@ public class EditTreePanel extends JPanel {
 	}
 	
 	void loadConfiguration(EditTreeConfiguration editTreeConfig) {
-		// editTreeConfig.getFileNodeEdit().setEditAsRoot((DefaultTreeModel) m_tree.getModel());
-		// m_editTreeConfig = editTreeConfig;
-
 		m_editTreeConfig.getFileNodeEdit().integrate(editTreeConfig.getFileNodeEdit());
 		
 		((DefaultTreeModel) (m_tree.getModel())).reload();

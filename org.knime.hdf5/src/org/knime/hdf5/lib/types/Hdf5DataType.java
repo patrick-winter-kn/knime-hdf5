@@ -62,33 +62,7 @@ public class Hdf5DataType {
 		}
 		
 		m_hdfType = Hdf5HdfDataType.getInstance(HdfDataType.get(typeId), endian);
-		
-		switch (m_hdfType.getType()) {
-		case BYTE:
-		case UBYTE:
-		case SHORT:
-		case USHORT:
-		case INTEGER:
-			m_knimeType = Hdf5KnimeDataType.INTEGER;
-			break;
-		case UINTEGER:
-		case LONG:
-			if (m_fromDS) {
-				m_knimeType = Hdf5KnimeDataType.LONG;
-				break;
-			}
-		case ULONG:
-		case FLOAT:
-		case DOUBLE:
-			m_knimeType = Hdf5KnimeDataType.DOUBLE;
-			break;
-		case STRING:
-			m_knimeType = Hdf5KnimeDataType.STRING;
-			break;
-		default:
-			m_knimeType = Hdf5KnimeDataType.UNKNOWN;
-			break;
-		}
+		m_knimeType = Hdf5KnimeDataType.getKnimeDataType(m_hdfType.getType(), m_fromDS);
 	}
 	
 	private static Hdf5DataType getInstance(long elementId, long classId, int size, Endian endian, boolean unsigned, boolean vlen) {
@@ -124,6 +98,11 @@ public class Hdf5DataType {
         }
 		
 		return dataType;
+	}
+	
+	public static Hdf5DataType createCopyFrom(Hdf5DataType copyDataType) {
+		return createDataType(Hdf5HdfDataType.createCopyFrom(copyDataType.getHdfType()),
+				copyDataType.getKnimeType(), copyDataType.isVlen(), copyDataType.isFromDS(), copyDataType.getHdfType().getStringLength());
 	}
 	
 	public static Hdf5DataType openDataType(long elementId, long classId, int size, Endian endian, boolean unsigned, boolean vlen) {

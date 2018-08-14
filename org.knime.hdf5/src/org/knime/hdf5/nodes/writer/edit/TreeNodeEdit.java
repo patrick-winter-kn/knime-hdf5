@@ -128,13 +128,17 @@ public abstract class TreeNodeEdit {
 	
 	@SuppressWarnings("unchecked")
 	public static String getUniqueName(DefaultMutableTreeNode parent, String name) {
-		String newName = name;
-		
 		List<String> usedNames = new ArrayList<>();
 		Enumeration<DefaultMutableTreeNode> children = parent.children();
 		while (children.hasMoreElements()) {
 			usedNames.add(((TreeNodeEdit) children.nextElement().getUserObject()).getName());
 		}
+		
+		return getUniqueName(usedNames, name);
+	}
+	
+	public static String getUniqueName(List<String> usedNames, String name) {
+		String newName = name;
 		
 		if (usedNames.contains(newName)) {
 			String oldName = name;
@@ -146,8 +150,8 @@ public abstract class TreeNodeEdit {
 			}
 			
 			while (usedNames.contains(newName)) {
-				 newName = oldName + "(" + i + ")";
-				 i++;
+				newName = oldName + "(" + i + ")";
+				i++;
 			}
 		}
 		
@@ -198,10 +202,13 @@ public abstract class TreeNodeEdit {
 		return m_editAction;
 	}
 	
-	protected void setEditAction(EditAction editAction) {
-		m_editAction = editAction;
-		if (m_parent != null && m_parent.getEditAction() == EditAction.NO_ACTION && m_editAction != EditAction.NO_ACTION) {
-			m_parent.setEditAction(EditAction.MODIFY);
+	public void setEditAction(EditAction editAction) {
+		if (editAction != EditAction.MODIFY || m_editAction == EditAction.NO_ACTION) {
+			m_editAction = editAction;
+			
+			if (m_parent != null && m_parent.getEditAction() == EditAction.NO_ACTION && m_editAction != EditAction.NO_ACTION) {
+				m_parent.setEditAction(EditAction.MODIFY);
+			}
 		}
 	}
 
@@ -215,6 +222,10 @@ public abstract class TreeNodeEdit {
 	
 	protected String getOutputPathFromFileWithName() {
 		return (m_outputPathFromFile != null ? m_outputPathFromFile + "/" : "") + m_name;
+	}
+	
+	protected TreeNodeEdit getRoot() {
+		return m_parent != null ? m_parent.getRoot() : this;
 	}
 	
 	public boolean validate() {

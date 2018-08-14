@@ -20,6 +20,30 @@ public enum Hdf5KnimeDataType {
 	DOUBLE,			// data type is a Double
 	STRING;			// data type is a String
 
+	public static Hdf5KnimeDataType getKnimeDataType(HdfDataType type, boolean fromDS) {
+		switch (type) {
+		case BYTE:
+		case UBYTE:
+		case SHORT:
+		case USHORT:
+		case INTEGER:
+			return Hdf5KnimeDataType.INTEGER;
+		case UINTEGER:
+		case LONG:
+			if (fromDS) {
+				return Hdf5KnimeDataType.LONG;
+			}
+		case ULONG:
+		case FLOAT:
+		case DOUBLE:
+			return Hdf5KnimeDataType.DOUBLE;
+		case STRING:
+			return Hdf5KnimeDataType.STRING;
+		default:
+			return Hdf5KnimeDataType.UNKNOWN;
+		}
+	}
+	
 	public static Hdf5KnimeDataType getKnimeDataType(DataType type) throws UnsupportedDataTypeException {
 		if (type != null) {
 			if (type.equals(IntCell.TYPE)) {	
