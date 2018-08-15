@@ -296,11 +296,12 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowId) throws UnsupportedDataTypeException {
+	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowId, Type[] copyValues) throws UnsupportedDataTypeException {
 		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfColumns());
 		
+		int copyIndex = 0;
 		for (int i = 0; i < dataIn.length; i++) {
-			dataIn[i] = getValueFromDataCell(row.getCell(specIndices[i]));
+			dataIn[i] = specIndices[i] >= 0 ? getValueFromDataCell(row.getCell(specIndices[i])) : copyValues[copyIndex++];
 		}
 		
 		return writeRow(dataIn, rowId);

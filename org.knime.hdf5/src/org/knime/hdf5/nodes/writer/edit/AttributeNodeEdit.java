@@ -69,7 +69,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		setEditAction(EditAction.CREATE);
 	}
 
-	public AttributeNodeEdit(AttributeNodeEdit copyAttribute, TreeNodeEdit parent) {
+	private AttributeNodeEdit(AttributeNodeEdit copyAttribute, TreeNodeEdit parent) {
 		this(copyAttribute.getInputPathFromFileWithName(), parent, copyAttribute.getName(), copyAttribute.getKnimeType());
 		m_hdfType = copyAttribute.getHdfType();
 		m_compoundAsArrayPossible = copyAttribute.isCompoundAsArrayPossible();
@@ -129,6 +129,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_attributeEditMenu = new AttributeNodeMenu();
 		m_knimeType = knimetype;
 		parent.addAttributeNodeEdit(this);
+	}
+	
+	public AttributeNodeEdit copyAttributeEditTo(TreeNodeEdit parent) {
+		return new AttributeNodeEdit(this, parent);
 	}
 	
 	private void updatePropertiesFromFlowVariable(FlowVariable var) {
@@ -534,11 +538,11 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				}
 				edit.setOverwrite(m_overwriteYes.isSelected());
 				
-				((DefaultTreeModel) (m_tree.getModel())).reload();
-				m_tree.makeVisible(new TreePath(m_node.getPath()));
-				
 				edit.setEditAction(EditAction.MODIFY);
 				edit.validate();
+				
+				((DefaultTreeModel) (m_tree.getModel())).reload();
+				m_tree.makeVisible(new TreePath(m_node.getPath()));
 			}
 		}
     }

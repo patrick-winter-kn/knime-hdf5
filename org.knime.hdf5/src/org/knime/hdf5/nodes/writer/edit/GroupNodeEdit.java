@@ -47,10 +47,9 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		setEditAction(EditAction.CREATE);
 	}
 	
-	public GroupNodeEdit(GroupNodeEdit copyGroup, GroupNodeEdit parent) {
+	private GroupNodeEdit(GroupNodeEdit copyGroup, GroupNodeEdit parent) {
 		this(copyGroup.getInputPathFromFileWithName(), parent, copyGroup.getName());
 		setEditAction(copyGroup.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
-		// TODO add elements in this group
 	}
 	
 	public GroupNodeEdit(Hdf5Group group, GroupNodeEdit parent) {
@@ -65,6 +64,24 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		if (parent != null) {
 			parent.addGroupNodeEdit(this);
 		}
+	}
+	
+	public GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent) {
+		GroupNodeEdit newGroupEdit = new GroupNodeEdit(this, parent);
+		
+		for (GroupNodeEdit groupEdit : getGroupNodeEdits()) {
+			groupEdit.copyGroupEditTo(newGroupEdit);
+		}
+		
+		for (DataSetNodeEdit dataSetEdit : getDataSetNodeEdits()) {
+			dataSetEdit.copyDataSetEditTo(newGroupEdit);
+		}
+		
+		for (AttributeNodeEdit attributeEdit : getAttributeNodeEdits()) {
+			attributeEdit.copyAttributeEditTo(newGroupEdit);
+		}
+		
+		return newGroupEdit;
 	}
 	
 	public GroupNodeMenu getGroupEditMenu() {
@@ -347,7 +364,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected boolean copyAction() {
-		return false;
+		return createAction(null, null, false);
 	}
 
 	@Override
@@ -479,11 +496,12 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			protected void editPropertyItems() {
 				TreeNodeEdit edit = (TreeNodeEdit) m_node.getUserObject();
 				edit.setName(m_nameField.getText());
-				((DefaultTreeModel) (m_tree.getModel())).reload();
-				m_tree.makeVisible(new TreePath(m_node.getPath()));
-
+				
 				edit.setEditAction(EditAction.MODIFY);
 				edit.validate();
+				
+				((DefaultTreeModel) (m_tree.getModel())).reload();
+				m_tree.makeVisible(new TreePath(m_node.getPath()));
 			}
 		}
     }

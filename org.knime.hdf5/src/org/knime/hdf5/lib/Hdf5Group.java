@@ -366,7 +366,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return paths;
 	}
 
-	public Hdf5DataSet<?> createDataSetFromEdit(long rows, DataSetNodeEdit edit) {
+	public Hdf5DataSet<?> createDataSetFromEdit(DataSetNodeEdit edit, long rows) {
 		Hdf5DataSet<?> dataSet = null;
 		
 		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), 

@@ -91,7 +91,8 @@ public abstract class TreeNodeEdit {
 		DATA_SETS("dataSets"),
 		ATTRIBUTES("attributes"),
 		COLUMNS("columns"),
-		COLUMN_SPEC_TYPE("columnSpecType");
+		COLUMN_SPEC_TYPE("columnSpecType"),
+		INPUT_COLUMN_INDEX("inputColumnIndex");
 
 		private String m_key;
 
@@ -178,7 +179,7 @@ public abstract class TreeNodeEdit {
 		return m_treeNode;
 	}
 
-	protected TreeNodeEdit getParent() {
+	public TreeNodeEdit getParent() {
 		return m_parent;
 	}
 	
