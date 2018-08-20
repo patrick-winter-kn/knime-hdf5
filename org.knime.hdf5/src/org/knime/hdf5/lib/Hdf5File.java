@@ -240,7 +240,7 @@ public class Hdf5File extends Hdf5Group {
 	        }
 	        for (i = 2; i < openObjects; i++) {
         		String pathFromFile = H5.H5Iget_name(objects[i]);
-	    		opened += " [\"" + pathFromFile + "\"";
+	    		opened += ", \"" + pathFromFile + "\"";
 	    		if (H5.H5Iis_valid(objects[i])) {
 		        	String objectType = objTypes[(int) H5.H5Iget_type(objects[i])];
 		    		opened += " (" + objectType + ")";

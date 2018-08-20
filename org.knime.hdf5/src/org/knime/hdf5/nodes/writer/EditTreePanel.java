@@ -403,32 +403,17 @@ public class EditTreePanel extends JPanel {
     			}
     		}
     		
-    		// TODO check if this method does not get called twice
     		private void createMenu(MouseEvent e) {
     			TreePath path = m_tree.getPathForLocation(e.getX(), e.getY());
 				if (path != null) {
 					m_tree.setSelectionPath(path);
     				DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
     				Object userObject = node.getUserObject();
-    				if (userObject instanceof ColumnNodeEdit) {
-    					ColumnNodeEdit.ColumnNodeMenu menu = ((ColumnNodeEdit) userObject).getColumnEditMenu();
-    					menu.initMenu(m_tree, node);
-    					menu.show(e.getComponent(), e.getX(), e.getY());
-    					
-    				} else if (userObject instanceof AttributeNodeEdit) {
-    					AttributeNodeEdit.AttributeNodeMenu menu = ((AttributeNodeEdit) userObject).getAttributeEditMenu();
-    					menu.initMenu(m_tree, node);
-    					menu.show(e.getComponent(), e.getX(), e.getY());
-    					
-    				} else if (userObject instanceof DataSetNodeEdit) {
-    					DataSetNodeEdit.DataSetNodeMenu menu = ((DataSetNodeEdit) userObject).getDataSetEditMenu();
-    					menu.initMenu(m_tree, node);
-    					menu.show(e.getComponent(), e.getX(), e.getY());
-    					
-    				} else if (userObject instanceof GroupNodeEdit) {
-    					GroupNodeEdit.GroupNodeMenu menu = ((GroupNodeEdit) userObject).getGroupEditMenu();
-    					menu.initMenu(m_tree, node);
-    					menu.show(e.getComponent(), e.getX(), e.getY());
+    				if (userObject instanceof TreeNodeEdit) {
+    					TreeNodeEdit.TreeNodeMenu menu = ((TreeNodeEdit) userObject).getTreeNodeMenu();
+    					if (!menu.isVisible()) {
+        					menu.show(e.getComponent(), e.getX(), e.getY());
+    					}
     				}
 				}
     		}
@@ -448,7 +433,7 @@ public class EditTreePanel extends JPanel {
 	void updateTreeWithExistingFile(Hdf5File file) {
 		FileNodeEdit fileEdit = new FileNodeEdit(file);
 		m_editTreeConfig.setFileNodeEdit(fileEdit);
-		fileEdit.setEditAsRoot((DefaultTreeModel) m_tree.getModel());
+		fileEdit.setEditAsRootOfTree(m_tree);
 		addChildrenToNodeOfEdit(fileEdit);
 		
 		showChildrenOfRoot();

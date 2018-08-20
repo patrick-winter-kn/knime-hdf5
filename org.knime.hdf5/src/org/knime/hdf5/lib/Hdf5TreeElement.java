@@ -153,7 +153,7 @@ abstract public class Hdf5TreeElement {
 				
 			} else {
 				throw new IOException("There is already an attribute with the name \""
-						+ name + "\" in the treeElement \"" + getPathFromFileWithName() + "\"");
+						+ name + "\" in treeElement \"" + getPathFromFileWithName() + "\"");
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			NodeLogger.getLogger("HDF5 Files").error("Existence of attribute could not be checked", hlnpe);
@@ -167,7 +167,7 @@ abstract public class Hdf5TreeElement {
 		Hdf5Attribute<?> attribute = null;
 		
 		try {
-			if (existsAttribute(edit.getName())) {
+			/*if (existsAttribute(edit.getName())) {
 				if (edit.isOverwrite()) {
 					deleteAttribute(edit.getName());
 					
@@ -176,14 +176,14 @@ abstract public class Hdf5TreeElement {
 					NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 					return null;
 				}
-			}
+			}*/
 			
 			long stringLength = edit.isCompoundAsArrayUsed() ? edit.getCompoundItemStringLength() : edit.getStringLength();
 			Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), edit.getKnimeType(), false, false, stringLength);
 			
 			attribute = createAttribute(edit.getName(), dimension, dataType);
 			
-		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+		} catch (/*HDF5LibraryException | */NullPointerException hlnpe) {
 			NodeLogger.getLogger(getClass()).error(hlnpe.getMessage(), hlnpe);
 		}
 		
@@ -223,56 +223,79 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public Hdf5Attribute<Object> createAndWriteAttribute(AttributeNodeEdit edit, FlowVariable flowVariable) {
+	public Hdf5Attribute<Object> createAndWriteAttribute(AttributeNodeEdit edit, FlowVariable flowVariable) throws IOException {
 		boolean success = false;
-		Hdf5Attribute<Object> attribute = null;
 		
-		try {
-			Object[] values = Hdf5Attribute.getFlowVariableValues(flowVariable);
-			attribute = (Hdf5Attribute<Object>) createAttribute(edit, values.length);
+		Object[] values = Hdf5Attribute.getFlowVariableValues(flowVariable);
+		Hdf5Attribute<Object> attribute = (Hdf5Attribute<Object>) createAttribute(edit, values.length);
+		if (attribute != null) {
 			if (!edit.isCompoundAsArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
 				success = attribute.write(new String[] { flowVariable.getStringValue() });
 			} else {
 				success = attribute.write(values);
 			}
-			
-		} catch (IOException ioe) {
-			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+			try {
+				if (!success && existsAttribute(attribute.getName())) {
+					deleteAttribute(attribute.getName());
+				}
+			} catch (HDF5LibraryException hle) {
+				NodeLogger.getLogger(getClass()).error(hle.getMessage(), hle);
+			}
 		}
-		
+	
 		return success ? attribute : null;
 	}
 	
 	@SuppressWarnings("unchecked")
-	public Hdf5Attribute<?> createAndWriteAttribute(AttributeNodeEdit edit, Hdf5Attribute<?> copyAttribute) {
+	public Hdf5Attribute<?> createAndWriteAttribute(AttributeNodeEdit edit, Hdf5Attribute<?> copyAttribute) throws IOException {
 		boolean success = false;
 		Hdf5Attribute<Object> newAttribute = null;
 		
 		try {
 			newAttribute = (Hdf5Attribute<Object>) createAttribute(edit, copyAttribute.getDimension());
 			
-			Object[] values = copyAttribute.getValue() == null ? copyAttribute.read() : copyAttribute.getValue();
-			success = newAttribute.write(values);
+			if (newAttribute != null) {
+				Object[] values = copyAttribute.getValue() == null ? copyAttribute.read() : copyAttribute.getValue();
+				success = newAttribute.write(values);
+				
+				try {
+					if (!success && existsAttribute(newAttribute.getName())) {
+						deleteAttribute(newAttribute.getName());
+					}
+				} catch (HDF5LibraryException hle) {
+					NodeLogger.getLogger(getClass()).error(hle.getMessage(), hle);
+				}
+			}
 			
 		} catch (IOException ioe) {
-			NodeLogger.getLogger(getClass()).error("Attribute \"" + copyAttribute.getPathFromFileWithName()
+			throw new IOException("Attribute \"" + copyAttribute.getPathFromFileWithName()
 					+ "\" could not be copied to \"" + getPathFromFileWithName() + "\": " + ioe.getMessage(), ioe);
 		}
 		
 		return success ? newAttribute : null;
 	}
 	
-	public Hdf5Attribute<?> copyAttribute(String newName, Hdf5Attribute<?> copyAttribute) {
+	public Hdf5Attribute<?> copyAttribute(String newName, Hdf5Attribute<?> copyAttribute) throws IOException {
 		boolean success = false;
 		Hdf5Attribute<?> newAttribute = null;
 		
 		try {
 			newAttribute = createAttribute(newName, copyAttribute.getDimension(), Hdf5DataType.createCopyFrom(copyAttribute.getType()));
-			success = H5.H5Acopy(copyAttribute.getAttributeId(), newAttribute.getAttributeId()) >= 0;
 			
-		} catch (HDF5LibraryException | IOException hlioe) {
-			NodeLogger.getLogger(getClass()).error("Attribute \"" + copyAttribute.getPathFromFileWithName()
-					+ "\" could not be copied with name \"" + newName + "\": " + hlioe.getMessage(), hlioe);
+			if (newAttribute != null) {
+				try {
+					success = H5.H5Acopy(copyAttribute.getAttributeId(), newAttribute.getAttributeId()) >= 0;
+					
+					if (!success && existsAttribute(newAttribute.getName())) {
+						deleteAttribute(newAttribute.getName());
+					}
+				} catch (HDF5LibraryException hle) {
+					NodeLogger.getLogger(getClass()).error(hle.getMessage(), hle);
+				}
+			}
+		} catch (IOException ioe) {
+			throw new IOException("Attribute \"" + copyAttribute.getPathFromFileWithName()
+					+ "\" could not be copied with name \"" + newName + "\": " + ioe.getMessage(), ioe);
 		}
 		
 		return success ? newAttribute : null;
@@ -369,10 +392,10 @@ abstract public class Hdf5TreeElement {
 		int success = -1;
 		
 		try {
-			success = H5.H5Adelete(getElementId(), name);
-		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			success = getAttribute(name).close() ? H5.H5Adelete(getElementId(), name) : -1;
+		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
 			NodeLogger.getLogger(getClass()).error("Attribute \"" + getPathFromFileWithName(true) + name
-					+ "\" could not be delete from disk: " + hlnpe.getMessage(), hlnpe);
+					+ "\" could not be deleted from disk: " + hlionpe.getMessage(), hlionpe);
 		}
 		
 		if (success >= 0) {

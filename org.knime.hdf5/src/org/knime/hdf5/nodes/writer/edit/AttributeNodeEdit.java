@@ -13,20 +13,15 @@ import javax.activation.UnsupportedDataTypeException;
 import javax.swing.ButtonGroup;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
-import javax.swing.JMenuItem;
 import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
 import javax.swing.JRadioButton;
 import javax.swing.JSpinner;
 import javax.swing.JTextField;
-import javax.swing.JTree;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.TreePath;
 
 import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.InvalidSettingsException;
@@ -42,8 +37,6 @@ import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 public class AttributeNodeEdit extends TreeNodeEdit {
-	
-	private final AttributeNodeMenu m_attributeEditMenu;
 	
 	private Hdf5KnimeDataType m_knimeType;
 	
@@ -103,7 +96,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 
 	private AttributeNodeEdit(String inputPathFromFileWithName, TreeNodeEdit parent, String name, Hdf5KnimeDataType knimetype) {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name);
-		m_attributeEditMenu = new AttributeNodeMenu();
+		setTreeNodeMenu(new AttributeNodeMenu());
 		m_knimeType = knimetype;
 		if (parent instanceof GroupNodeEdit) {
 			((GroupNodeEdit) parent).addAttributeNodeEdit(this);
@@ -119,14 +112,14 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	AttributeNodeEdit(String inputPathFromFileWithName, GroupNodeEdit parent, String name, Hdf5KnimeDataType knimetype) {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name);
-		m_attributeEditMenu = new AttributeNodeMenu();
+		setTreeNodeMenu(new AttributeNodeMenu());
 		m_knimeType = knimetype;
 		parent.addAttributeNodeEdit(this);
 	}
 	
 	AttributeNodeEdit(String inputPathFromFileWithName, DataSetNodeEdit parent, String name, Hdf5KnimeDataType knimetype) {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name);
-		m_attributeEditMenu = new AttributeNodeMenu();
+		setTreeNodeMenu(new AttributeNodeMenu());
 		m_knimeType = knimetype;
 		parent.addAttributeNodeEdit(this);
 	}
@@ -153,10 +146,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_hdfType = knimeType.getEquivalentHdfType();
 		m_compoundAsArrayPossible = m_compoundItemStringLength != m_stringLength;
 		m_compoundAsArrayUsed = m_compoundAsArrayPossible;
-	}
-	
-	public AttributeNodeMenu getAttributeEditMenu() {
-		return m_attributeEditMenu;
 	}
 	
 	public Hdf5KnimeDataType getKnimeType() {
@@ -257,7 +246,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	        			Hdf5Attribute.getPathAndName(getInputPathFromFileWithName())[1]));
 	        }
 		} catch (IOException ioe) {
-			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+			// nothing to do here: edit will be invalid anyway
 		}
 		
 		setHdfType(HdfDataType.valueOf(settings.getString(SettingsKey.HDF_TYPE.getKey())));
@@ -268,6 +257,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		setStringLength(settings.getInt(SettingsKey.STRING_LENGTH.getKey()));
 		setCompoundItemStringLength(settings.getInt(SettingsKey.COMPOUND_ITEM_STRING_LENGTH.getKey()));
 		setOverwrite(settings.getBoolean(SettingsKey.OVERWRITE.getKey()));
+
+		validate();
 	}
 	
 	@Override
@@ -276,6 +267,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			m_treeNode = new DefaultMutableTreeNode(this);
 		}
 		parentNode.add(m_treeNode);
+		
+		validate();
 	}
 
 	@Override
@@ -290,13 +283,20 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 
 	@Override
 	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
-		FlowVariable var = flowVariables.get(getInputPathFromFileWithName());
 		Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
 		if (!parent.isFile()) {
 			parent.open();
 		}
-		Hdf5Attribute<?> newAttribute = parent.createAndWriteAttribute(this, var);
+		
+		Hdf5Attribute<?> newAttribute = null;
+		FlowVariable var = flowVariables.get(getInputPathFromFileWithName());
+		try {
+			newAttribute = parent.createAndWriteAttribute(this, var);
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+		}
 		setHdfObject(newAttribute);
+		
 		return newAttribute != null;
 	}
 
@@ -313,7 +313,13 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		if (!parent.isFile()) {
 			parent.open();
 		}
-		Hdf5Attribute<?> newAttribute = parent.createAndWriteAttribute(this, copyAttribute);
+		
+		Hdf5Attribute<?> newAttribute = null;
+		try {
+			newAttribute = parent.createAndWriteAttribute(this, copyAttribute);
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+		}
 		setHdfObject(newAttribute);
 		
 		return newAttribute != null;
@@ -345,81 +351,70 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		String oldName = Hdf5Attribute.getPathAndName(getInputPathFromFileWithName())[1];
 		Hdf5Attribute<?> tempAttribute = null;
 		try {
-			tempAttribute = parent.copyAttribute(TreeNodeEdit.getUniqueName(parent.loadAttributeNames(), oldName), parent.getAttribute(oldName));
+			tempAttribute = parent.copyAttribute(TreeNodeEdit.getUniqueName(parent.loadAttributeNames(), getName() + "(1)"), parent.getAttribute(oldName));
 		} catch (IOException ioe) {
 			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 		}
 		boolean success = tempAttribute != null;
 		success &= parent.deleteAttribute(oldName) >= 0;
 		
-		Hdf5Attribute<?> newAttribute = parent.createAndWriteAttribute(this, tempAttribute);
-		setHdfObject(newAttribute);
-		success &= newAttribute != null;
+		try {
+			Hdf5Attribute<?> newAttribute = parent.createAndWriteAttribute(this, tempAttribute);
+			setHdfObject(newAttribute);
+			setInputPathFromFileWithName(newAttribute.getPathFromFileWithName());
+			success &= newAttribute != null;
+			
+		} catch (IOException ioe) {
+			success = false;
+			try {
+				Hdf5Attribute<?> changedNameAttribute = parent.copyAttribute(TreeNodeEdit.getUniqueName(parent.loadAttributeNames(), getName()), tempAttribute);
+				setHdfObject(changedNameAttribute);
+				setInputPathFromFileWithName(changedNameAttribute.getPathFromFileWithName());
+				
+			} catch (IOException ioe2) {
+				NodeLogger.getLogger(getClass()).error(ioe2.getMessage(), ioe2);
+			}
+		}
 
 		success &= parent.deleteAttribute(tempAttribute.getName()) >= 0;
 		
 		return success;
 	}
 	
-	public class AttributeNodeMenu extends JPopupMenu {
+	public class AttributeNodeMenu extends TreeNodeMenu {
 
 		private static final long serialVersionUID = -6418394582185524L;
 
 		private AttributePropertiesDialog m_propertiesDialog;
     	
-    	private JTree m_tree;
-    	
-    	private DefaultMutableTreeNode m_node;
-    	
 		private AttributeNodeMenu() {
-    		JMenuItem itemEdit = new JMenuItem("Edit attribute properties");
-    		itemEdit.addActionListener(new ActionListener() {
-				
-				@Override
-				public void actionPerformed(ActionEvent e) {
-					if (m_propertiesDialog == null) {
-						m_propertiesDialog = new AttributePropertiesDialog("Attribute properties");
-					}
-					
-					m_propertiesDialog.initPropertyItems((AttributeNodeEdit) m_node.getUserObject());
-					m_propertiesDialog.setVisible(true);
-				}
-			});
-    		add(itemEdit);
-    		
-    		JMenuItem itemDelete = new JMenuItem("Delete");
-    		itemDelete.addActionListener(new ActionListener() {
-				
-				@Override
-				public void actionPerformed(ActionEvent e) {
-					Object userObject = m_node.getUserObject();
-					if (userObject instanceof AttributeNodeEdit) {
-						AttributeNodeEdit edit = (AttributeNodeEdit) userObject;
-                    	DefaultMutableTreeNode parent = (DefaultMutableTreeNode) m_node.getParent();
-                    	Object parentObject = parent.getUserObject();
-                    	if (edit.getEditAction().isCreateOrCopyAction()) {
-                        	if (parentObject instanceof DataSetNodeEdit) {
-        						((DataSetNodeEdit) parentObject).removeAttributeNodeEdit(edit);
-                    		} else if (parentObject instanceof GroupNodeEdit) {
-        						((GroupNodeEdit) parentObject).removeAttributeNodeEdit(edit);	
-                    		} 
-                    	} else {
-                    		edit.setEditAction(EditAction.DELETE);
-                    	}
-                    	
-        				((DefaultTreeModel) (m_tree.getModel())).reload();
-        				TreePath path = new TreePath(parent.getPath());
-        				path = parent.getChildCount() > 0 ? path.pathByAddingChild(parent.getFirstChild()) : path;
-        				m_tree.makeVisible(path);
-					}
-				}
-			});
-    		add(itemDelete);
+			super(true, false, true);
     	}
 		
-		public void initMenu(JTree tree, DefaultMutableTreeNode node) {
-			m_tree = tree;
-			m_node = node;
+		@Override
+		protected void onEdit() {
+			if (m_propertiesDialog == null) {
+				m_propertiesDialog = new AttributePropertiesDialog("Attribute properties");
+			}
+			
+			m_propertiesDialog.initPropertyItems();
+			m_propertiesDialog.setVisible(true);
+		}
+
+		@Override
+		protected void onDelete() {
+			AttributeNodeEdit edit = AttributeNodeEdit.this;
+        	TreeNodeEdit parentEdit = edit.getParent();
+        	if (edit.getEditAction().isCreateOrCopyAction() || edit.getHdfObject() == null) {
+            	if (parentEdit instanceof DataSetNodeEdit) {
+					((DataSetNodeEdit) parentEdit).removeAttributeNodeEdit(edit);
+        		} else if (parentEdit instanceof GroupNodeEdit) {
+					((GroupNodeEdit) parentEdit).removeAttributeNodeEdit(edit);	
+        		}
+        	} else {
+        		edit.setDeletion(edit.getEditAction() != EditAction.DELETE);
+        	}
+        	edit.reloadTreeWithEditVisible();
 		}
 		
 		private class AttributePropertiesDialog extends PropertiesDialog<AttributeNodeEdit> {
@@ -427,7 +422,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			private static final long serialVersionUID = 9201153080744087510L;
 	    	
 			private JTextField m_nameField = new JTextField(15);
-			private JComboBox<HdfDataType> m_typeField = new JComboBox<>(((AttributeNodeEdit) m_node.getUserObject()).getKnimeType().getConvertibleHdfTypes().toArray(new HdfDataType[] {}));
+			private JComboBox<HdfDataType> m_typeField = new JComboBox<>(getKnimeType().getConvertibleHdfTypes().toArray(new HdfDataType[] {}));
 			private JCheckBox m_compoundAsArrayField = new JCheckBox();
 			private JComboBox<Endian> m_endianField = new JComboBox<>(Endian.values());
 			private JRadioButton m_stringLengthAuto = new JRadioButton("auto");
@@ -437,7 +432,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			private JRadioButton m_overwriteYes = new JRadioButton("yes");
 			
 			private AttributePropertiesDialog(String title) {
-				super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, m_tree), title);
+				super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, AttributeNodeMenu.this), title);
 				setMinimumSize(new Dimension(450, 300));
 
 				addProperty("Name: ", m_nameField);
@@ -511,7 +506,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			}
 			
 			@Override
-			protected void initPropertyItems(AttributeNodeEdit edit) {
+			protected void initPropertyItems() {
+				AttributeNodeEdit edit = AttributeNodeEdit.this;
 				m_nameField.setText(edit.getName());
 				m_typeField.setSelectedItem(edit.getHdfType());
 				m_compoundAsArrayField.setSelected(edit.isCompoundAsArrayUsed());
@@ -525,7 +521,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 
 			@Override
 			protected void editPropertyItems() {
-				AttributeNodeEdit edit = (AttributeNodeEdit) m_node.getUserObject();
+				AttributeNodeEdit edit = AttributeNodeEdit.this;
 				edit.setName(m_nameField.getText());
 				edit.setHdfType((HdfDataType) m_typeField.getSelectedItem());
 				edit.setCompoundAsArrayUsed(m_compoundAsArrayField.isSelected());
@@ -540,9 +536,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				
 				edit.setEditAction(EditAction.MODIFY);
 				edit.validate();
-				
-				((DefaultTreeModel) (m_tree.getModel())).reload();
-				m_tree.makeVisible(new TreePath(m_node.getPath()));
+
+				edit.reloadTreeWithEditVisible();
 			}
 		}
     }

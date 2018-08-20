@@ -10,6 +10,7 @@ import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.ExecutionMonitor;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeCreationContext;
+import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeModel;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
@@ -50,6 +51,9 @@ public class HDF5WriterNodeModel extends NodeModel {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
 		try {
 			fileEdit.doAction(inData[0], getAvailableFlowVariables(), m_saveColumnProperties.getBooleanValue());
+		} catch (Exception e) {
+			// just for testing if there are exceptions here
+			NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
 		} finally {
 			if (fileEdit.getHdfObject() != null) {
 				((Hdf5File) fileEdit.getHdfObject()).close();

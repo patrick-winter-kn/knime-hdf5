@@ -4,8 +4,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 
+import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreePath;
 
 import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.InvalidSettingsException;
@@ -18,6 +20,8 @@ import org.knime.hdf5.lib.Hdf5File;
 public class FileNodeEdit extends GroupNodeEdit {
 	
 	private final String m_filePath;
+	
+	private JTree m_tree;
 	
 	public FileNodeEdit(Hdf5File file) {
 		this(file.getFilePath());
@@ -50,26 +54,29 @@ public class FileNodeEdit extends GroupNodeEdit {
 	
 	@Override
 	public void addEditToNode(DefaultMutableTreeNode parentNode) {
-		/* nothing to do here, setEditAsRoot() is used instead */
+		super.addEditToNode(parentNode);
 	}
 	
-	public void setEditAsRoot(DefaultTreeModel treeModel) {
+	public void setEditAsRootOfTree(JTree tree) {
 		if (m_treeNode == null) {
 			m_treeNode = new DefaultMutableTreeNode(this);
 		}
-		treeModel.setRoot(m_treeNode);
-		/*
-		for (GroupNodeEdit edit : getGroupNodeEdits()) {
-	        edit.addEditToNode(node);
-		}
+		((DefaultTreeModel) tree.getModel()).setRoot(m_treeNode);
+		m_tree = tree;
 		
-		for (DataSetNodeEdit edit : getDataSetNodeEdits()) {
-	        edit.addEditToNode(node);
+		validate();
+	}
+
+	public void reloadTree() {
+		((DefaultTreeModel) (m_tree.getModel())).reload();
+	}
+	
+	public void makeTreeNodeVisible(TreeNodeEdit edit) {
+		if (edit.getTreeNode() != null) {
+			m_tree.makeVisible(new TreePath(edit.getTreeNode().getPath()));
+		} else {
+			makeTreeNodeVisible(edit.getParent());
 		}
-		
-		for (AttributeNodeEdit edit : getAttributeNodeEdits()) {
-	        edit.addEditToNode(node);
-		}*/
 	}
 	
 	@Override

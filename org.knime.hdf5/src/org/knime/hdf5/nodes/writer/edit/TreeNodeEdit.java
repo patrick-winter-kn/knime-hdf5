@@ -21,7 +21,9 @@ import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.WindowConstants;
 import javax.swing.event.ChangeListener;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -104,12 +106,14 @@ public abstract class TreeNodeEdit {
 			return m_key;
 		}
 	}
-
-	private final String m_inputPathFromFileWithName;
+	
+	private String m_inputPathFromFileWithName;
 	
 	private String m_outputPathFromFile;
 	
 	private String m_name;
+
+	private TreeNodeMenu m_treeNodeMenu;
 	
 	protected DefaultMutableTreeNode m_treeNode;
 	
@@ -146,8 +150,8 @@ public abstract class TreeNodeEdit {
 			int i = 1;
 			
 			if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
-				oldName = oldName.substring(0, oldName.lastIndexOf("("));
 				i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
+				oldName = oldName.substring(0, oldName.lastIndexOf("("));
 			}
 			
 			while (usedNames.contains(newName)) {
@@ -159,8 +163,49 @@ public abstract class TreeNodeEdit {
 		return newName;
 	}
 
+	protected static <T extends TreeNodeEdit> boolean doActionsinOrder(T[] edits, BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+		List<TreeNodeEdit> deleteEdits = new ArrayList<>();
+		List<TreeNodeEdit> modifyEdits = new ArrayList<>();
+		List<TreeNodeEdit> otherEdits = new ArrayList<>();
+		
+		for (TreeNodeEdit edit : edits) {
+			if (edit.getEditAction() == EditAction.DELETE) {
+				deleteEdits.add(edit);
+			} else if (edit.getEditAction() == EditAction.MODIFY) {
+				modifyEdits.add(edit);
+			} else {
+				otherEdits.add(edit);
+			}
+		}
+		
+		boolean success = true;
+		for (TreeNodeEdit edit : deleteEdits) {
+			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
+		}
+		
+		List<TreeNodeEdit> secondModifyEdits = new ArrayList<>();
+		for (TreeNodeEdit edit : modifyEdits) {
+			if (!edit.doAction(inputTable, flowVariables, saveColumnProperties)) {
+				secondModifyEdits.add(edit);
+			}
+		}
+		for (TreeNodeEdit edit : secondModifyEdits) {
+			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
+		}
+		
+		for (TreeNodeEdit edit : otherEdits) {
+			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
+		}
+		
+		return success;
+	}
+	
 	public String getInputPathFromFileWithName() {
 		return m_inputPathFromFileWithName;
+	}
+	
+	void setInputPathFromFileWithName(String inputPathFromFileWithName) {
+		m_inputPathFromFileWithName = inputPathFromFileWithName;
 	}
 	
 	public String getOutputPathFromFile() {
@@ -171,8 +216,16 @@ public abstract class TreeNodeEdit {
 		return m_name;
 	}
 	
-	public void setName(String name) {
+	void setName(String name) {
 		m_name = name;
+	}
+
+	public TreeNodeMenu getTreeNodeMenu() {
+		return m_treeNodeMenu;
+	}
+	
+	protected void setTreeNodeMenu(TreeNodeMenu treeNodeMenu) {
+		m_treeNodeMenu = treeNodeMenu;
 	}
 	
 	public DefaultMutableTreeNode getTreeNode() {
@@ -225,8 +278,14 @@ public abstract class TreeNodeEdit {
 		return (m_outputPathFromFile != null ? m_outputPathFromFile + "/" : "") + m_name;
 	}
 	
-	protected TreeNodeEdit getRoot() {
-		return m_parent != null ? m_parent.getRoot() : this;
+	public void reloadTreeWithEditVisible() {
+		FileNodeEdit root = getRoot();
+		root.reloadTree();
+		root.makeTreeNodeVisible(this);
+	}
+	
+	protected FileNodeEdit getRoot() {
+		return m_parent != null ? m_parent.getRoot() : (FileNodeEdit) this;
 	}
 	
 	public boolean validate() {
@@ -238,8 +297,9 @@ public abstract class TreeNodeEdit {
 		setEditAction(getEditAction());
 	}
 	
-	public String getOutputPathFromFileWithoutEndSlash() {
-		return !m_outputPathFromFile.isEmpty() ? m_outputPathFromFile.substring(0, m_outputPathFromFile.length() - 1) : "";
+	void setDeletion(boolean isDelete) {
+		m_editAction = isDelete ? EditAction.DELETE : EditAction.MODIFY;
+		m_treeNodeMenu.setDeleteItemText(isDelete ? "Remove deletion" : "Delete");
 	}
 	
 	protected void saveSettings(NodeSettingsWO settings) {
@@ -271,7 +331,7 @@ public abstract class TreeNodeEdit {
 			return false;
 		}*/
 		
-		return true;
+		return getEditAction().isCreateOrCopyAction() || getHdfObject() != null;
 	}
 	
 	protected abstract boolean isInConflict(TreeNodeEdit edit);
@@ -295,6 +355,65 @@ public abstract class TreeNodeEdit {
 	protected abstract boolean copyAction();
 	protected abstract boolean deleteAction();
 	protected abstract boolean modifyAction();
+	
+	public static abstract class TreeNodeMenu extends JPopupMenu {
+
+		private static final long serialVersionUID = 4973286624577483071L;
+		
+    	private JMenuItem m_itemDelete;
+		
+		protected TreeNodeMenu(boolean editable, boolean groupCreatable, boolean deletable) {
+			if (editable) {
+				JMenuItem itemEdit = new JMenuItem("Edit properties");
+	    		itemEdit.addActionListener(new ActionListener() {
+					
+					@Override
+					public void actionPerformed(ActionEvent e) {
+						onEdit();
+					}
+				});
+	    		add(itemEdit);
+			}
+			
+    		if (groupCreatable) {
+	    		JMenuItem itemCreateGroup = new JMenuItem("Create new group");
+	    		itemCreateGroup.addActionListener(new ActionListener() {
+					
+					@Override
+					public void actionPerformed(ActionEvent e) {
+						onCreateGroup();
+					}
+				});
+	    		add(itemCreateGroup);
+    		}
+
+    		if (deletable) {
+    			m_itemDelete = new JMenuItem("Delete");
+    			m_itemDelete.addActionListener(new ActionListener() {
+					
+					@Override
+					public void actionPerformed(ActionEvent e) {
+						onDelete();
+					}
+				});
+				add(m_itemDelete);
+    		}
+    	}
+		
+		private void setDeleteItemText(String text) {
+			m_itemDelete.setText(text);
+		}
+
+		protected void onEdit() {
+			// to implement in subclasses
+		}
+		
+		protected void onCreateGroup() {
+			// to implement in subclasses
+		}
+		
+		protected abstract void onDelete();
+	}
 	
 	protected static abstract class PropertiesDialog<Edit extends TreeNodeEdit> extends JDialog {
 
@@ -398,7 +517,7 @@ public abstract class TreeNodeEdit {
 			}
 		}
 		
-		protected abstract void initPropertyItems(Edit edit);
+		protected abstract void initPropertyItems();
 		
 		protected abstract void editPropertyItems();
 	}

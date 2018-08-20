@@ -26,22 +26,17 @@ import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JList;
-import javax.swing.JMenuItem;
 import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JTextField;
-import javax.swing.JTree;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.tree.DefaultMutableTreeNode;
-import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.TreePath;
 
 import org.knime.core.data.DataCell;
 import org.knime.core.data.DataColumnSpec;
@@ -68,8 +63,6 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	private static final String COLUMN_PROPERTY_NAMES = "knime.columnnames";
 	
 	private static final String COLUMN_PROPERTY_TYPES = "knime.columntypes";
-	
-	private final DataSetNodeMenu m_dataSetNodeMenu;
 	
 	private Hdf5KnimeDataType m_knimeType;
 	
@@ -106,13 +99,15 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		m_knimeType = dataSet.getType().getKnimeType();
 		m_hdfType = m_knimeType.getEquivalentHdfType();
 		m_stringLength = (int) dataSet.getType().getHdfType().getStringLength();
+		m_compression = dataSet.getCompressionLevel();
+		m_chunkRowSize = (int) dataSet.getChunkRowSize();
 		setEditAction(EditAction.NO_ACTION);
 		setHdfObject(dataSet);
 	}
 	
 	DataSetNodeEdit(String inputPathFromFileWithName, GroupNodeEdit parent, String name) {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name);
-		m_dataSetNodeMenu = new DataSetNodeMenu();
+		setTreeNodeMenu(new DataSetNodeMenu());
 		m_endian = Endian.LITTLE_ENDIAN;
 		parent.addDataSetNodeEdit(this);
 	}
@@ -129,10 +124,6 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		}
 		
 		return newDataSetEdit;
-	}
-	
-	public DataSetNodeMenu getDataSetEditMenu() {
-		return m_dataSetNodeMenu;
 	}
 
 	public Hdf5KnimeDataType getKnimeType() {
@@ -311,12 +302,25 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		}
 		
 		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
-			if (!copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
+			if (copyAttributeEdit.getEditAction() == EditAction.MODIFY || copyAttributeEdit.getEditAction() == EditAction.NO_ACTION) {
 				removeAttributeNodeEdit(getAttributeNodeEdit(copyAttributeEdit.getName()));
 			}
 			addAttributeNodeEdit(copyAttributeEdit);
 			copyAttributeEdit.addEditToNode(getTreeNode());
 		}
+	}
+	
+	@Override
+	void setDeletion(boolean isDelete) {
+		super.setDeletion(isDelete);
+
+    	for (ColumnNodeEdit columnEdit : m_columnEdits) {
+    		columnEdit.setDeletion(isDelete);
+    	}
+    	
+    	for (AttributeNodeEdit attributeEdit : m_attributeEdits) {
+    		attributeEdit.setDeletion(isDelete);
+    	}
 	}
 	
 	@Override
@@ -340,17 +344,16 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	    NodeSettingsWO columnSettings = settings.addNodeSettings(SettingsKey.COLUMNS.getKey());
 	    NodeSettingsWO attributeSettings = settings.addNodeSettings(SettingsKey.ATTRIBUTES.getKey());
 		
-		for (int i = 0; i < m_columnEdits.size(); i++) {
-			ColumnNodeEdit edit = m_columnEdits.get(i);
+		for (ColumnNodeEdit edit : m_columnEdits) {
         	if (edit.getEditAction() != EditAction.NO_ACTION) {
-		        NodeSettingsWO editSettings = columnSettings.addNodeSettings(i + ": " + edit.getName());
+		        NodeSettingsWO editSettings = columnSettings.addNodeSettings("" + edit.hashCode());
 				edit.saveSettings(editSettings);
 			}
 		}
 	    
 		for (AttributeNodeEdit edit : m_attributeEdits) {
         	if (edit.getEditAction() != EditAction.NO_ACTION) {
-		        NodeSettingsWO editSettings = attributeSettings.addNodeSettings(edit.getName());
+		        NodeSettingsWO editSettings = attributeSettings.addNodeSettings("" + edit.hashCode());
 				edit.saveSettings(editSettings);
 			}
 		}
@@ -400,6 +403,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
     			throw new InvalidSettingsException(udte.getMessage());
     		}
         }
+
+		validate();
 	}
 
 	@Override
@@ -416,6 +421,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		for (AttributeNodeEdit edit : m_attributeEdits) {
 	        edit.addEditToNode(m_treeNode);
 		}
+		
+		validate();
 	}
 	
 	@Override
@@ -553,74 +560,47 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 
 	@Override
 	protected boolean modifyAction() {
-		return false;
+		return true;
 	}
 
 	@Override
 	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
 		boolean success = super.doAction(inputTable, flowVariables, saveColumnProperties);
 		
-		for (AttributeNodeEdit attributeEdit : getAttributeNodeEdits()) {
-			success &= attributeEdit.doAction(inputTable, flowVariables, saveColumnProperties);
-		}
+		success &= TreeNodeEdit.doActionsinOrder(getAttributeNodeEdits(), inputTable, flowVariables, saveColumnProperties);
 		
 		return success;
 	}
 	
-	public class DataSetNodeMenu extends JPopupMenu {
+	public class DataSetNodeMenu extends TreeNodeMenu {
 
 		private static final long serialVersionUID = -6418394582185524L;
 
 		private DataSetPropertiesDialog m_propertiesDialog;
     	
-    	private JTree m_tree;
-    	
-    	private DefaultMutableTreeNode m_node;
-    	
 		private DataSetNodeMenu() {
-    		JMenuItem itemEdit = new JMenuItem("Edit dataSet properties");
-    		itemEdit.addActionListener(new ActionListener() {
-				
-				@Override
-				public void actionPerformed(ActionEvent e) {
-					if (m_propertiesDialog == null) {
-						m_propertiesDialog = new DataSetPropertiesDialog("DataSet properties");
-					}
-					
-					m_propertiesDialog.initPropertyItems((DataSetNodeEdit) m_node.getUserObject());
-					m_propertiesDialog.setVisible(true);
-				}
-			});
-    		add(itemEdit);
-		
-    		JMenuItem itemDelete = new JMenuItem("Delete");
-    		itemDelete.addActionListener(new ActionListener() {
-				
-				@Override
-				public void actionPerformed(ActionEvent e) {
-					Object userObject = m_node.getUserObject();
-					if (userObject instanceof DataSetNodeEdit) {
-						DataSetNodeEdit edit = (DataSetNodeEdit) userObject;
-                    	DefaultMutableTreeNode parent = (DefaultMutableTreeNode) m_node.getParent();
-                    	if (edit.getEditAction().isCreateOrCopyAction()) {
-    						((GroupNodeEdit) parent.getUserObject()).removeDataSetNodeEdit(edit);
-                    	} else {
-                    		edit.setEditAction(EditAction.DELETE);
-                    	}
-                    	
-        				((DefaultTreeModel) (m_tree.getModel())).reload();
-        				TreePath path = new TreePath(parent.getPath());
-        				path = parent.getChildCount() > 0 ? path.pathByAddingChild(parent.getFirstChild()) : path;
-        				m_tree.makeVisible(path);
-					}
-				}
-			});
-    		add(itemDelete);
+			super(true, false, true);
     	}
-		
-		public void initMenu(JTree tree, DefaultMutableTreeNode node) {
-			m_tree = tree;
-			m_node = node;
+
+		@Override
+		protected void onEdit() {
+			if (m_propertiesDialog == null) {
+				m_propertiesDialog = new DataSetPropertiesDialog("DataSet properties");
+			}
+			
+			m_propertiesDialog.initPropertyItems();
+			m_propertiesDialog.setVisible(true);
+		}
+
+		@Override
+		protected void onDelete() {
+			DataSetNodeEdit edit = DataSetNodeEdit.this;
+        	if (edit.getEditAction().isCreateOrCopyAction() || edit.getHdfObject() == null) {
+				((GroupNodeEdit) edit.getParent()).removeDataSetNodeEdit(edit);
+        	} else {
+        		edit.setDeletion(edit.getEditAction() != EditAction.DELETE);
+        	}
+        	edit.reloadTreeWithEditVisible();
 		}
 		
 		private class DataSetPropertiesDialog extends PropertiesDialog<DataSetNodeEdit> {
@@ -642,7 +622,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			private JList<ColumnNodeEdit> m_editList = new JList<>(new DefaultListModel<>());
 	    	
 			private DataSetPropertiesDialog(String title) {
-				super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, m_tree), title);
+				super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, DataSetNodeMenu.this), title);
 				setMinimumSize(new Dimension(450, 500));
 
 				addProperty("Name: ", m_nameField);
@@ -794,7 +774,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			}
 			
 			@Override
-			protected void initPropertyItems(DataSetNodeEdit edit) {
+			protected void initPropertyItems() {
+				DataSetNodeEdit edit = DataSetNodeEdit.this;
 				m_nameField.setText(edit.getName());
 				m_typeField.setModel(new DefaultComboBoxModel<HdfDataType>(edit.getKnimeType().getConvertibleHdfTypes().toArray(new HdfDataType[] {})));
 				m_typeField.setSelectedItem(edit.getHdfType());
@@ -817,7 +798,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 
 			@Override
 			protected void editPropertyItems() {
-				DataSetNodeEdit edit = (DataSetNodeEdit) m_node.getUserObject();
+				DataSetNodeEdit edit = DataSetNodeEdit.this;
 				edit.setName(m_nameField.getText());
 				edit.setHdfType((HdfDataType) m_typeField.getSelectedItem());
 				edit.setEndian((Endian) m_endianField.getSelectedItem());
@@ -829,16 +810,15 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 						: (m_overwriteNo.isSelected() ? HDF5OverwritePolicy.ABORT : HDF5OverwritePolicy.INSERT));
 				edit.setColumnEdits(Collections.list(((DefaultListModel<ColumnNodeEdit>) m_editList.getModel()).elements()));
 				
-				m_node.removeAllChildren();
+				edit.getTreeNode().removeAllChildren();
 				for (ColumnNodeEdit columnEdit : edit.getColumnNodeEdits()) {
-					m_node.add(new DefaultMutableTreeNode(columnEdit));
+					edit.getTreeNode().add(new DefaultMutableTreeNode(columnEdit));
 				}
 				
 				edit.setEditAction(EditAction.MODIFY);
 				edit.validate();
-				
-				((DefaultTreeModel) (m_tree.getModel())).reload();
-				m_tree.makeVisible(new TreePath(m_node.getPath()));
+
+				edit.reloadTreeWithEditVisible();
 			}
 		}
     }

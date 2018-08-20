@@ -31,7 +31,6 @@ import javax.swing.JTextField;
 import javax.swing.TransferHandler;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
-import javax.swing.tree.DefaultMutableTreeNode;
 
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataTableSpec;
@@ -52,7 +51,6 @@ import org.knime.core.node.util.FlowVariableListCellRenderer;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
-import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 	
@@ -153,14 +151,14 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 					}
 				//}
 			}
-			
+			/*
 			private boolean filePathChanged(String curFilePath) {
 				Object rootObject = ((DefaultMutableTreeNode) m_editTreePanel.getTree().getModel().getRoot()).getUserObject();
 				if (rootObject instanceof FileNodeEdit) {
 					return !curFilePath.equals(((FileNodeEdit) rootObject).getFilePath());
 				}
 				return true;
-			}
+			}*/
 		});
 		outputPanel.add(updateButton);
 		outputPanel.add(m_editTreePanel);

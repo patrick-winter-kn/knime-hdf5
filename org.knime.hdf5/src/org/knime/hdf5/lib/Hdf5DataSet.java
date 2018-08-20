@@ -125,6 +125,14 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return m_dimensions;
 	}
 	
+	public int getCompressionLevel() {
+		return m_compressionLevel;
+	}
+	
+	public long getChunkRowSize() {
+		return m_chunkRowSize;
+	}
+	
 	public Hdf5DataType getType() {
 		return m_type;
 	}
