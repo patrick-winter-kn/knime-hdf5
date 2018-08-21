@@ -559,7 +559,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		long propertyListId = H5.H5Dget_create_plist(getElementId());
 		int layoutType = H5.H5Pget_layout(propertyListId);
         m_compressionLevel = 0;
-    	m_chunkRowSize = 0;
+    	m_chunkRowSize = 1;
 		
 		if (layoutType == HDF5Constants.H5D_CHUNKED) {
 			int[] values = new int[1];

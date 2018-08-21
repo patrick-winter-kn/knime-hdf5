@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.activation.UnsupportedDataTypeException;
 import javax.swing.BorderFactory;
 import javax.swing.DropMode;
 import javax.swing.Icon;
@@ -29,14 +28,11 @@ import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
 import org.knime.core.data.DataColumnSpec;
-import org.knime.core.data.DataColumnSpecCreator;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
-import org.knime.hdf5.lib.Hdf5Group;
-import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
 import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.ColumnNodeEdit;
@@ -139,8 +135,11 @@ public class EditTreePanel extends JPanel {
 					
 					if (nodeObject instanceof TreeNodeEdit) {
 						TreeNodeEdit edit = (TreeNodeEdit) nodeObject;
+						edit.validate();
+						
 						text = (edit.getEditAction() == TreeNodeEdit.EditAction.MODIFY ? "*" : "") + edit.getName();
 						icon = icons[getItemId(edit)][getStateId(edit)];
+						setOpaque(!edit.isValid());
 						setBackground(edit.isValid() ? Color.WHITE : Color.RED);
 					}
 
@@ -284,10 +283,10 @@ public class EditTreePanel extends JPanel {
 			private boolean importFromTree(TreePath path) {
 				DefaultMutableTreeNode parent = (DefaultMutableTreeNode) path.getLastPathComponent();
             	TreeNodeEdit parentEdit = (TreeNodeEdit) parent.getUserObject();
+				TreeNodeEdit newEdit = null;
             	
             	try {
             		for (TreeNodeEdit copyEdit : m_copyEdits) {
-    					TreeNodeEdit newEdit = null;
     					if (parentEdit instanceof GroupNodeEdit) {
     						GroupNodeEdit parentGroupEdit = (GroupNodeEdit) parentEdit;
     						if (copyEdit instanceof GroupNodeEdit) {
@@ -369,11 +368,10 @@ public class EditTreePanel extends JPanel {
             		NodeLogger.getLogger(getClass()).warn(ise.getMessage());
             		
             	} finally {
-    				((DefaultTreeModel) (m_tree.getModel())).reload();
+    				newEdit.reloadTreeWithEditVisible();
     				for (TreeNodeEdit copyEdit : m_copyEdits) {
     					m_tree.makeVisible(new TreePath(copyEdit.getTreeNode().getPath()));
     				}
-    				m_tree.makeVisible(path.pathByAddingChild(parent.getFirstChild()));
             	}
 				
 				return true;
@@ -426,17 +424,25 @@ public class EditTreePanel extends JPanel {
 	
 	void updateTreeWithNewFile(String filePath) {
 		FileNodeEdit fileEdit = new FileNodeEdit(filePath);
-		((DefaultTreeModel) m_tree.getModel()).setRoot(new DefaultMutableTreeNode(fileEdit));
-		m_editTreeConfig.setFileNodeEdit(fileEdit);
-	}
-
-	void updateTreeWithExistingFile(Hdf5File file) {
-		FileNodeEdit fileEdit = new FileNodeEdit(file);
 		m_editTreeConfig.setFileNodeEdit(fileEdit);
 		fileEdit.setEditAsRootOfTree(m_tree);
-		addChildrenToNodeOfEdit(fileEdit);
-		
-		showChildrenOfRoot();
+	}
+
+	void updateTreeWithExistingFile(String filePath) throws IOException {
+		Hdf5File file = null;
+		try {
+			file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+			FileNodeEdit fileEdit = new FileNodeEdit(file);
+			m_editTreeConfig.setFileNodeEdit(fileEdit);
+			fileEdit.setEditAsRootOfTree(m_tree);
+			fileEdit.loadChildrenOfHdfObject();
+			showChildrenOfRoot();
+			
+		} finally {
+			if (file != null) {
+				file.close();
+			}
+		}
 	}
 	
 	private void showChildrenOfRoot() {
@@ -446,67 +452,6 @@ public class EditTreePanel extends JPanel {
 			m_tree.makeVisible(path.pathByAddingChild(root.getFirstChild()));
 		}
 	}
-    
-    private void addChildrenToNodeOfEdit(TreeNodeEdit parentEdit) {
-    	Object parentObject = parentEdit.getHdfObject();
-    	if (parentEdit instanceof GroupNodeEdit) {
-    		Hdf5Group parentGroup = (Hdf5Group) parentObject;
-    		
-        	try {
-        		for (String groupName : parentGroup.loadGroupNames()) {
-        			Hdf5Group group = parentGroup.getGroup(groupName);
-        			GroupNodeEdit groupEdit = new GroupNodeEdit(group, (GroupNodeEdit) parentEdit);
-        			groupEdit.addEditToNode(parentEdit.getTreeNode());
-        			addChildrenToNodeOfEdit(groupEdit);
-        		}
-        		
-        		for (String dataSetName : parentGroup.loadDataSetNames()) {
-        			Hdf5DataSet<?> dataSet = parentGroup.getDataSet(dataSetName);
-        			DataSetNodeEdit dataSetEdit = new DataSetNodeEdit(dataSet, (GroupNodeEdit) parentEdit);
-        			dataSetEdit.addEditToNode(parentEdit.getTreeNode());
-        			addChildrenToNodeOfEdit(dataSetEdit);
-        		}
-        	} catch (IOException ioe) {
-        		// TODO exception
-        	}
-    	} else if (parentEdit instanceof DataSetNodeEdit) {
-    		Hdf5DataSet<?> parentDataSet = (Hdf5DataSet<?>) parentObject;
-    		
-    		// TODO what to do with >2 dimensions?
-    		if (parentDataSet.getDimensions().length == 2) {
-    			for (int i = 0; i < parentDataSet.getDimensions()[1]; i++) {
-    				try {
-						DataColumnSpec spec = new DataColumnSpecCreator("col" + (i + 1), parentDataSet.getType().getKnimeType().getColumnDataType()).createSpec();
-						ColumnNodeEdit columnEdit = new ColumnNodeEdit(spec, (DataSetNodeEdit) parentEdit, i);
-						columnEdit.addEditToNode(parentEdit.getTreeNode());
-	        			
-					} catch (UnsupportedDataTypeException udte) {
-						NodeLogger.getLogger("HDF5 Files").error(udte.getMessage(), udte);
-					}
-    			}
-    		} else if (parentDataSet.getDimensions().length < 2) {
-    			try {
-					DataColumnSpec spec = new DataColumnSpecCreator("col", parentDataSet.getType().getKnimeType().getColumnDataType()).createSpec();
-					ColumnNodeEdit columnEdit = new ColumnNodeEdit(spec, (DataSetNodeEdit) parentEdit, 0);
-					columnEdit.addEditToNode(parentEdit.getTreeNode());
-        			
-				} catch (UnsupportedDataTypeException udte) {
-					NodeLogger.getLogger("HDF5 Files").error(udte.getMessage(), udte);
-				}
-    		}
-    	}
-
-		Hdf5TreeElement parentElement = (Hdf5TreeElement) parentObject;
-    	try {
-    		for (String attributeName : parentElement.loadAttributeNames()) {
-    			Hdf5Attribute<?> attribute = parentElement.updateAttribute(attributeName);
-    			AttributeNodeEdit attributeEdit = new AttributeNodeEdit(attribute, parentEdit);
-    			attributeEdit.addEditToNode(parentEdit.getTreeNode());
-    		}
-    	} catch (IOException ioe) {
-    		// TODO exception
-    	}
-    }
 
 	void saveConfiguration(EditTreeConfiguration editTreeConfig) {
 		if (m_editTreeConfig.getFileNodeEdit() != null) {

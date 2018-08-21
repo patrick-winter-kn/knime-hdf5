@@ -38,6 +38,7 @@ import org.knime.core.data.DataValue;
 import org.knime.core.node.FlowVariableModel;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeDialogPane;
+import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.NotConfigurableException;
@@ -134,17 +135,10 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 				String filePath = m_filePathSettings.getStringValue();
 				//if (filePathChanged(filePath)) {
 					if (Hdf5File.existsFile(filePath)) {
-						Hdf5File file = null;
 						try {
-							file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-							m_editTreePanel.updateTreeWithExistingFile(file);
-							
+							m_editTreePanel.updateTreeWithExistingFile(filePath);
 						} catch (IOException ioe) {
-							// TODO exception
-						} finally {
-							if (file != null) {
-								file.close();
-							}
+				    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 						}
 					} else {
 						m_editTreePanel.updateTreeWithNewFile(filePath);
@@ -311,17 +305,10 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	initListModel(SpecInfo.FLOW_VARIABLE_SPECS, vars.toArray());
     	
     	if (!m_filePathSettings.getStringValue().trim().isEmpty()) {
-			Hdf5File file = null;
 			try {
-				file = Hdf5File.openFile(m_filePathSettings.getStringValue(), Hdf5File.READ_ONLY_ACCESS);
-				m_editTreePanel.updateTreeWithExistingFile(file);
-				
+				m_editTreePanel.updateTreeWithExistingFile(m_filePathSettings.getStringValue());
 			} catch (IOException ioe) {
-				// TODO exception
-			} finally {
-				if (file != null) {
-					file.close();
-				}
+	    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 			}
 		
 			EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();

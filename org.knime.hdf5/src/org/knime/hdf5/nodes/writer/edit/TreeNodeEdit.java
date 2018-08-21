@@ -1,6 +1,7 @@
 package org.knime.hdf5.nodes.writer.edit;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.Frame;
 import java.awt.GridBagConstraints;
@@ -22,8 +23,10 @@ import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 import javax.swing.event.ChangeListener;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -79,12 +82,13 @@ public abstract class TreeNodeEdit {
 		EDIT_ACTION("editAction"),
 		KNIME_TYPE("knimeType"),
 		HDF_TYPE("hdfType"),
-		COMPOUND_AS_ARRAY_POSSIBLE("compoundAsArrayPossible"),
-		COMPOUND_AS_ARRAY_USED("compoundAsArrayUsed"),
 		LITTLE_ENDIAN("littleEndian"),
 		FIXED("fixed"),
 		STRING_LENGTH("stringLength"),
+		COMPOUND_AS_ARRAY_POSSIBLE("compoundAsArrayPossible"),
+		COMPOUND_AS_ARRAY_USED("compoundAsArrayUsed"),
 		COMPOUND_ITEM_STRING_LENGTH("compoundItemStringLength"),
+		NUMBER_OF_DIMENSIONS("numberOfDimensions"),
 		COMPRESSION("compression"),
 		CHUNK_ROW_SIZE("chunkRowSize"),
 		OVERWRITE("overwrite"),
@@ -123,12 +127,17 @@ public abstract class TreeNodeEdit {
 	
 	private EditAction m_editAction = EditAction.NO_ACTION;
 	
-	protected boolean m_valid;
+	private List<TreeNodeEdit> m_incompleteCopies = new ArrayList<>();
+	
+	private TreeNodeEdit m_copyEdit;
+	
+	private boolean m_valid;
 
-	TreeNodeEdit(String inputPathFromFileWithName, String outputPathFromFile, String name) {
+	TreeNodeEdit(String inputPathFromFileWithName, String outputPathFromFile, String name, EditAction editAction) {
 		m_inputPathFromFileWithName = inputPathFromFileWithName;
 		m_outputPathFromFile = outputPathFromFile;
 		m_name = name;
+		setEditAction(editAction);
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -163,12 +172,12 @@ public abstract class TreeNodeEdit {
 		return newName;
 	}
 
-	protected static <T extends TreeNodeEdit> boolean doActionsinOrder(T[] edits, BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
-		List<TreeNodeEdit> deleteEdits = new ArrayList<>();
-		List<TreeNodeEdit> modifyEdits = new ArrayList<>();
-		List<TreeNodeEdit> otherEdits = new ArrayList<>();
+	protected static <Edit extends TreeNodeEdit> boolean doActionsinOrder(Edit[] edits, BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+		List<Edit> deleteEdits = new ArrayList<>();
+		List<Edit> modifyEdits = new ArrayList<>();
+		List<Edit> otherEdits = new ArrayList<>();
 		
-		for (TreeNodeEdit edit : edits) {
+		for (Edit edit : edits) {
 			if (edit.getEditAction() == EditAction.DELETE) {
 				deleteEdits.add(edit);
 			} else if (edit.getEditAction() == EditAction.MODIFY) {
@@ -179,21 +188,23 @@ public abstract class TreeNodeEdit {
 		}
 		
 		boolean success = true;
-		for (TreeNodeEdit edit : deleteEdits) {
-			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
+		for (Edit edit : deleteEdits) {
+			if (!edit.areIncompleteCopiesLeft()) {
+				success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
+			}
 		}
 		
-		List<TreeNodeEdit> secondModifyEdits = new ArrayList<>();
-		for (TreeNodeEdit edit : modifyEdits) {
+		List<Edit> secondModifyEdits = new ArrayList<>();
+		for (Edit edit : modifyEdits) {
 			if (!edit.doAction(inputTable, flowVariables, saveColumnProperties)) {
 				secondModifyEdits.add(edit);
 			}
 		}
-		for (TreeNodeEdit edit : secondModifyEdits) {
+		for (Edit edit : secondModifyEdits) {
 			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
 		}
 		
-		for (TreeNodeEdit edit : otherEdits) {
+		for (Edit edit : otherEdits) {
 			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
 		}
 		
@@ -257,13 +268,17 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public void setEditAction(EditAction editAction) {
-		if (editAction != EditAction.MODIFY || m_editAction == EditAction.NO_ACTION) {
+		if (editAction != EditAction.MODIFY || m_editAction == EditAction.NO_ACTION || m_editAction == EditAction.MODIFY) {
 			m_editAction = editAction;
 			
 			if (m_parent != null && m_parent.getEditAction() == EditAction.NO_ACTION && m_editAction != EditAction.NO_ACTION) {
 				m_parent.setEditAction(EditAction.MODIFY);
 			}
 		}
+	}
+	
+	private void setCopyEdit(TreeNodeEdit copyEdit) {
+		m_copyEdit = copyEdit;
 	}
 
 	public boolean isValid() {
@@ -272,6 +287,20 @@ public abstract class TreeNodeEdit {
 	
 	private void setValid(boolean valid) {
 		m_valid = valid;
+	}
+	
+	protected void addIncompleteCopy(TreeNodeEdit edit) {
+		m_incompleteCopies.add(edit);
+		edit.setCopyEdit(this);
+	}
+	
+	protected void removeIncompleteCopy(TreeNodeEdit edit) {
+		m_incompleteCopies.remove(edit);
+		edit.setCopyEdit(null);
+	}
+	
+	protected boolean areIncompleteCopiesLeft() {
+		return !m_incompleteCopies.isEmpty();
 	}
 	
 	protected String getOutputPathFromFileWithName() {
@@ -288,19 +317,22 @@ public abstract class TreeNodeEdit {
 		return m_parent != null ? m_parent.getRoot() : (FileNodeEdit) this;
 	}
 	
-	public boolean validate() {
-		setValid(getValidation());
-		return isValid();
-	}
-	
 	protected void updateParentEditAction() {
 		setEditAction(getEditAction());
 	}
 	
 	void setDeletion(boolean isDelete) {
-		m_editAction = isDelete ? EditAction.DELETE : EditAction.MODIFY;
-		m_treeNodeMenu.setDeleteItemText(isDelete ? "Remove deletion" : "Delete");
+    	if (isDelete && getEditAction().isCreateOrCopyAction() || !isValid() && getEditAction() == EditAction.DELETE) {
+    		removeFromParent();
+    		
+    	} else {
+    		m_editAction = isDelete ? EditAction.DELETE : EditAction.MODIFY;
+    		updateParentEditAction();
+    		m_treeNodeMenu.updateDeleteItemText();
+    	}
 	}
+	
+	protected abstract void removeFromParent();
 	
 	protected void saveSettings(NodeSettingsWO settings) {
 		settings.addString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey(), m_inputPathFromFileWithName);
@@ -308,14 +340,17 @@ public abstract class TreeNodeEdit {
 		settings.addString(SettingsKey.EDIT_ACTION.getKey(), m_editAction.getActionName());
 	}
 
-	protected void loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		m_editAction = EditAction.get(settings.getString(SettingsKey.EDIT_ACTION.getKey()));
-	}
+	protected abstract void loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException;
 	
 	public abstract void addEditToNode(DefaultMutableTreeNode parentNode);
 	
+	public boolean validate() {
+		// TODO (maybe) also validate edits which are depending on this edit
+		setValid(getValidation());
+		return isValid();
+	}
+	
 	protected boolean getValidation() {
-		// TODO improve edit creation before
 		/*List<TreeNodeEdit> editsInConflict = new ArrayList<>();
 		List<DefaultMutableTreeNode> children = Collections.list(m_treeNode.getParent().children());
 		for (DefaultMutableTreeNode child : children) {
@@ -331,7 +366,10 @@ public abstract class TreeNodeEdit {
 			return false;
 		}*/
 		
-		return getEditAction().isCreateOrCopyAction() || getHdfObject() != null;
+		boolean hdfObjectAvailable = getHdfObject() != null || getEditAction().isCreateOrCopyAction();
+		boolean deleteConsistent = m_parent.getEditAction() != EditAction.DELETE || getEditAction() == EditAction.DELETE;
+		
+		return hdfObjectAvailable && deleteConsistent;
 	}
 	
 	protected abstract boolean isInConflict(TreeNodeEdit edit);
@@ -341,7 +379,14 @@ public abstract class TreeNodeEdit {
 		case CREATE:
 			return createAction(inputTable, flowVariables, saveColumnProperties);
 		case COPY:
-			return copyAction();
+			boolean success = copyAction();
+			if (success && m_copyEdit != null) {
+				m_copyEdit.removeIncompleteCopy(this);
+				if (!m_copyEdit.areIncompleteCopiesLeft() && m_copyEdit.getEditAction() == EditAction.DELETE) {
+					success &= m_copyEdit.deleteAction();
+				}
+			}
+			return success;
 		case DELETE:
 			return deleteAction();
 		case MODIFY:
@@ -356,9 +401,11 @@ public abstract class TreeNodeEdit {
 	protected abstract boolean deleteAction();
 	protected abstract boolean modifyAction();
 	
-	public static abstract class TreeNodeMenu extends JPopupMenu {
+	public abstract class TreeNodeMenu extends JPopupMenu {
 
 		private static final long serialVersionUID = 4973286624577483071L;
+
+    	private PropertiesDialog m_propertiesDialog;
 		
     	private JMenuItem m_itemDelete;
 		
@@ -369,7 +416,12 @@ public abstract class TreeNodeEdit {
 					
 					@Override
 					public void actionPerformed(ActionEvent e) {
-						onEdit();
+						if (m_propertiesDialog == null) {
+							m_propertiesDialog = getPropertiesDialog();
+						}
+						
+						m_propertiesDialog.initPropertyItems();
+						m_propertiesDialog.setVisible(true);
 					}
 				});
 	    		add(itemEdit);
@@ -388,24 +440,36 @@ public abstract class TreeNodeEdit {
     		}
 
     		if (deletable) {
-    			m_itemDelete = new JMenuItem("Delete");
+    			m_itemDelete = new JMenuItem();
+    			updateDeleteItemText();
     			m_itemDelete.addActionListener(new ActionListener() {
 					
 					@Override
 					public void actionPerformed(ActionEvent e) {
-						onDelete();
+						int dialogResult = JOptionPane.showConfirmDialog(TreeNodeMenu.this,
+								getDeleteConfirmMessage(), "Warning", JOptionPane.YES_NO_OPTION);
+						if (dialogResult == JOptionPane.YES_OPTION){
+							onDelete();
+						}
 					}
 				});
 				add(m_itemDelete);
     		}
     	}
 		
-		private void setDeleteItemText(String text) {
-			m_itemDelete.setText(text);
+		private void updateDeleteItemText() {
+			m_itemDelete.setText(m_editAction != EditAction.DELETE ? "Delete" : "Remove deletion");
+		}
+		
+		private String getDeleteConfirmMessage() {
+			return "Are you sure to "
+					+ (m_editAction != EditAction.DELETE ? "delete" : "remove the deletion of")
+					+ " this object and all its descendants?";
 		}
 
-		protected void onEdit() {
+		protected PropertiesDialog getPropertiesDialog() {
 			// to implement in subclasses
+			return null;
 		}
 		
 		protected void onCreateGroup() {
@@ -415,7 +479,7 @@ public abstract class TreeNodeEdit {
 		protected abstract void onDelete();
 	}
 	
-	protected static abstract class PropertiesDialog<Edit extends TreeNodeEdit> extends JDialog {
+	protected static abstract class PropertiesDialog extends JDialog {
 
 		private static final long serialVersionUID = -2868431511358917946L;
 		
@@ -423,8 +487,8 @@ public abstract class TreeNodeEdit {
 		
 		private final GridBagConstraints m_constraints = new GridBagConstraints();
 		
-		protected PropertiesDialog(Frame owner, String title) {
-			super(owner, title);
+		protected PropertiesDialog(Component comp, String title) {
+			super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, comp), title);
 			setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
 			setLocation(400, 400);
 			setModal(true);
@@ -465,7 +529,7 @@ public abstract class TreeNodeEdit {
 //			m_contentPanel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLUE), m_contentPanel.getBorder()));
 		}
 
-		protected void addProperty(String description, JComponent component, ChangeListener checkBoxListener, double weighty) {
+		protected JCheckBox addProperty(String description, JComponent component, ChangeListener checkBoxListener, double weighty) {
 			PropertyDescriptionPanel propertyPanel = new PropertyDescriptionPanel(description,
 					checkBoxListener, Double.compare(weighty, 0.0) != 0);
 			m_constraints.gridx = 0;
@@ -476,10 +540,12 @@ public abstract class TreeNodeEdit {
             m_constraints.weightx = 1.0;
             m_contentPanel.add(component, m_constraints);
 			m_constraints.gridy++;
+			
+			return propertyPanel.getCheckBox();
 		}
 
-		protected void addProperty(String description, JComponent component, ChangeListener checkBoxListener) {
-	        addProperty(description, component, checkBoxListener, 0.0);
+		protected JCheckBox addProperty(String description, JComponent component, ChangeListener checkBoxListener) {
+	        return addProperty(description, component, checkBoxListener, 0.0);
 		}
 		
 		protected void addProperty(String description, JComponent component, double weighty) {
@@ -494,15 +560,17 @@ public abstract class TreeNodeEdit {
 
 			private static final long serialVersionUID = 3019076429508416644L;
 			
+			private JCheckBox m_checkBox;
+			
 			private PropertyDescriptionPanel(String description, ChangeListener checkBoxListener, boolean northwest) {
 				setLayout(new BoxLayout(this, BoxLayout.X_AXIS));
 				if (checkBoxListener != null) {
-					JCheckBox checkBox = new JCheckBox();
-					add(checkBox);
-					checkBox.addChangeListener(checkBoxListener);
+					m_checkBox = new JCheckBox();
+					add(m_checkBox);
+					m_checkBox.addChangeListener(checkBoxListener);
 					
 					if (northwest) {
-						checkBox.setAlignmentY(0.0f);
+						m_checkBox.setAlignmentY(0.0f);
 					}
 				}
 				JLabel nameLabel = new JLabel(description);
@@ -514,6 +582,10 @@ public abstract class TreeNodeEdit {
 //				setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.GREEN), getBorder()));
 //				nameLabel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.RED), nameLabel.getBorder()));
 //				component.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLUE), component.getBorder()));
+			}
+			
+			private JCheckBox getCheckBox() {
+				return m_checkBox;
 			}
 		}
 		

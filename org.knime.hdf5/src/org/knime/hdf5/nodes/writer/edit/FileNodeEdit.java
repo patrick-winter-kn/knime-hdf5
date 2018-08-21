@@ -24,14 +24,16 @@ public class FileNodeEdit extends GroupNodeEdit {
 	private JTree m_tree;
 	
 	public FileNodeEdit(Hdf5File file) {
-		this(file.getFilePath());
-		setEditAction(EditAction.NO_ACTION);
+		this(file.getFilePath(), EditAction.NO_ACTION);
 		setHdfObject(file);
 	}
 	
 	public FileNodeEdit(String filePath) {
-		super(null, filePath.substring(filePath.lastIndexOf(File.separator) + 1));
-		setEditAction(EditAction.CREATE);
+		this(filePath, EditAction.CREATE);
+	}
+	
+	private FileNodeEdit(String filePath, EditAction editAction) {
+		super(null, null, filePath.substring(filePath.lastIndexOf(File.separator) + 1), editAction);
 		m_filePath = filePath;
 	}
 	
@@ -40,8 +42,26 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	public static FileNodeEdit useFileSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		FileNodeEdit edit = new FileNodeEdit(settings.getString(SettingsKey.FILE_PATH.getKey()));
-        edit.loadSettings(settings);
+		Hdf5File file = null;
+		FileNodeEdit edit = new FileNodeEdit(settings.getString(SettingsKey.FILE_PATH.getKey()),
+				EditAction.get(settings.getString(SettingsKey.EDIT_ACTION.getKey())));
+		try {
+	        if (!edit.getEditAction().isCreateOrCopyAction()) {
+				try {
+					file = Hdf5File.openFile(edit.getFilePath(), Hdf5File.READ_ONLY_ACCESS);
+				} catch (IOException ioe) {
+					throw new InvalidSettingsException(ioe.getMessage(), ioe);
+				}
+			}
+			edit.setHdfObject(file);
+	        edit.loadSettings(settings);
+	        
+		} finally {
+			if (file != null) {
+				file.close();
+			}
+		}
+		
         return edit;
 	}
 
@@ -53,8 +73,13 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	@Override
+	public void loadChildrenOfHdfObject() throws IOException {
+		super.loadChildrenOfHdfObject();
+	}
+	
+	@Override
 	public void addEditToNode(DefaultMutableTreeNode parentNode) {
-		super.addEditToNode(parentNode);
+		// not needed here; instead use setEditAsRootOfTree[JTree]
 	}
 	
 	public void setEditAsRootOfTree(JTree tree) {
@@ -64,7 +89,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 		((DefaultTreeModel) tree.getModel()).setRoot(m_treeNode);
 		m_tree = tree;
 		
-		validate();
+		reloadTree();
 	}
 
 	public void reloadTree() {
@@ -72,8 +97,11 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	public void makeTreeNodeVisible(TreeNodeEdit edit) {
-		if (edit.getTreeNode() != null) {
+		if (edit.getTreeNode().isNodeAncestor(getTreeNode())) {
 			m_tree.makeVisible(new TreePath(edit.getTreeNode().getPath()));
+		} else if (edit.getParent().getTreeNode().getChildCount() != 0) {
+			m_tree.makeVisible(new TreePath(edit.getParent().getTreeNode().getPath())
+					.pathByAddingChild(edit.getParent().getTreeNode().getFirstChild()));
 		} else {
 			makeTreeNodeVisible(edit.getParent());
 		}
@@ -87,7 +115,8 @@ public class FileNodeEdit extends GroupNodeEdit {
 	
 	@Override
 	protected boolean isInConflict(TreeNodeEdit edit) {
-		return edit instanceof FileNodeEdit && !edit.equals(this) && ((FileNodeEdit) edit).getFilePath().equals(getFilePath()) && edit.getName().equals(getName());
+		return edit instanceof FileNodeEdit && !edit.equals(this) && ((FileNodeEdit) edit).getFilePath().equals(getFilePath())
+				&& edit.getName().equals(getName());
 	}
 
 	@Override

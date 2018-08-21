@@ -371,10 +371,10 @@ public class Hdf5Group extends Hdf5TreeElement {
 		
 		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), 
 				edit.getKnimeType(), false, true, edit.getStringLength());
-		long[] dims = new long[] { rows, edit.getColumnSpecs().length };
+		long[] dims = edit.getNumberOfDimensions() == 1 ? new long[] { rows } : new long[] { rows, edit.getColumnSpecs().length };
 		
 		try {
-			dataSet = createDataSet(edit.getName(), dims, edit.getCompression(), edit.getChunkRowSize(), dataType);
+			dataSet = createDataSet(edit.getName(), dims, edit.getCompressionLevel(), edit.getChunkRowSize(), dataType);
 			
 		} catch (IOException ioe) {
 			try {

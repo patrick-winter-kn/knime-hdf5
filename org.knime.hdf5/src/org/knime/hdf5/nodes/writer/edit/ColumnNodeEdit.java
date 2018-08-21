@@ -19,27 +19,28 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 
 	private ColumnNodeEdit(ColumnNodeEdit copyColumn, DataSetNodeEdit parent) {
 		this(copyColumn.getEditAction() == EditAction.CREATE ? copyColumn.getName() :
-				((DataSetNodeEdit) copyColumn.getParent()).getInputPathFromFileWithName(), copyColumn.getColumnSpec(), parent);
-		setEditAction(copyColumn.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
+				((DataSetNodeEdit) copyColumn.getParent()).getInputPathFromFileWithName(), copyColumn.getColumnSpec(), parent,
+				copyColumn.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
 		m_inputColumnIndex = copyColumn.getInputColumnIndex();
+		if (getEditAction() == EditAction.COPY) {
+			copyColumn.getParent().addIncompleteCopy(parent);
+		}
 	}
 
 	public ColumnNodeEdit(DataColumnSpec columnSpec, DataSetNodeEdit parent) {
-		this(columnSpec.getName(), columnSpec, parent);
-		setEditAction(EditAction.CREATE);
+		this(columnSpec.getName(), columnSpec, parent, EditAction.CREATE);
 		if (parent.getEditAction() == EditAction.COPY) {
 			parent.setEditAction(EditAction.CREATE);
 		}
 	}
 	
 	public ColumnNodeEdit(DataColumnSpec columnSpec, DataSetNodeEdit parent, int inputColumnIndex) {
-		this(columnSpec.getName(), columnSpec, parent);
-		setEditAction(EditAction.NO_ACTION);
+		this(columnSpec.getName(), columnSpec, parent, EditAction.NO_ACTION);
 		m_inputColumnIndex = inputColumnIndex;
 	}
 	
-	ColumnNodeEdit(String inputPathFromFileWithName, DataColumnSpec columnSpec, DataSetNodeEdit parent) {
-		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), columnSpec.getName());
+	ColumnNodeEdit(String inputPathFromFileWithName, DataColumnSpec columnSpec, DataSetNodeEdit parent, EditAction editAction) {
+		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), columnSpec.getName(), editAction);
 		setTreeNodeMenu(new ColumnNodeMenu());
 		m_columnSpec = columnSpec;
 		parent.addColumnNodeEdit(this);
@@ -56,6 +57,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	int getInputColumnIndex() {
 		return m_inputColumnIndex;
 	}
+
+	@Override
+	protected void removeFromParent() {
+		((DataSetNodeEdit) getParent()).removeColumnNodeEdit(this);
+	}
 	
 	@Override
 	public void saveSettings(NodeSettingsWO settings) {
@@ -67,11 +73,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected void loadSettings(NodeSettingsRO settings) throws InvalidSettingsException {
-		super.loadSettings(settings);
-		
 		m_inputColumnIndex = settings.getInt(SettingsKey.INPUT_COLUMN_INDEX.getKey());
-		
-		validate();
 	}
 	
 	@Override
@@ -80,8 +82,6 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 			m_treeNode = new DefaultMutableTreeNode(this);
 		}
 		parentNode.add(m_treeNode);
-		
-		validate();
 	}
 	
 	@Override
@@ -125,19 +125,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		@Override
 		protected void onDelete() {
 			ColumnNodeEdit edit = ColumnNodeEdit.this;
+			edit.setDeletion(edit.getEditAction() != EditAction.DELETE);
+
         	DataSetNodeEdit parentEdit = (DataSetNodeEdit) edit.getParent();
-			if (edit.getEditAction().isCreateOrCopyAction() || edit.getHdfObject() == null) {
-				parentEdit.removeColumnNodeEdit(edit);
-        	} else {
-        		edit.setDeletion(edit.getEditAction() != EditAction.DELETE);
-			}
-			
         	if (parentEdit.getTreeNode().getChildCount() == 0) {
-				if (parentEdit.getEditAction().isCreateOrCopyAction() || parentEdit.getHdfObject() == null) {
-					((GroupNodeEdit) parentEdit.getParent()).removeDataSetNodeEdit(parentEdit);
-            	} else {
-            		parentEdit.setDeletion(true);
-            	}
+				parentEdit.setDeletion(true);
         	}
         	
         	edit.reloadTreeWithEditVisible();
