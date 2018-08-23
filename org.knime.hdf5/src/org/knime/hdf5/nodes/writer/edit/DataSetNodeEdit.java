@@ -338,25 +338,23 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		}
 		
 		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
-			if (copyAttributeEdit.getEditAction() == EditAction.MODIFY || copyAttributeEdit.getEditAction() == EditAction.NO_ACTION) {
-				removeAttributeNodeEdit(getAttributeNodeEdit(copyAttributeEdit.getName()));
+			AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getName());
+			if (attributeEdit != null && !attributeEdit.getEditAction().isCreateOrCopyAction() && !copyEdit.getEditAction().isCreateOrCopyAction()) {
+				removeAttributeNodeEdit(attributeEdit);
 			}
 			addAttributeNodeEdit(copyAttributeEdit);
 			copyAttributeEdit.addEditToNode(getTreeNode());
 		}
 	}
-	
-	@Override
-	void setDeletion(boolean isDelete) {
-		super.setDeletion(isDelete);
 
-    	for (ColumnNodeEdit columnEdit : m_columnEdits.toArray(new ColumnNodeEdit[0])) {
-    		columnEdit.setDeletion(isDelete);
-    	}
-    	
-    	for (AttributeNodeEdit attributeEdit : m_attributeEdits.toArray(new AttributeNodeEdit[0])) {
-    		attributeEdit.setDeletion(isDelete);
-    	}
+	@Override
+	protected TreeNodeEdit[] getAllChildren() {
+		List<TreeNodeEdit> children = new ArrayList<>();
+		
+		children.addAll(m_columnEdits);
+		children.addAll(m_attributeEdits);
+		
+		return children.toArray(new TreeNodeEdit[0]);
 	}
 
 	@Override
@@ -486,31 +484,16 @@ public class DataSetNodeEdit extends TreeNodeEdit {
     		throw new IOException(npe.getMessage());
     	}
 	}
-
-	@Override
-	public void addEditToNode(DefaultMutableTreeNode parentNode) {
-		if (m_treeNode == null) {
-			m_treeNode = new DefaultMutableTreeNode(this);
-		}
-		parentNode.add(m_treeNode);
-		
-		for (ColumnNodeEdit edit : m_columnEdits) {
-	        edit.addEditToNode(m_treeNode);
-		}
-		
-		for (AttributeNodeEdit edit : m_attributeEdits) {
-	        edit.addEditToNode(m_treeNode);
-		}
-	}
 	
 	@Override
-	protected boolean getValidation() {
-		return super.getValidation() && !getName().contains("/");
+	protected InvalidCause validateEditInternal() {
+		return getName().contains("/") ? InvalidCause.NAME_CHARS : null;
 	}
 
 	@Override
 	protected boolean isInConflict(TreeNodeEdit edit) {
-		return (edit instanceof DataSetNodeEdit || edit instanceof GroupNodeEdit) && !edit.equals(this) && edit.getName().equals(getName());
+		return (edit instanceof DataSetNodeEdit || edit instanceof GroupNodeEdit) && !edit.equals(this)
+				&& edit.getName().equals(getName()) && !(getEditAction() == EditAction.DELETE && edit.getEditAction() == EditAction.DELETE);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -645,7 +628,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
 		boolean success = super.doAction(inputTable, flowVariables, saveColumnProperties);
 		
-		success &= TreeNodeEdit.doActionsinOrder(getAttributeNodeEdits(), inputTable, flowVariables, saveColumnProperties);
+		success &= TreeNodeEdit.doActionsInOrder(getAttributeNodeEdits(), inputTable, flowVariables, saveColumnProperties);
 		
 		return success;
 	}

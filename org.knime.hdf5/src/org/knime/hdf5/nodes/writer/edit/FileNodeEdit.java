@@ -55,6 +55,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 			}
 			edit.setHdfObject(file);
 	        edit.loadSettings(settings);
+	        edit.validate();
 	        
 		} finally {
 			if (file != null) {
@@ -75,6 +76,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	@Override
 	public void loadChildrenOfHdfObject() throws IOException {
 		super.loadChildrenOfHdfObject();
+		validate();
 	}
 	
 	@Override
@@ -93,6 +95,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 
 	public void reloadTree() {
+		validate();
 		((DefaultTreeModel) (m_tree.getModel())).reload();
 	}
 	
@@ -108,9 +111,8 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	@Override
-	protected boolean getValidation() {
-		// TODO check if file can be created correctly with its properties
-		return m_filePath.endsWith(".h5") || m_filePath.endsWith(".hdf5");
+	protected InvalidCause validateEditInternal() {
+		return m_filePath.endsWith(".h5") || m_filePath.endsWith(".hdf5") ? null : InvalidCause.FILE_EXTENSION;
 	}
 	
 	@Override

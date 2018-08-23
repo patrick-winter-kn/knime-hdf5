@@ -74,10 +74,9 @@ public class HDF5WriterNodeModel extends NodeModel {
 			throw new InvalidSettingsException("No file selected");
 		}
 		
-		// TODO find causes for invalid things
 		FileNodeEdit fileEdit = editTreeConfig.getFileNodeEdit();
 		if (!fileEdit.isValid()) {
-			throw new InvalidSettingsException("The settings for file \"" + fileEdit.getFilePath() + "\" are not valid");
+			throw new InvalidSettingsException("The settings for file \"" + fileEdit.getFilePath() + "\" are not valid:\n" + fileEdit.getInvalidCauseMessages());
 		}
 	}
 

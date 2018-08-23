@@ -10,6 +10,9 @@ import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
@@ -39,42 +42,8 @@ import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 
-public abstract class TreeNodeEdit {
+public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 
-	public static enum EditAction {
-		CREATE("create"),
-		COPY("copy"),
-		DELETE("delete"),
-		MODIFY("modify"),
-		NO_ACTION("noAction");
-		
-		private static final Map<String, EditAction> LOOKUP = new HashMap<>();
-
-		static {
-			for (EditAction editAction : EditAction.values()) {
-				LOOKUP.put(editAction.getActionName(), editAction);
-			}
-		}
-
-	    private final String m_actionName;
-
-	    EditAction(final String actionName) {
-	    	m_actionName = actionName;
-	    }
-
-		public static EditAction get(String actionName) {
-			return LOOKUP.get(actionName);
-		}
-
-	    public String getActionName() {
-	        return m_actionName;
-	    }
-	    
-		public boolean isCreateOrCopyAction() {
-			return this == CREATE || this == COPY;
-		}
-	}
-	
 	protected static enum SettingsKey {
 		NAME("name"),
 		INPUT_PATH_FROM_FILE_WITH_NAME("inputPathFromFileWithName"),
@@ -111,6 +80,58 @@ public abstract class TreeNodeEdit {
 		}
 	}
 	
+	public static enum EditAction {
+		CREATE("create"),
+		COPY("copy"),
+		DELETE("delete"),
+		MODIFY("modify"),
+		NO_ACTION("noAction");
+		
+		private static final Map<String, EditAction> LOOKUP = new HashMap<>();
+
+		static {
+			for (EditAction editAction : EditAction.values()) {
+				LOOKUP.put(editAction.getActionName(), editAction);
+			}
+		}
+
+	    private final String m_actionName;
+
+	    EditAction(final String actionName) {
+	    	m_actionName = actionName;
+	    }
+
+		public static EditAction get(String actionName) {
+			return LOOKUP.get(actionName);
+		}
+
+	    public String getActionName() {
+	        return m_actionName;
+	    }
+	    
+		public boolean isCreateOrCopyAction() {
+			return this == CREATE || this == COPY;
+		}
+	}
+	
+	public static enum InvalidCause {
+		NAME_DUPLICATE("name duplicate"),
+		HDF_OBJECT("no hdf object available"),
+		PARENT_DELETE("parent is getting deleted so this also has to be deleted"),
+		NAME_CHARS("name contains invalid characters"),
+		FILE_EXTENSION("file extension is not .h5 or .hdf5");
+
+		private String m_message;
+
+		private InvalidCause(String message) {
+			m_message = message;
+		}
+		
+		protected String getMessage() {
+			return m_message;
+		}
+	}
+	
 	private String m_inputPathFromFileWithName;
 	
 	private String m_outputPathFromFile;
@@ -131,7 +152,7 @@ public abstract class TreeNodeEdit {
 	
 	private TreeNodeEdit m_copyEdit;
 	
-	private boolean m_valid;
+	private Map<TreeNodeEdit, InvalidCause> m_invalidEdits = new HashMap<>();
 
 	TreeNodeEdit(String inputPathFromFileWithName, String outputPathFromFile, String name, EditAction editAction) {
 		m_inputPathFromFileWithName = inputPathFromFileWithName;
@@ -172,7 +193,7 @@ public abstract class TreeNodeEdit {
 		return newName;
 	}
 
-	protected static <Edit extends TreeNodeEdit> boolean doActionsinOrder(Edit[] edits, BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+	protected static <Edit extends TreeNodeEdit> boolean doActionsInOrder(Edit[] edits, BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
 		List<Edit> deleteEdits = new ArrayList<>();
 		List<Edit> modifyEdits = new ArrayList<>();
 		List<Edit> otherEdits = new ArrayList<>();
@@ -282,11 +303,35 @@ public abstract class TreeNodeEdit {
 	}
 
 	public boolean isValid() {
-		return m_valid;
+		return m_invalidEdits.isEmpty();
 	}
 	
-	private void setValid(boolean valid) {
-		m_valid = valid;
+	private void updateInvalidMap(TreeNodeEdit edit, InvalidCause cause) {
+		if (cause != null) {
+			m_invalidEdits.put(edit, cause);
+		} else if (m_invalidEdits.containsKey(edit)) {
+			m_invalidEdits.remove(edit);
+		}
+		if (m_parent != null) {
+			m_parent.updateInvalidMap(edit, cause);
+		}
+	}
+	
+	public String getInvalidCauseMessages() {
+		String messages = "";
+		
+		TreeNodeEdit[] invalidEdits = m_invalidEdits.keySet().toArray(new TreeNodeEdit[0]);
+		Arrays.sort(invalidEdits, (Comparator<TreeNodeEdit>) this);
+		for (TreeNodeEdit invalidEdit : invalidEdits) {
+			messages += "- " + invalidEdit.getOutputPathFromFileWithName() + ": " + m_invalidEdits.get(invalidEdit).getMessage() + "\n";
+		}
+		
+		return messages;
+	}
+	
+	public String getToolTipText() {
+		return getOutputPathFromFileWithName() + (isValid() ? "" : " (invalid"
+				+ (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : "") + ")");
 	}
 	
 	protected void addIncompleteCopy(TreeNodeEdit edit) {
@@ -303,18 +348,36 @@ public abstract class TreeNodeEdit {
 		return !m_incompleteCopies.isEmpty();
 	}
 	
-	protected String getOutputPathFromFileWithName() {
+	public String getOutputPathFromFileWithName() {
 		return (m_outputPathFromFile != null ? m_outputPathFromFile + "/" : "") + m_name;
 	}
-	
+
 	public void reloadTreeWithEditVisible() {
+		reloadTreeWithEditVisible(false);
+	}
+	
+	public void reloadTreeWithEditVisible(boolean childrenVisible) {
 		FileNodeEdit root = getRoot();
 		root.reloadTree();
-		root.makeTreeNodeVisible(this);
+		if (childrenVisible) {
+			TreeNodeEdit[] childEdits = getAllChildren();
+			root.makeTreeNodeVisible(childEdits.length > 0 ? childEdits[0] : this);
+		} else {
+			root.makeTreeNodeVisible(this);
+		}
 	}
 	
 	protected FileNodeEdit getRoot() {
 		return m_parent != null ? m_parent.getRoot() : (FileNodeEdit) this;
+	}
+	
+	private TreeNodeEdit[] getPath() {
+		List<TreeNodeEdit> editsInPath = new ArrayList<>();
+		editsInPath.add(this);
+		while (editsInPath.get(0).getParent() != null) {
+			editsInPath.add(0, editsInPath.get(0).getParent());
+		}
+		return editsInPath.toArray(new TreeNodeEdit[0]);
 	}
 	
 	protected void updateParentEditAction() {
@@ -330,7 +393,13 @@ public abstract class TreeNodeEdit {
     		updateParentEditAction();
     		m_treeNodeMenu.updateDeleteItemText();
     	}
+    	
+    	for (TreeNodeEdit edit : getAllChildren()) {
+        	edit.setDeletion(isDelete);
+    	}
 	}
+
+	protected abstract TreeNodeEdit[] getAllChildren();
 	
 	protected abstract void removeFromParent();
 	
@@ -341,36 +410,55 @@ public abstract class TreeNodeEdit {
 	}
 
 	protected abstract void loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException;
-	
-	public abstract void addEditToNode(DefaultMutableTreeNode parentNode);
-	
-	public boolean validate() {
-		// TODO (maybe) also validate edits which are depending on this edit
-		setValid(getValidation());
-		return isValid();
-	}
-	
-	protected boolean getValidation() {
-		/*List<TreeNodeEdit> editsInConflict = new ArrayList<>();
-		List<DefaultMutableTreeNode> children = Collections.list(m_treeNode.getParent().children());
-		for (DefaultMutableTreeNode child : children) {
-			TreeNodeEdit edit = (TreeNodeEdit) child.getUserObject();
-			if (isInConflict(edit)) {
-				editsInConflict.add(edit);
+
+	@SuppressWarnings("unchecked")
+	public void addEditToNode(DefaultMutableTreeNode parentNode) {
+		if (m_treeNode == null) {
+			m_treeNode = new DefaultMutableTreeNode(this);
+		}
+		
+		Enumeration<DefaultMutableTreeNode> enumeration = parentNode.children();
+		DefaultMutableTreeNode[] siblings = Collections.list(enumeration).toArray(new DefaultMutableTreeNode[0]);
+		int insert;
+		for (insert = 0; insert < siblings.length; insert++) {
+			TreeNodeEdit edit = (TreeNodeEdit) siblings[insert].getUserObject();
+			if (compareProperties(this, edit) < 0) {
+				break;
 			}
 		}
-		if (!editsInConflict.isEmpty()) {
-			for (TreeNodeEdit edit : editsInConflict) {
-				edit.setValid(false);
-			}
-			return false;
-		}*/
+		parentNode.insert(m_treeNode, insert);
 		
-		boolean hdfObjectAvailable = getHdfObject() != null || getEditAction().isCreateOrCopyAction();
-		boolean deleteConsistent = m_parent.getEditAction() != EditAction.DELETE || getEditAction() == EditAction.DELETE;
-		
-		return hdfObjectAvailable && deleteConsistent;
+		for (TreeNodeEdit edit : getAllChildren()) {
+	        edit.addEditToNode(m_treeNode);
+		}
 	}
+	
+	protected void validate() {
+		InvalidCause cause = validateEditInternal();
+		
+		if (m_parent != null) {
+			cause = cause == null && (m_parent.getEditAction() == EditAction.DELETE && getEditAction() != EditAction.DELETE) ? InvalidCause.PARENT_DELETE : cause;
+			
+			if (cause == null) {
+				for (TreeNodeEdit edit : m_parent.getAllChildren()) {
+					if (isInConflict(edit)) {
+						cause = InvalidCause.NAME_DUPLICATE;
+						break;
+					}
+				}
+			}
+		}
+		
+		cause = cause == null && (!(this instanceof ColumnNodeEdit) && !getEditAction().isCreateOrCopyAction() && getHdfObject() == null) ? InvalidCause.HDF_OBJECT : cause;
+		
+		updateInvalidMap(this, cause);
+
+		for (TreeNodeEdit edit : getAllChildren()) {
+	        edit.validate();
+		}
+	}
+	
+	protected abstract InvalidCause validateEditInternal();
 	
 	protected abstract boolean isInConflict(TreeNodeEdit edit);
 	
@@ -400,6 +488,35 @@ public abstract class TreeNodeEdit {
 	protected abstract boolean copyAction();
 	protected abstract boolean deleteAction();
 	protected abstract boolean modifyAction();
+	
+	@Override
+	public int compare(TreeNodeEdit o1, TreeNodeEdit o2) {
+		if (o1.getParent() == o2.getParent()) {
+			return compareProperties(o1, o2);
+			
+		} else {
+			TreeNodeEdit[] path1 = o1.getPath();
+			TreeNodeEdit[] path2 = o2.getPath();
+			int minLength = Math.min(path1.length, path2.length);
+			int compare = 0;
+			for (int i = 0; compare == 0 && i < minLength; i++) {
+				compare = compareProperties(path1[i], path2[i]);
+			}
+			return compare == 0 ? Integer.compare(path1.length, path2.length) : compare;
+		}
+	}
+	
+	private int compareProperties(TreeNodeEdit o1, TreeNodeEdit o2) {
+		int compare = Integer.compare(o1.getClassValue(), o2.getClassValue());
+		return compare == 0 ? o1.getName().compareTo(o2.getName()) : compare; 
+	}
+	
+	private int getClassValue() {
+		return this instanceof GroupNodeEdit ? 0 : 
+			(this instanceof DataSetNodeEdit ? 1 :
+			(this instanceof ColumnNodeEdit ? 2 :
+			(this instanceof AttributeNodeEdit ? 3 : 4)));
+	}
 	
 	public abstract class TreeNodeMenu extends JPopupMenu {
 

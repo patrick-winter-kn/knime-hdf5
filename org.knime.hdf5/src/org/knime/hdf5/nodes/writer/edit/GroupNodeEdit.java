@@ -11,7 +11,6 @@ import java.util.Map;
 import javax.activation.UnsupportedDataTypeException;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
-import javax.swing.tree.DefaultMutableTreeNode;
 
 import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.InvalidSettingsException;
@@ -207,31 +206,25 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		
 		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
 			AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getName());
-			if (attributeEdit != null) {
+			if (attributeEdit != null && !attributeEdit.getEditAction().isCreateOrCopyAction() && !copyEdit.getEditAction().isCreateOrCopyAction()) {
 				removeAttributeNodeEdit(attributeEdit);
 			}
 			addAttributeNodeEdit(copyAttributeEdit);
 			copyAttributeEdit.addEditToNode(getTreeNode());
 		}
 	}
-	
-	@Override
-	void setDeletion(boolean isDelete) {
-		super.setDeletion(isDelete);
-    	
-    	for (GroupNodeEdit groupEdit : m_groupEdits.toArray(new GroupNodeEdit[0])) {
-        	groupEdit.setDeletion(isDelete);
-    	}
-    	
-    	for (DataSetNodeEdit dataSetEdit : m_dataSetEdits.toArray(new DataSetNodeEdit[0])) {
-    		dataSetEdit.setDeletion(isDelete);
-    	}
-    	
-    	for (AttributeNodeEdit attributeEdit : m_attributeEdits.toArray(new AttributeNodeEdit[0])) {
-    		attributeEdit.setDeletion(isDelete);
-    	}
-	}
 
+	@Override
+	protected TreeNodeEdit[] getAllChildren() {
+		List<TreeNodeEdit> children = new ArrayList<>();
+		
+		children.addAll(m_groupEdits);
+		children.addAll(m_dataSetEdits);
+		children.addAll(m_attributeEdits);
+		
+		return children.toArray(new TreeNodeEdit[0]);
+	}
+	
 	@Override
 	protected void removeFromParent() {
 		((GroupNodeEdit) getParent()).removeGroupNodeEdit(this);
@@ -342,33 +335,14 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	public void addEditToNode(DefaultMutableTreeNode parentNode) {
-		if (m_treeNode == null) {
-			m_treeNode = new DefaultMutableTreeNode(this);
-		}
-		parentNode.add(m_treeNode);
-		
-		for (GroupNodeEdit edit : m_groupEdits) {
-	        edit.addEditToNode(m_treeNode);
-		}
-		
-		for (DataSetNodeEdit edit : m_dataSetEdits) {
-	        edit.addEditToNode(m_treeNode);
-		}
-		
-		for (AttributeNodeEdit edit : m_attributeEdits) {
-	        edit.addEditToNode(m_treeNode);
-		}
-	}
-	
-	@Override
-	protected boolean getValidation() {
-		return super.getValidation() && !getName().contains("/");
+	protected InvalidCause validateEditInternal() {
+		return getName().contains("/") ? InvalidCause.NAME_CHARS : null;
 	}
 
 	@Override
 	protected boolean isInConflict(TreeNodeEdit edit) {
-		return (edit instanceof GroupNodeEdit || edit instanceof DataSetNodeEdit) && !edit.equals(this) && edit.getName().equals(getName());
+		return (edit instanceof GroupNodeEdit || edit instanceof DataSetNodeEdit) && !edit.equals(this)
+				&& edit.getName().equals(getName()) && !(getEditAction() == EditAction.DELETE && edit.getEditAction() == EditAction.DELETE);
 	}
 
 	@Override
@@ -407,9 +381,9 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
 		boolean success = super.doAction(inputTable, flowVariables, saveColumnProperties);
 		
-		success &= TreeNodeEdit.doActionsinOrder(getAttributeNodeEdits(), inputTable, flowVariables, saveColumnProperties);
-		success &= TreeNodeEdit.doActionsinOrder(getDataSetNodeEdits(), inputTable, flowVariables, saveColumnProperties);
-		success &= TreeNodeEdit.doActionsinOrder(getGroupNodeEdits(), inputTable, flowVariables, saveColumnProperties);
+		success &= TreeNodeEdit.doActionsInOrder(getAttributeNodeEdits(), inputTable, flowVariables, saveColumnProperties);
+		success &= TreeNodeEdit.doActionsInOrder(getDataSetNodeEdits(), inputTable, flowVariables, saveColumnProperties);
+		success &= TreeNodeEdit.doActionsInOrder(getGroupNodeEdits(), inputTable, flowVariables, saveColumnProperties);
 		
 		return success;
 	}

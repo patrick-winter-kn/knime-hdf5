@@ -21,7 +21,6 @@ public class EditTreeConfiguration {
 
 	public void setFileNodeEdit(FileNodeEdit edit) {
 		m_fileEdit = edit;
-		edit.validate();
 	}
 	
 	void saveConfiguration(NodeSettingsWO settings) {

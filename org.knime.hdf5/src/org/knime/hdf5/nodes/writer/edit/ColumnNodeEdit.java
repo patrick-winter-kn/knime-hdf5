@@ -2,8 +2,6 @@ package org.knime.hdf5.nodes.writer.edit;
 
 import java.util.Map;
 
-import javax.swing.tree.DefaultMutableTreeNode;
-
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.InvalidSettingsException;
@@ -59,6 +57,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
+	protected TreeNodeEdit[] getAllChildren() {
+		return new TreeNodeEdit[0];
+	}
+	
+	@Override
 	protected void removeFromParent() {
 		((DataSetNodeEdit) getParent()).removeColumnNodeEdit(this);
 	}
@@ -77,16 +80,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	public void addEditToNode(DefaultMutableTreeNode parentNode) {
-		if (m_treeNode == null) {
-			m_treeNode = new DefaultMutableTreeNode(this);
-		}
-		parentNode.add(m_treeNode);
-	}
-	
-	@Override
-	protected boolean getValidation() {
-		return true;
+	protected InvalidCause validateEditInternal() {
+		return null;
 	}
 
 	@Override
