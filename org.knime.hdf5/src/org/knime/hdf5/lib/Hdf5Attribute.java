@@ -179,7 +179,7 @@ public class Hdf5Attribute<Type> {
 		
 		String name = pathWithName.substring(pathStringLength + 1);
 		name = name.replaceAll("\\\\/", "/");
-		String pathWithoutName = pathWithName.substring(0, pathStringLength);
+		String pathWithoutName = pathStringLength == -1 ? "" : pathWithName.substring(0, pathStringLength);
 		
 		return new String[] { pathWithoutName, name };
 	}

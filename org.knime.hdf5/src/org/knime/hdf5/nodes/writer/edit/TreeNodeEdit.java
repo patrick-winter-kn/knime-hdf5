@@ -42,7 +42,7 @@ import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 
-public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
+public abstract class TreeNodeEdit {
 
 	protected static enum SettingsKey {
 		NAME("name"),
@@ -67,6 +67,7 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 		ATTRIBUTES("attributes"),
 		COLUMNS("columns"),
 		COLUMN_SPEC_TYPE("columnSpecType"),
+		INPUT_ROW_COUNT("inputRowCount"),
 		INPUT_COLUMN_INDEX("inputColumnIndex");
 
 		private String m_key;
@@ -116,10 +117,12 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 	
 	public static enum InvalidCause {
 		NAME_DUPLICATE("name duplicate"),
-		HDF_OBJECT("no hdf object available"),
+		NO_HDF_OBJECT("no hdf object available"),
+		NO_COPY_EDIT("no source available to copy from"),
 		PARENT_DELETE("parent is getting deleted so this also has to be deleted"),
 		NAME_CHARS("name contains invalid characters"),
-		FILE_EXTENSION("file extension is not .h5 or .hdf5");
+		FILE_EXTENSION("file extension is not .h5 or .hdf5"),
+		ROW_COUNT("dataSet has unequal row sizes");
 
 		private String m_message;
 
@@ -238,6 +241,9 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 	
 	void setInputPathFromFileWithName(String inputPathFromFileWithName) {
 		m_inputPathFromFileWithName = inputPathFromFileWithName;
+		for (TreeNodeEdit copyEdit : m_incompleteCopies) {
+			copyEdit.setInputPathFromFileWithName(inputPathFromFileWithName);
+		}
 	}
 	
 	public String getOutputPathFromFile() {
@@ -258,6 +264,7 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 	
 	protected void setTreeNodeMenu(TreeNodeMenu treeNodeMenu) {
 		m_treeNodeMenu = treeNodeMenu;
+		m_treeNodeMenu.updateDeleteItemText();
 	}
 	
 	public DefaultMutableTreeNode getTreeNode() {
@@ -269,6 +276,9 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 	}
 	
 	protected void setParent(TreeNodeEdit parent) {
+		if (m_parent != null) {
+			m_parent.updateInvalidMap(this, null);
+		}
 		m_parent = parent;
 	}
 	
@@ -297,10 +307,32 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 			}
 		}
 	}
+
+	private TreeNodeEdit getCopyEdit() {
+		return m_copyEdit;
+	}
 	
 	private void setCopyEdit(TreeNodeEdit copyEdit) {
 		m_copyEdit = copyEdit;
 	}
+	
+	protected void copyPropertiesFrom(TreeNodeEdit copyEdit) {
+		copyCorePropertiesFrom(copyEdit);
+		copyAdditionalPropertiesFrom(copyEdit);
+	}
+	
+	protected void copyCorePropertiesFrom(TreeNodeEdit copyEdit) {
+		m_name = copyEdit.getName();
+		m_inputPathFromFileWithName = copyEdit.getInputPathFromFileWithName();
+		m_outputPathFromFile = copyEdit.getOutputPathFromFile();
+		setEditAction(copyEdit.getEditAction());
+		m_treeNodeMenu.updateDeleteItemText();
+		if (getEditAction() == EditAction.COPY) {
+			m_parent.addIncompleteCopy(this);
+		}
+	}
+	
+	protected abstract void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit);
 
 	public boolean isValid() {
 		return m_invalidEdits.isEmpty();
@@ -321,7 +353,7 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 		String messages = "";
 		
 		TreeNodeEdit[] invalidEdits = m_invalidEdits.keySet().toArray(new TreeNodeEdit[0]);
-		Arrays.sort(invalidEdits, (Comparator<TreeNodeEdit>) this);
+		Arrays.sort(invalidEdits, new TreeNodeEditComparator());
 		for (TreeNodeEdit invalidEdit : invalidEdits) {
 			messages += "- " + invalidEdit.getOutputPathFromFileWithName() + ": " + m_invalidEdits.get(invalidEdit).getMessage() + "\n";
 		}
@@ -335,6 +367,9 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 	}
 	
 	protected void addIncompleteCopy(TreeNodeEdit edit) {
+		if (edit.getCopyEdit() != null) {
+			edit.getCopyEdit().removeIncompleteCopy(edit);
+		}
 		m_incompleteCopies.add(edit);
 		edit.setCopyEdit(this);
 	}
@@ -346,6 +381,32 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 	
 	protected boolean areIncompleteCopiesLeft() {
 		return !m_incompleteCopies.isEmpty();
+	}
+	
+	protected void updateIncompleteCopies() {
+    	if (m_editAction == EditAction.COPY && m_copyEdit == null) {
+    		TreeNodeEdit copyEdit = findCopyEdit();
+			if (copyEdit != null) {
+				copyEdit.addIncompleteCopy(this);
+			}
+		}
+    	
+		for (TreeNodeEdit edit : getAllChildren()) {
+			edit.updateIncompleteCopies();
+		}
+	}
+	
+	private TreeNodeEdit findCopyEdit() {
+		if (this instanceof GroupNodeEdit) {
+			return getRoot().getGroupEditByPath(getInputPathFromFileWithName());
+		} else if (this instanceof DataSetNodeEdit) {
+			return getRoot().getDataSetEditByPath(getInputPathFromFileWithName());
+		} else if (this instanceof ColumnNodeEdit) {
+			return getRoot().getColumnEditByPath(getInputPathFromFileWithName(), ((ColumnNodeEdit) this).getInputColumnIndex());
+		} else if (this instanceof AttributeNodeEdit) {
+			return getRoot().getAttributeEditByPath(getInputPathFromFileWithName());
+		} 
+		return null;
 	}
 	
 	public String getOutputPathFromFileWithName() {
@@ -389,7 +450,7 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
     		removeFromParent();
     		
     	} else {
-    		m_editAction = isDelete ? EditAction.DELETE : EditAction.MODIFY;
+    		m_editAction = isDelete ? EditAction.DELETE : (this instanceof ColumnNodeEdit ? EditAction.NO_ACTION : EditAction.MODIFY);
     		updateParentEditAction();
     		m_treeNodeMenu.updateDeleteItemText();
     	}
@@ -413,23 +474,25 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 
 	@SuppressWarnings("unchecked")
 	public void addEditToNode(DefaultMutableTreeNode parentNode) {
-		if (m_treeNode == null) {
-			m_treeNode = new DefaultMutableTreeNode(this);
-		}
-		
-		Enumeration<DefaultMutableTreeNode> enumeration = parentNode.children();
-		DefaultMutableTreeNode[] siblings = Collections.list(enumeration).toArray(new DefaultMutableTreeNode[0]);
-		int insert;
-		for (insert = 0; insert < siblings.length; insert++) {
-			TreeNodeEdit edit = (TreeNodeEdit) siblings[insert].getUserObject();
-			if (compareProperties(this, edit) < 0) {
-				break;
+		if (parentNode != null) {
+			if (m_treeNode == null) {
+				m_treeNode = new DefaultMutableTreeNode(this);
 			}
-		}
-		parentNode.insert(m_treeNode, insert);
-		
-		for (TreeNodeEdit edit : getAllChildren()) {
-	        edit.addEditToNode(m_treeNode);
+			
+			Enumeration<DefaultMutableTreeNode> enumeration = parentNode.children();
+			DefaultMutableTreeNode[] siblings = Collections.list(enumeration).toArray(new DefaultMutableTreeNode[0]);
+			int insert;
+			for (insert = 0; insert < siblings.length; insert++) {
+				TreeNodeEdit edit = (TreeNodeEdit) siblings[insert].getUserObject();
+				if (TreeNodeEditComparator.compareProperties(this, edit) < 0) {
+					break;
+				}
+			}
+			parentNode.insert(m_treeNode, insert);
+			
+			for (TreeNodeEdit edit : getAllChildren()) {
+		        edit.addEditToNode(m_treeNode);
+			}
 		}
 	}
 	
@@ -437,7 +500,7 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 		InvalidCause cause = validateEditInternal();
 		
 		if (m_parent != null) {
-			cause = cause == null && (m_parent.getEditAction() == EditAction.DELETE && getEditAction() != EditAction.DELETE) ? InvalidCause.PARENT_DELETE : cause;
+			cause = cause == null && (m_parent.getEditAction() == EditAction.DELETE && m_editAction != EditAction.DELETE) ? InvalidCause.PARENT_DELETE : cause;
 			
 			if (cause == null) {
 				for (TreeNodeEdit edit : m_parent.getAllChildren()) {
@@ -449,7 +512,10 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 			}
 		}
 		
-		cause = cause == null && (!(this instanceof ColumnNodeEdit) && !getEditAction().isCreateOrCopyAction() && getHdfObject() == null) ? InvalidCause.HDF_OBJECT : cause;
+		cause = cause == null && !(this instanceof ColumnNodeEdit) && !m_editAction.isCreateOrCopyAction() && m_hdfObject == null ? InvalidCause.NO_HDF_OBJECT : cause;
+		
+		// TODO find a way to check if there is a source to copy from, especially when using a file with a different structure than used to save the settings
+		// cause = cause == null && m_editAction == EditAction.COPY && m_copyEdit == null ? InvalidCause.NO_COPY_EDIT : cause;
 		
 		updateInvalidMap(this, cause);
 
@@ -469,9 +535,10 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 		case COPY:
 			boolean success = copyAction();
 			if (success && m_copyEdit != null) {
+				TreeNodeEdit copyEdit = m_copyEdit;
 				m_copyEdit.removeIncompleteCopy(this);
-				if (!m_copyEdit.areIncompleteCopiesLeft() && m_copyEdit.getEditAction() == EditAction.DELETE) {
-					success &= m_copyEdit.deleteAction();
+				if (!copyEdit.areIncompleteCopiesLeft() && copyEdit.getEditAction() == EditAction.DELETE) {
+					success &= copyEdit.deleteAction();
 				}
 			}
 			return success;
@@ -489,33 +556,40 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 	protected abstract boolean deleteAction();
 	protected abstract boolean modifyAction();
 	
-	@Override
-	public int compare(TreeNodeEdit o1, TreeNodeEdit o2) {
-		if (o1.getParent() == o2.getParent()) {
-			return compareProperties(o1, o2);
-			
-		} else {
-			TreeNodeEdit[] path1 = o1.getPath();
-			TreeNodeEdit[] path2 = o2.getPath();
-			int minLength = Math.min(path1.length, path2.length);
-			int compare = 0;
-			for (int i = 0; compare == 0 && i < minLength; i++) {
-				compare = compareProperties(path1[i], path2[i]);
+	private static class TreeNodeEditComparator implements Comparator<TreeNodeEdit> {
+		@Override
+		public int compare(TreeNodeEdit o1, TreeNodeEdit o2) {
+			if (o1.getParent() == o2.getParent()) {
+				return compareProperties(o1, o2);
+				
+			} else {
+				TreeNodeEdit[] path1 = o1.getPath();
+				TreeNodeEdit[] path2 = o2.getPath();
+				int minLength = Math.min(path1.length, path2.length);
+				int compare = 0;
+				for (int i = 0; compare == 0 && i < minLength; i++) {
+					compare = compareProperties(path1[i], path2[i]);
+				}
+				return compare == 0 ? Integer.compare(path1.length, path2.length) : compare;
 			}
-			return compare == 0 ? Integer.compare(path1.length, path2.length) : compare;
 		}
-	}
-	
-	private int compareProperties(TreeNodeEdit o1, TreeNodeEdit o2) {
-		int compare = Integer.compare(o1.getClassValue(), o2.getClassValue());
-		return compare == 0 ? o1.getName().compareTo(o2.getName()) : compare; 
-	}
-	
-	private int getClassValue() {
-		return this instanceof GroupNodeEdit ? 0 : 
-			(this instanceof DataSetNodeEdit ? 1 :
-			(this instanceof ColumnNodeEdit ? 2 :
-			(this instanceof AttributeNodeEdit ? 3 : 4)));
+		
+		private static int compareProperties(TreeNodeEdit o1, TreeNodeEdit o2) {
+			int compare = Integer.compare(getClassValue(o1), getClassValue(o2));
+			if (o1 instanceof ColumnNodeEdit) {
+				return compare == 0 ? ((o1.getEditAction() == EditAction.DELETE) == (o2.getEditAction() == EditAction.DELETE) ? 0
+						: (o1.getEditAction() == EditAction.DELETE ? 1 : -1)) : compare;
+			} else {
+				return compare == 0 ? o1.getName().compareTo(o2.getName()) : compare;
+			}
+		}
+		
+		private static int getClassValue(TreeNodeEdit o) {
+			return o.getClass() == GroupNodeEdit.class ? 0 : 
+				(o.getClass() == DataSetNodeEdit.class ? 1 :
+				(o.getClass() == ColumnNodeEdit.class ? 2 :
+				(o.getClass() == AttributeNodeEdit.class ? 3 : 4)));
+		}
 	}
 	
 	public abstract class TreeNodeMenu extends JPopupMenu {
@@ -575,7 +649,9 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
     	}
 		
 		private void updateDeleteItemText() {
-			m_itemDelete.setText(m_editAction != EditAction.DELETE ? "Delete" : "Remove deletion");
+			if (m_itemDelete != null) {
+				m_itemDelete.setText(m_editAction != EditAction.DELETE ? "Delete" : "Remove deletion");
+			}
 		}
 		
 		private String getDeleteConfirmMessage() {
@@ -605,10 +681,9 @@ public abstract class TreeNodeEdit implements Comparator<TreeNodeEdit> {
 		private final GridBagConstraints m_constraints = new GridBagConstraints();
 		
 		protected PropertiesDialog(Component comp, String title) {
-			super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, comp), title);
+			super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, comp), title, true);
 			setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
 			setLocation(400, 400);
-			setModal(true);
 			
 			JPanel panel = new JPanel(new BorderLayout());
 			add(panel, BorderLayout.CENTER);

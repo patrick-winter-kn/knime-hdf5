@@ -14,7 +14,6 @@ import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
-import org.knime.hdf5.nodes.writer.HDF5OverwritePolicy;
 import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
 
 import hdf.hdf5lib.H5;
@@ -366,19 +365,20 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return paths;
 	}
 
-	public Hdf5DataSet<?> createDataSetFromEdit(DataSetNodeEdit edit, long rows) {
+	public Hdf5DataSet<?> createDataSetFromEdit(DataSetNodeEdit edit) {
 		Hdf5DataSet<?> dataSet = null;
 		
 		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), 
 				edit.getKnimeType(), false, true, edit.getStringLength());
-		long[] dims = edit.getNumberOfDimensions() == 1 ? new long[] { rows } : new long[] { rows, edit.getColumnSpecs().length };
+		long[] dims = edit.getNumberOfDimensions() == 1 ? new long[] { edit.getInputRowCount() }
+				: new long[] { edit.getInputRowCount(), edit.getColumnSpecs().length };
 		
 		try {
 			dataSet = createDataSet(edit.getName(), dims, edit.getCompressionLevel(), edit.getChunkRowSize(), dataType);
 			
 		} catch (IOException ioe) {
-			try {
-				if (edit.getOverwritePolicy() == HDF5OverwritePolicy.OVERWRITE) {
+			/*try {
+				if (edit.getOverwritePolicy() == OverwritePolicy.OVERWRITE) {
 					dataSet = getDataSet(edit.getName());
 					
 					// TODO try that it's also possible to overwrite when the types or dimensions differ
@@ -391,7 +391,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				}
 			} catch (IOException ioe2) {
 				NodeLogger.getLogger("HDF5 Files").warn(ioe2.getMessage(), ioe2);
-			}
+			}*/
 		}
 		
 		return dataSet;

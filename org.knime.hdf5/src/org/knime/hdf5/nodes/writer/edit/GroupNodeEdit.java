@@ -131,28 +131,37 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		return false;
 	}
 	
-	public GroupNodeEdit getGroupNodeEdit(String name) {
-		for (GroupNodeEdit groupEdit : m_groupEdits) {
-			if (name.equals(groupEdit.getName())) {
-				return groupEdit;
+	GroupNodeEdit getGroupNodeEdit(String inputPathFromFileWithName) {
+		if (inputPathFromFileWithName != null) {
+			for (GroupNodeEdit groupEdit : m_groupEdits) {
+				if (inputPathFromFileWithName.equals(groupEdit.getInputPathFromFileWithName())
+						&& !groupEdit.getEditAction().isCreateOrCopyAction()) {
+					return groupEdit;
+				}
 			}
 		}
 		return null;
 	}
 	
-	public DataSetNodeEdit getDataSetNodeEdit(String name) {
-		for (DataSetNodeEdit dataSetEdit : m_dataSetEdits) {
-			if (name.equals(dataSetEdit.getName())) {
-				return dataSetEdit;
+	DataSetNodeEdit getDataSetNodeEdit(String inputPathFromFileWithName) {
+		if (inputPathFromFileWithName != null) {
+			for (DataSetNodeEdit dataSetEdit : m_dataSetEdits) {
+				if (inputPathFromFileWithName.equals(dataSetEdit.getInputPathFromFileWithName())
+						&& !dataSetEdit.getEditAction().isCreateOrCopyAction()) {
+					return dataSetEdit;
+				}
 			}
 		}
 		return null;
 	}
 	
-	public AttributeNodeEdit getAttributeNodeEdit(String name) {
-		for (AttributeNodeEdit attributeEdit : m_attributeEdits) {
-			if (name.equals(attributeEdit.getName())) {
-				return attributeEdit;
+	AttributeNodeEdit getAttributeNodeEdit(String inputPathFromFileWithName, EditAction editAction) {
+		if (inputPathFromFileWithName != null) {
+			for (AttributeNodeEdit attributeEdit : m_attributeEdits) {
+				if (inputPathFromFileWithName.equals(attributeEdit.getInputPathFromFileWithName())
+						&& (editAction == EditAction.CREATE) == (attributeEdit.getEditAction() == EditAction.CREATE)) {
+					return attributeEdit;
+				}
 			}
 		}
 		return null;
@@ -163,7 +172,6 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
 		}
-		// checkValidation(); for invalid siblings
 	}
 	
 	public void removeDataSetNodeEdit(DataSetNodeEdit edit) {
@@ -171,7 +179,6 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
 		}
-		// checkValidation(); for invalid siblings
 	}
 	
 	public void removeAttributeNodeEdit(AttributeNodeEdit edit) {
@@ -179,41 +186,54 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
 		}
-		// checkValidation(); for invalid siblings
 	}
 	
 	/**
 	 * so far with overwrite of properties
 	 */
-	public void integrate(GroupNodeEdit copyEdit) {
+	public void integrate(GroupNodeEdit copyEdit, long inputRowCount) {
 		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
-			if (copyGroupEdit.getEditAction().isCreateOrCopyAction()) {
+			GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
+			if (groupEdit != null && !copyGroupEdit.getEditAction().isCreateOrCopyAction()) {
+				groupEdit.integrate(copyGroupEdit, inputRowCount);
+			} else {
 				addGroupNodeEdit(copyGroupEdit);
 				copyGroupEdit.addEditToNode(getTreeNode());
-			} else {
-				getGroupNodeEdit(copyGroupEdit.getName()).integrate(copyGroupEdit);
 			}
 		}
 		
 		for (DataSetNodeEdit copyDataSetEdit : copyEdit.getDataSetNodeEdits()) {
-			if (copyDataSetEdit.getEditAction().isCreateOrCopyAction()) {
+			DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
+			if (dataSetEdit != null && !copyDataSetEdit.getEditAction().isCreateOrCopyAction()) {
+				dataSetEdit.integrate(copyDataSetEdit, inputRowCount);
+			} else {
 				addDataSetNodeEdit(copyDataSetEdit);
 				copyDataSetEdit.addEditToNode(getTreeNode());
-			} else {
-				getDataSetNodeEdit(copyDataSetEdit.getName()).integrate(copyDataSetEdit);
+				for (ColumnNodeEdit copyColumnEdit : copyDataSetEdit.getColumnNodeEdits()) {
+					if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
+						copyColumnEdit.setInputRowCount(inputRowCount);
+					}
+				}
 			}
 		}
 		
 		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
-			AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getName());
-			if (attributeEdit != null && !attributeEdit.getEditAction().isCreateOrCopyAction() && !copyEdit.getEditAction().isCreateOrCopyAction()) {
+			AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
+			if (attributeEdit != null && !copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
 				removeAttributeNodeEdit(attributeEdit);
 			}
 			addAttributeNodeEdit(copyAttributeEdit);
 			copyAttributeEdit.addEditToNode(getTreeNode());
 		}
+		
+		copyPropertiesFrom(copyEdit);
 	}
-
+	
+	@Override
+	protected void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit) {
+		// nothing to do here
+	}
+	
 	@Override
 	protected TreeNodeEdit[] getAllChildren() {
 		List<TreeNodeEdit> children = new ArrayList<>();
@@ -228,6 +248,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	@Override
 	protected void removeFromParent() {
 		((GroupNodeEdit) getParent()).removeGroupNodeEdit(this);
+		setParent(null);
 	}
 	
 	@Override
@@ -342,7 +363,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	@Override
 	protected boolean isInConflict(TreeNodeEdit edit) {
 		return (edit instanceof GroupNodeEdit || edit instanceof DataSetNodeEdit) && !edit.equals(this)
-				&& edit.getName().equals(getName()) && !(getEditAction() == EditAction.DELETE && edit.getEditAction() == EditAction.DELETE);
+				&& edit.getName().equals(getName()) && getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
 	}
 
 	@Override
@@ -413,8 +434,9 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		@Override
 		protected void onDelete() {
 			GroupNodeEdit edit = GroupNodeEdit.this;
+			TreeNodeEdit parentOfVisible = edit.getParent();
         	edit.setDeletion(edit.getEditAction() != EditAction.DELETE);
-            edit.reloadTreeWithEditVisible();
+            parentOfVisible.reloadTreeWithEditVisible(true);
 		}
 		
 		private class GroupPropertiesDialog extends PropertiesDialog {

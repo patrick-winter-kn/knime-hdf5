@@ -123,12 +123,17 @@ public class EditTreePanel extends JPanel {
 				
 				if (value instanceof DefaultMutableTreeNode) {
 					DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
-					TreeNodeEdit edit = (TreeNodeEdit) node.getUserObject();
-						
-					setText((edit.getEditAction() == TreeNodeEdit.EditAction.MODIFY ? "*" : "") + edit.getName());
-					setIcon(icons[getItemId(edit)][getStateId(edit.getEditAction())]);
-					setBorder(edit.isValid() ? null : BorderFactory.createLineBorder(Color.red));
-					tree.setToolTipText(edit.getToolTipText());
+					Object userObject = node.getUserObject();
+					
+					if (userObject instanceof TreeNodeEdit) {
+						TreeNodeEdit edit = (TreeNodeEdit) userObject;
+						setText((edit.getEditAction() == TreeNodeEdit.EditAction.MODIFY ? "*" : "") + edit.getName());
+						setIcon(icons[getItemId(edit)][getStateId(edit.getEditAction())]);
+						setBorder(edit.isValid() ? null : BorderFactory.createLineBorder(Color.red));
+						tree.setToolTipText(edit.getToolTipText());
+					} else {
+						setText(userObject.toString());
+					}
 				}
 				
 				return this;
@@ -428,7 +433,7 @@ public class EditTreePanel extends JPanel {
 	
 	void loadConfiguration(EditTreeConfiguration editTreeConfig) {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
-		fileEdit.integrate(editTreeConfig.getFileNodeEdit());
+		fileEdit.integrate(editTreeConfig.getFileNodeEdit(), ColumnNodeEdit.UNKNOWN_ROW_COUNT);
 		fileEdit.reloadTreeWithEditVisible(true);
 	}
 }

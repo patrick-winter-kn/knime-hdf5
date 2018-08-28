@@ -18,6 +18,7 @@ import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.port.PortType;
 import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.nodes.writer.edit.ColumnNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 
 public class HDF5WriterNodeModel extends NodeModel {
@@ -45,7 +46,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		checkForErrors(m_filePathSettings, m_editTreeConfig);
+		checkForErrors(m_filePathSettings, m_editTreeConfig, inData[0].size());
 
 		// TODO find a possibility to estimate exec.setProgress()
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
@@ -65,18 +66,40 @@ public class HDF5WriterNodeModel extends NodeModel {
 	
 	@Override
 	protected DataTableSpec[] configure(DataTableSpec[] inSpecs) throws InvalidSettingsException {
-		checkForErrors(m_filePathSettings, m_editTreeConfig);
+		checkForErrors(m_filePathSettings, m_editTreeConfig, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
 		return null;
     }
 	
-	private static void checkForErrors(SettingsModelString filePathSettings, EditTreeConfiguration editTreeConfig) throws InvalidSettingsException {
-		if (filePathSettings.getStringValue().trim().isEmpty()) {
+	private static void checkForErrors(SettingsModelString filePathSettings,
+			EditTreeConfiguration editTreeConfig, long inputRowCount) throws InvalidSettingsException {
+		String filePath = filePathSettings.getStringValue();
+		if (filePath.trim().isEmpty()) {
 			throw new InvalidSettingsException("No file selected");
 		}
 		
-		FileNodeEdit fileEdit = editTreeConfig.getFileNodeEdit();
-		if (!fileEdit.isValid()) {
-			throw new InvalidSettingsException("The settings for file \"" + fileEdit.getFilePath() + "\" are not valid:\n" + fileEdit.getInvalidCauseMessages());
+		Hdf5File file = null;
+		try {
+			FileNodeEdit fileEdit = editTreeConfig.getFileNodeEdit();
+			if (!fileEdit.getEditAction().isCreateOrCopyAction()) {
+				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+				fileEdit = new FileNodeEdit(file);
+				fileEdit.loadChildrenOfHdfObject();
+				fileEdit.integrate(editTreeConfig.getFileNodeEdit(), inputRowCount);
+			} else if (Hdf5File.existsFile(filePath)) {
+				throw new InvalidSettingsException("The selected file \"" + filePath + "\" does already exist");
+			}
+			if (!fileEdit.isValid()) {
+				throw new InvalidSettingsException("The settings for file \"" + fileEdit.getFilePath()
+						+ "\" are not valid:\n" + fileEdit.getInvalidCauseMessages());
+			}
+			
+		} catch (IOException ioe) {
+			throw new InvalidSettingsException(ioe.getMessage(), ioe.getCause());
+			
+		} finally {
+			if (file != null) {
+				file.close();
+			}
 		}
 	}
 
@@ -105,7 +128,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 		editTreeConfig.loadConfiguration(settings);
 		
-		checkForErrors(filePathSettings, editTreeConfig);
+		checkForErrors(filePathSettings, editTreeConfig, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
 	}
 
 	@Override

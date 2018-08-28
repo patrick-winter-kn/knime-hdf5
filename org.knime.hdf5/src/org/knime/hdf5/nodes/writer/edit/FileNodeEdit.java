@@ -15,6 +15,7 @@ import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
+import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5File;
 
 public class FileNodeEdit extends GroupNodeEdit {
@@ -41,6 +42,48 @@ public class FileNodeEdit extends GroupNodeEdit {
 		return m_filePath;
 	}
 	
+	GroupNodeEdit getGroupEditByPath(String inputPathFromFileWithName) {
+		if (!inputPathFromFileWithName.isEmpty()) {
+			int pathLength = inputPathFromFileWithName.lastIndexOf("/");
+			GroupNodeEdit parent = pathLength >= 0 ? getGroupEditByPath(inputPathFromFileWithName.substring(0, pathLength)) : this;
+			
+			return parent != null ? parent.getGroupNodeEdit(inputPathFromFileWithName) : null;
+			
+		} else {
+			return this;
+		}
+	}
+
+	DataSetNodeEdit getDataSetEditByPath(String inputPathFromFileWithName) {
+		int pathLength = inputPathFromFileWithName.lastIndexOf("/");
+		GroupNodeEdit parent = pathLength >= 0 ? getGroupEditByPath(inputPathFromFileWithName.substring(0, pathLength)) : this;
+		
+		return parent != null ? parent.getDataSetNodeEdit(inputPathFromFileWithName) : null;
+	}
+
+	ColumnNodeEdit getColumnEditByPath(String inputPathFromFileWithName, int inputColumnIndex) {
+		DataSetNodeEdit parent = getDataSetEditByPath(inputPathFromFileWithName);
+		
+		return parent != null ? parent.getColumnNodeEdit(inputPathFromFileWithName, inputColumnIndex) : null;
+	}
+
+	AttributeNodeEdit getAttributeEditByPath(String inputPathFromFileWithName) {
+		AttributeNodeEdit attributeEdit = null;
+		
+		String[] pathAndName = Hdf5Attribute.getPathAndName(inputPathFromFileWithName);
+		GroupNodeEdit parentGroup = getGroupEditByPath(pathAndName[0]);
+		
+		if (parentGroup != null) {
+			attributeEdit = parentGroup.getAttributeNodeEdit(inputPathFromFileWithName, EditAction.NO_ACTION);
+			
+		} else {
+			DataSetNodeEdit parentDataSet = getDataSetEditByPath(pathAndName[0]);
+			attributeEdit = parentDataSet != null ? parentDataSet.getAttributeNodeEdit(inputPathFromFileWithName, EditAction.NO_ACTION) : null;
+		}
+		
+		return attributeEdit;
+	}
+	
 	public static FileNodeEdit useFileSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
 		Hdf5File file = null;
 		FileNodeEdit edit = new FileNodeEdit(settings.getString(SettingsKey.FILE_PATH.getKey()),
@@ -55,6 +98,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 			}
 			edit.setHdfObject(file);
 	        edit.loadSettings(settings);
+	        edit.updateIncompleteCopies();
 	        edit.validate();
 	        
 		} finally {
@@ -64,6 +108,16 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 		
         return edit;
+	}
+	
+	@Override
+	public void integrate(GroupNodeEdit copyEdit, long inputRowCount) {
+		if (copyEdit instanceof FileNodeEdit) {
+			super.integrate(copyEdit, inputRowCount);
+			validate();
+		} else {
+			throw new IllegalStateException("Cannot integrate group (which is not a file) in a file");
+		}
 	}
 
 	@Override

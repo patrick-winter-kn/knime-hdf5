@@ -62,14 +62,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	private AttributeNodeEdit(AttributeNodeEdit copyAttribute, TreeNodeEdit parent) {
 		this(copyAttribute.getInputPathFromFileWithName(), parent, copyAttribute.getName(), copyAttribute.getKnimeType(),
 				copyAttribute.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
-		m_hdfType = copyAttribute.getHdfType();
-		m_compoundAsArrayPossible = copyAttribute.isCompoundAsArrayPossible();
-		m_compoundAsArrayUsed = copyAttribute.isCompoundAsArrayUsed();
-		m_endian = copyAttribute.getEndian();
-		m_fixed = copyAttribute.isFixed();
-		m_stringLength = copyAttribute.getStringLength();
-		m_compoundItemStringLength = copyAttribute.getCompoundItemStringLength();
-		m_overwrite = copyAttribute.isOverwrite();
+		copyAdditionalPropertiesFrom(copyAttribute);
 		if (getEditAction() == EditAction.COPY) {
 			copyAttribute.addIncompleteCopy(this);
 		}
@@ -215,7 +208,22 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	private void setOverwrite(boolean overwrite) {
 		m_overwrite = overwrite;
 	}
-
+	
+	@Override
+	protected void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit) {
+		if (copyEdit instanceof AttributeNodeEdit) {
+			AttributeNodeEdit copyAttributeEdit = (AttributeNodeEdit) copyEdit;
+			m_hdfType = copyAttributeEdit.getHdfType();
+			m_compoundAsArrayPossible = copyAttributeEdit.isCompoundAsArrayPossible();
+			m_compoundAsArrayUsed = copyAttributeEdit.isCompoundAsArrayUsed();
+			m_endian = copyAttributeEdit.getEndian();
+			m_fixed = copyAttributeEdit.isFixed();
+			m_stringLength = copyAttributeEdit.getStringLength();
+			m_compoundItemStringLength = copyAttributeEdit.getCompoundItemStringLength();
+			m_overwrite = copyAttributeEdit.isOverwrite();
+		}
+	}
+	
 	@Override
 	protected TreeNodeEdit[] getAllChildren() {
 		return new TreeNodeEdit[0];
@@ -229,6 +237,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		} else if (parentEdit instanceof GroupNodeEdit) {
 			((GroupNodeEdit) parentEdit).removeAttributeNodeEdit(this);	
 		}
+		setParent(null);
 	}
 
 	@Override
@@ -280,7 +289,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	@Override
 	protected boolean isInConflict(TreeNodeEdit edit) {
 		return edit instanceof AttributeNodeEdit && !edit.equals(this) && edit.getName().equals(getName())
-				&& !(getEditAction() == EditAction.DELETE && edit.getEditAction() == EditAction.DELETE);
+				&& getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
 	}
 
 	@Override
@@ -399,8 +408,9 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		@Override
 		protected void onDelete() {
 			AttributeNodeEdit edit = AttributeNodeEdit.this;
+			TreeNodeEdit parentOfVisible = edit.getParent();
         	edit.setDeletion(edit.getEditAction() != EditAction.DELETE);
-        	edit.reloadTreeWithEditVisible();
+            parentOfVisible.reloadTreeWithEditVisible(true);
 		}
 		
 		private class AttributePropertiesDialog extends PropertiesDialog {
