@@ -264,8 +264,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	protected void loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
 		try {
 	        if (!getEditAction().isCreateOrCopyAction()) {
-	        	setHdfObject(((Hdf5TreeElement) getParent().getHdfObject()).getAttribute(
-	        			Hdf5Attribute.getPathAndName(getInputPathFromFileWithName())[1]));
+	        	Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
+	        	if (parent != null) {
+		        	setHdfObject(parent.getAttribute(Hdf5Attribute.getPathAndName(getInputPathFromFileWithName())[1]));
+	        	}
 	        }
 		} catch (IOException ioe) {
 			// nothing to do here: edit will be invalid anyway

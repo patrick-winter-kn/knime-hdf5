@@ -123,7 +123,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 						+ " with the name \"" + name + "\" in the group \"" + getPathFromFileWithName() + "\"");
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
-			NodeLogger.getLogger("HDF5 Files").error("Existence of object could not be checked", hlnpe);
+			NodeLogger.getLogger(getClass()).error(hlnpe.getMessage(), hlnpe);
 			/* group stays null */
 		}
 		
@@ -148,7 +148,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 						+ " with the name \"" + name + "\" in the group \"" + getPathFromFileWithName() + "\"");
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
-			NodeLogger.getLogger("HDF5 Files").error("Existence of object could not be checked", hlnpe);
+			NodeLogger.getLogger(getClass()).error(hlnpe.getMessage(), hlnpe);
 			/* dataSet stays null */
 		}
 		
@@ -175,7 +175,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				objectType = getObjectTypeByName(name);
 				
 			} catch (HDF5LibraryException | NullPointerException hlnpe) {
-				NodeLogger.getLogger("HDF5 Files").error("Existence of object could not be checked", hlnpe);
+				NodeLogger.getLogger(getClass()).error(hlnpe.getMessage(), hlnpe);
 				/* dataSet stays null */
 			}
 			
@@ -230,7 +230,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				objectType = getObjectTypeByName(name);
 				
 			} catch (HDF5LibraryException | NullPointerException hlnpe) {
-				NodeLogger.getLogger("HDF5 Files").error("Existence of object could not be checked", hlnpe);
+				NodeLogger.getLogger(getClass()).error(hlnpe.getMessage(), hlnpe);
 				/* dataSet stays null */
 			}
 			
@@ -263,16 +263,60 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 	
 	private int getObjectTypeByName(final String name) throws HDF5LibraryException, NullPointerException {
-		if (H5.H5Lexists(getElementId(), name, HDF5Constants.H5P_DEFAULT)
-				&& H5.H5Oexists_by_name(getElementId(), name, HDF5Constants.H5P_DEFAULT)) {
-			long elementId = H5.H5Oopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
-			int typeId = H5.H5Iget_type(elementId); 
-			H5.H5Oclose(elementId);
-			
-			return typeId;
+		try {
+			if (H5.H5Lexists(getElementId(), name, HDF5Constants.H5P_DEFAULT)
+					&& H5.H5Oexists_by_name(getElementId(), name, HDF5Constants.H5P_DEFAULT)) {
+				long elementId = H5.H5Oopen(getElementId(), name, HDF5Constants.H5P_DEFAULT);
+				int typeId = H5.H5Iget_type(elementId); 
+				H5.H5Oclose(elementId);
+				
+				return typeId;
+			}
+		} catch (HDF5LibraryException hle) {
+			throw new HDF5LibraryException("Existence of object could not be checked");
 		}
 		
 		return OBJECT_NOT_EXISTS;
+	}
+	
+	public synchronized int deleteGroup(final String name) {
+		int success = -1;
+		
+		try {
+			Hdf5Group group = getGroup(name);
+			group.close();
+			if (!group.isOpen()) {
+				H5.H5Ldelete(getElementId(), name, HDF5Constants.H5P_DEFAULT);
+				if (getObjectTypeByName(name) == OBJECT_NOT_EXISTS) {
+					success = removeGroup(group) ? 1 : 0;
+				}
+			}
+		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
+			NodeLogger.getLogger(getClass()).error("Group \"" + getPathFromFileWithName(true) + name
+					+ "\" could not be deleted from disk: " + hlionpe.getMessage(), hlionpe);
+		}
+		
+		return success;
+	}
+	
+	public synchronized int deleteDataSet(final String name) {
+		int success = -1;
+		
+		try {
+			Hdf5DataSet<?> dataSet = getDataSet(name);
+			dataSet.close();
+			if (!dataSet.isOpen()) {
+				H5.H5Ldelete(getElementId(), name, HDF5Constants.H5P_DEFAULT);
+				if (getObjectTypeByName(name) == OBJECT_NOT_EXISTS) {
+					success = removeDataSet(dataSet) ? 1 : 0;
+				}
+			}
+		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
+			NodeLogger.getLogger(getClass()).error("Group \"" + getPathFromFileWithName(true) + name
+					+ "\" could not be deleted from disk: " + hlionpe.getMessage(), hlionpe);
+		}
+		
+		return success;
 	}
 	
 	private void addGroup(Hdf5Group group) {
@@ -285,6 +329,20 @@ public class Hdf5Group extends Hdf5TreeElement {
 		m_dataSets.add(dataSet);
 		dataSet.setPathFromFile(getPathFromFileWithName(true));
 		dataSet.setParent(this);
+	}
+
+	private boolean removeGroup(Hdf5Group group) {
+		group.setParent(null);
+		group.setPathFromFile("");
+		group.setElementId(-1);
+		return m_groups.remove(group);
+	}
+
+	private boolean removeDataSet(Hdf5DataSet<?> dataSet) {
+		dataSet.setParent(null);
+		dataSet.setPathFromFile("");
+		dataSet.setElementId(-1);
+		return m_dataSets.remove(dataSet);
 	}
 
 	private List<String> loadObjectNames(int objectId) throws IllegalStateException {
@@ -415,7 +473,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 			objectType = getObjectTypeByName(name);
 			
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
-			NodeLogger.getLogger("HDF5 Files").error("Existence of object could not be checked", hlnpe);
+			NodeLogger.getLogger(getClass()).error(hlnpe.getMessage(), hlnpe);
 		}
 		
 		if (objectType == HDF5Constants.H5I_DATASET) {
@@ -465,8 +523,9 @@ public class Hdf5Group extends Hdf5TreeElement {
 					+ getPathFromFile() + getName() + "\"");
 		}
 	}
-	
-	public void open() {
+
+	@Override
+	public boolean open() {
 		if (isFile()) {
 			throw new IllegalStateException("Wrong method used for Hdf5File");
 		}
@@ -479,17 +538,22 @@ public class Hdf5Group extends Hdf5TreeElement {
 				setElementId(H5.H5Gopen(getParent().getElementId(), getName(),
 						HDF5Constants.H5P_DEFAULT));
 				setOpen(true);
+				
+                return true;
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
             NodeLogger.getLogger("HDF5 Files").error("Group could not be opened", hlnpe);
         }
+
+        return false;
 	}
-	
+
 	/**
 	 * Closes the group and all elements in this group.
 	 * 
 	 */
-	public void close() {
+	@Override
+	public boolean close() {
 		try {
             if (isOpen()) {
             	Iterator<Hdf5DataSet<?>> iterDss = getDataSets().iterator();
@@ -509,9 +573,14 @@ public class Hdf5Group extends Hdf5TreeElement {
 	    		
 	    		H5.H5Gclose(getElementId());
 		        setOpen(false);
+		        
+		        // TODO should only be true if all descendants are closed
+                return true;
             }
         } catch (HDF5LibraryException hle) {
             NodeLogger.getLogger("HDF5 Files").error("Group could not be closed", hle);
         }
+		
+        return false;
 	}
 }

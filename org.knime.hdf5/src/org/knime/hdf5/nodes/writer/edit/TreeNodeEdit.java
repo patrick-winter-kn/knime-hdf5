@@ -86,6 +86,7 @@ public abstract class TreeNodeEdit {
 		COPY("copy"),
 		DELETE("delete"),
 		MODIFY("modify"),
+		MODIFY_CHILDREN_ONLY("modifyChildrenOnly"),
 		NO_ACTION("noAction");
 		
 		private static final Map<String, EditAction> LOOKUP = new HashMap<>();
@@ -112,6 +113,10 @@ public abstract class TreeNodeEdit {
 	    
 		public boolean isCreateOrCopyAction() {
 			return this == CREATE || this == COPY;
+		}
+	    
+		public boolean isModifyAction() {
+			return this == MODIFY || this == MODIFY_CHILDREN_ONLY;
 		}
 	}
 	
@@ -195,45 +200,6 @@ public abstract class TreeNodeEdit {
 		
 		return newName;
 	}
-
-	protected static <Edit extends TreeNodeEdit> boolean doActionsInOrder(Edit[] edits, BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
-		List<Edit> deleteEdits = new ArrayList<>();
-		List<Edit> modifyEdits = new ArrayList<>();
-		List<Edit> otherEdits = new ArrayList<>();
-		
-		for (Edit edit : edits) {
-			if (edit.getEditAction() == EditAction.DELETE) {
-				deleteEdits.add(edit);
-			} else if (edit.getEditAction() == EditAction.MODIFY) {
-				modifyEdits.add(edit);
-			} else {
-				otherEdits.add(edit);
-			}
-		}
-		
-		boolean success = true;
-		for (Edit edit : deleteEdits) {
-			if (!edit.areIncompleteCopiesLeft()) {
-				success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
-			}
-		}
-		
-		List<Edit> secondModifyEdits = new ArrayList<>();
-		for (Edit edit : modifyEdits) {
-			if (!edit.doAction(inputTable, flowVariables, saveColumnProperties)) {
-				secondModifyEdits.add(edit);
-			}
-		}
-		for (Edit edit : secondModifyEdits) {
-			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
-		}
-		
-		for (Edit edit : otherEdits) {
-			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
-		}
-		
-		return success;
-	}
 	
 	public String getInputPathFromFileWithName() {
 		return m_inputPathFromFileWithName;
@@ -299,11 +265,11 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public void setEditAction(EditAction editAction) {
-		if (editAction != EditAction.MODIFY || m_editAction == EditAction.NO_ACTION || m_editAction == EditAction.MODIFY) {
+		if (!editAction.isModifyAction() || m_editAction == EditAction.NO_ACTION || m_editAction.isModifyAction()) {
 			m_editAction = editAction;
 			
 			if (m_parent != null && m_parent.getEditAction() == EditAction.NO_ACTION && m_editAction != EditAction.NO_ACTION) {
-				m_parent.setEditAction(EditAction.MODIFY);
+				m_parent.setEditAction(EditAction.MODIFY_CHILDREN_ONLY);
 			}
 		}
 	}
@@ -354,8 +320,18 @@ public abstract class TreeNodeEdit {
 		
 		TreeNodeEdit[] invalidEdits = m_invalidEdits.keySet().toArray(new TreeNodeEdit[0]);
 		Arrays.sort(invalidEdits, new TreeNodeEditComparator());
-		for (TreeNodeEdit invalidEdit : invalidEdits) {
-			messages += "- " + invalidEdit.getOutputPathFromFileWithName() + ": " + m_invalidEdits.get(invalidEdit).getMessage() + "\n";
+		for (InvalidCause invalidCause : InvalidCause.values()) {
+			int found = 0;
+			for (TreeNodeEdit invalidEdit : invalidEdits) {
+				if (invalidCause == m_invalidEdits.get(invalidEdit)) {
+					found++;
+					if (found <= 10) {
+						messages += found == 1 ? invalidCause.getMessage() + ":\n" : "";
+						messages += "- " + invalidEdit.getOutputPathFromFileWithName() + "\n";
+					}
+				}
+			}
+			messages += found > 10 ? "- and " + (found - 10) + " more\n" : "";
 		}
 		
 		return messages;
@@ -446,7 +422,7 @@ public abstract class TreeNodeEdit {
 	}
 	
 	void setDeletion(boolean isDelete) {
-    	if (isDelete && getEditAction().isCreateOrCopyAction() || !isValid() && getEditAction() == EditAction.DELETE) {
+    	if (isDelete && getEditAction().isCreateOrCopyAction() || !isDelete && !isValid() && getEditAction() == EditAction.DELETE) {
     		removeFromParent();
     		
     	} else {
@@ -528,27 +504,81 @@ public abstract class TreeNodeEdit {
 	
 	protected abstract boolean isInConflict(TreeNodeEdit edit);
 	
-	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+	protected boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+		boolean success = false;
+
 		switch (m_editAction) {
 		case CREATE:
-			return createAction(inputTable, flowVariables, saveColumnProperties);
+			success = createAction(inputTable, flowVariables, saveColumnProperties);
+			break;
 		case COPY:
-			boolean success = copyAction();
+			success = copyAction();
 			if (success && m_copyEdit != null) {
 				TreeNodeEdit copyEdit = m_copyEdit;
 				m_copyEdit.removeIncompleteCopy(this);
 				if (!copyEdit.areIncompleteCopiesLeft() && copyEdit.getEditAction() == EditAction.DELETE) {
-					success &= copyEdit.deleteAction();
+					success &= copyEdit.doAction(null, null, false);
 				}
 			}
-			return success;
-		case DELETE:
-			return deleteAction();
-		case MODIFY:
-			return modifyAction();
+			break;
 		default:
-			return true;
+			success = true;
+			break;
 		}
+		
+		doChildActionsInOrder(inputTable, flowVariables, saveColumnProperties);
+		
+		switch (m_editAction) {
+		case DELETE:
+			success &= deleteAction();
+			break;
+		case MODIFY:
+			success &= modifyAction();
+			break;
+		default:
+			break;
+		}
+		
+		return success;
+	}
+
+	private boolean doChildActionsInOrder(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+		List<TreeNodeEdit> deleteEdits = new ArrayList<>();
+		List<TreeNodeEdit> modifyEdits = new ArrayList<>();
+		List<TreeNodeEdit> otherEdits = new ArrayList<>();
+		
+		for (TreeNodeEdit edit : getAllChildren()) {
+			if (edit.getEditAction() == EditAction.DELETE) {
+				deleteEdits.add(edit);
+			} else if (edit.getEditAction() == EditAction.MODIFY) {
+				modifyEdits.add(edit);
+			} else {
+				otherEdits.add(edit);
+			}
+		}
+		
+		boolean success = true;
+		for (TreeNodeEdit edit : deleteEdits) {
+			if (!edit.areIncompleteCopiesLeft()) {
+				success &= edit.doAction(null, null, false);
+			}
+		}
+		
+		List<TreeNodeEdit> secondModifyEdits = new ArrayList<>();
+		for (TreeNodeEdit edit : modifyEdits) {
+			if (!edit.doAction(inputTable, flowVariables, saveColumnProperties)) {
+				secondModifyEdits.add(edit);
+			}
+		}
+		for (TreeNodeEdit edit : secondModifyEdits) {
+			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
+		}
+		
+		for (TreeNodeEdit edit : otherEdits) {
+			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
+		}
+		
+		return success;
 	}
 
 	protected abstract boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties);
@@ -557,6 +587,7 @@ public abstract class TreeNodeEdit {
 	protected abstract boolean modifyAction();
 	
 	private static class TreeNodeEditComparator implements Comparator<TreeNodeEdit> {
+		
 		@Override
 		public int compare(TreeNodeEdit o1, TreeNodeEdit o2) {
 			if (o1.getParent() == o2.getParent()) {
@@ -576,9 +607,10 @@ public abstract class TreeNodeEdit {
 		
 		private static int compareProperties(TreeNodeEdit o1, TreeNodeEdit o2) {
 			int compare = Integer.compare(getClassValue(o1), getClassValue(o2));
-			if (o1 instanceof ColumnNodeEdit) {
-				return compare == 0 ? ((o1.getEditAction() == EditAction.DELETE) == (o2.getEditAction() == EditAction.DELETE) ? 0
+			if (o1 instanceof ColumnNodeEdit && o2 instanceof ColumnNodeEdit) {
+				compare = compare == 0 ? ((o1.getEditAction() == EditAction.DELETE) == (o2.getEditAction() == EditAction.DELETE) ? 0
 						: (o1.getEditAction() == EditAction.DELETE ? 1 : -1)) : compare;
+				return compare == 0 ? Integer.compare(((ColumnNodeEdit) o1).getInputColumnIndex(), ((ColumnNodeEdit) o2).getInputColumnIndex()) : compare;
 			} else {
 				return compare == 0 ? o1.getName().compareTo(o2.getName()) : compare;
 			}

@@ -66,7 +66,12 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	void setInputRowCount(long inputRowCount) {
-		m_inputRowCount = inputRowCount;
+		if (m_inputRowCount == UNKNOWN_ROW_COUNT) {
+			m_inputRowCount = inputRowCount;
+			if (((DataSetNodeEdit) getParent()).getInputRowCount() == UNKNOWN_ROW_COUNT) {
+				((DataSetNodeEdit) getParent()).setInputRowCount(inputRowCount);
+			}
+		}
 	}
 	
 	int getInputColumnIndex() {

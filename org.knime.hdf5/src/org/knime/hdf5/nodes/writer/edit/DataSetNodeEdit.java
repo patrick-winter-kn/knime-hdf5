@@ -186,6 +186,10 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	public long getInputRowCount() {
 		return m_inputRowCount;
 	}
+	
+	void setInputRowCount(long inputRowCount) {
+		m_inputRowCount = inputRowCount;
+	}
 
 	public int getCompressionLevel() {
 		return m_compressionLevel;
@@ -452,7 +456,10 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	protected void loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
 		try {
 	        if (!getEditAction().isCreateOrCopyAction()) {
-	        	setHdfObject(((Hdf5Group) getParent().getHdfObject()).getDataSet(getName()));
+				Hdf5Group parent = (Hdf5Group) getParent().getHdfObject();
+				if (parent != null) {
+		        	setHdfObject(parent.getDataSet(getName()));
+				}
 	        }
 		} catch (IOException ioe) {
 			// nothing to do here: edit will be invalid anyway
@@ -677,21 +684,23 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 
 	@Override
 	protected boolean deleteAction() {
-		return false;
+		Hdf5Group parent = (Hdf5Group) getParent().getHdfObject();
+		if (!parent.isFile()) {
+			parent.open();
+		}
+		
+		String name = getInputPathFromFileWithName().substring(getInputPathFromFileWithName().lastIndexOf("/") + 1);
+		boolean success = parent.deleteDataSet(name) >= 0;
+		if (success) {
+			setHdfObject((Hdf5DataSet<?>) null);
+		}
+		
+		return success;
 	}
 
 	@Override
 	protected boolean modifyAction() {
 		return true;
-	}
-
-	@Override
-	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
-		boolean success = super.doAction(inputTable, flowVariables, saveColumnProperties);
-		
-		success &= TreeNodeEdit.doActionsInOrder(getAttributeNodeEdits(), inputTable, flowVariables, saveColumnProperties);
-		
-		return success;
 	}
 	
 	public class DataSetNodeMenu extends TreeNodeMenu {

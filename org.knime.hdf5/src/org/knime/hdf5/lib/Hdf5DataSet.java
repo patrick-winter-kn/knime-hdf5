@@ -465,7 +465,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		}
 	}
 	
-	public void open() {
+	@Override
+	public boolean open() {
 		try {
 			if (!isOpen()) {
 				if (!getParent().isOpen()) {
@@ -478,10 +479,14 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				setOpen(true);
 				loadDimensions();
 				loadChunkInfo();
+				
+				return true;
 			}
 		} catch (HDF5LibraryException | NullPointerException | IllegalStateException hlnpise) {
             NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened", hlnpise);
         }
+		
+		return false;
 	}
 	
 	private void createDimensions(long[] dimensions) {
@@ -575,8 +580,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		
         H5.H5Pclose(propertyListId);
 	}
-	
-	public void close() {
+
+	@Override
+	public boolean close() {
 		// End access to the dataSet and release resources used by it.
         try {
             if (isOpen()) {
@@ -591,9 +597,12 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
                 
                 H5.H5Dclose(getElementId());
                 setOpen(false);
+                return true;
             }
         } catch (HDF5LibraryException hle) {
             NodeLogger.getLogger("HDF5 Files").error("DataSet could not be closed", hle);
         }
+        
+        return false;
 	}
 }

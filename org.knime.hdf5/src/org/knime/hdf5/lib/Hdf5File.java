@@ -103,6 +103,10 @@ public class Hdf5File extends Hdf5Group {
 		return new File(filePath).exists();
 	}
 	
+	public static boolean hasHdf5FileEnding(final String filePath) {
+		return filePath.endsWith(".h5") || filePath.endsWith(".hdf5");
+	}
+	
 	protected boolean isOpen() {
 		return m_accessors.containsKey(Thread.currentThread());
 	}
@@ -146,7 +150,7 @@ public class Hdf5File extends Hdf5Group {
 			// System.out.print(String.format("%,16d", // System.nanoTime() - START) + " " + Thread.currentThread() + " UNLOCK WRITE end of \"" + getFilePath() + "\" ... ");
             m_w.unlock();
 			// System.out.println("successful");
-            NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be created", hlnpe);
+            NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be created : " + hlnpe.getMessage(), hlnpe);
         }
 	}
 	
@@ -192,7 +196,7 @@ public class Hdf5File extends Hdf5Group {
 				m_w.unlock();
 				// System.out.println("successful");
 			}
-            NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be opened", hlnpe);
+            NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be opened: " + hlnpe.getMessage(), hlnpe);
         }
 	}
 	
@@ -211,7 +215,7 @@ public class Hdf5File extends Hdf5Group {
 				return "(error: file is already closed)";
 			}
 		} catch (HDF5LibraryException hle) {
-			NodeLogger.getLogger("HDF5 Files").error("Number of open objects in file could not be loaded", hle);
+			NodeLogger.getLogger("HDF5 Files").debug("Number of open objects in file could not be loaded: " + hle.getMessage(), hle);
 		}
 
         if (count <= 0) {
@@ -249,7 +253,7 @@ public class Hdf5File extends Hdf5Group {
 	        
 	        opened += "]";
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
-            NodeLogger.getLogger("HDF5 Files").error("Info of open objects in file could not be loaded", hlnpe);
+            NodeLogger.getLogger("HDF5 Files").debug("Info of open objects in file could not be loaded: " + hlnpe.getMessage(), hlnpe);
         }
         
         return opened;
@@ -269,7 +273,7 @@ public class Hdf5File extends Hdf5Group {
 			opened = H5.getOpenIDCount() + " objects, " + (fileNum - 1) + " other files " + H5.getOpenIDs();
 			
 		} catch (HDF5LibraryException hle) {
-            NodeLogger.getLogger("HDF5 Files").error("Info of open objects in total could not be loaded", hle);
+            NodeLogger.getLogger("HDF5 Files").debug("Info of open objects in total could not be loaded: " + hle.getMessage(), hle);
 		}
 		
 		return opened;
@@ -280,55 +284,61 @@ public class Hdf5File extends Hdf5Group {
 	 * 
 	 */
 	@Override
-	public void close() {
+	public boolean close() {
 		try {
-            if (isOpenExactlyOnceInThisThread()) {
-	    		synchronized (this) {
-		    		if (isOpenOnlyInThisThread()) {
-		    			Iterator<Hdf5DataSet<?>> iterDss = getDataSets().iterator();
-			    		while (iterDss.hasNext()) {
-			    			iterDss.next().close();
+			if (isOpen()) {
+				if (isOpenExactlyOnceInThisThread()) {
+		    		synchronized (this) {
+			    		if (isOpenOnlyInThisThread()) {
+			    			Iterator<Hdf5DataSet<?>> iterDss = getDataSets().iterator();
+				    		while (iterDss.hasNext()) {
+				    			iterDss.next().close();
+				    		}
+	
+				    		Iterator<Hdf5Attribute<?>> iterAttrs = getAttributes().iterator();
+				    		while (iterAttrs.hasNext()) {
+				    			iterAttrs.next().close();
+				    		}
+	
+				    		Iterator<Hdf5Group> iterGrps = getGroups().iterator();
+				    		while (iterGrps.hasNext()) {
+				    			iterGrps.next().close();
+				    		}
+				    		
+				    		NodeLogger.getLogger("HDF5 Files").debug("Number of open objects in file \""
+				    				+ getName() + "\": " + whatIsOpenInFile() + " (total number: " + whatIsOpen() + ")");
+				    		
+				    		// System.out.println(whatIsOpen());
+				    		
+							H5.H5Fclose(getElementId());
 			    		}
-
-			    		Iterator<Hdf5Attribute<?>> iterAttrs = getAttributes().iterator();
-			    		while (iterAttrs.hasNext()) {
-			    			iterAttrs.next().close();
-			    		}
-
-			    		Iterator<Hdf5Group> iterGrps = getGroups().iterator();
-			    		while (iterGrps.hasNext()) {
-			    			iterGrps.next().close();
-			    		}
-			    		
-			    		NodeLogger.getLogger("HDF5 Files").debug("Number of open objects in file \""
-			    				+ getName() + "\": " + whatIsOpenInFile() + " (total number: " + whatIsOpen() + ")");
-			    		
-			    		// System.out.println(whatIsOpen());
-			    		
-						H5.H5Fclose(getElementId());
+			    		setOpen(false);
+	  
+						if (m_access == READ_ONLY_ACCESS) {
+							// System.out.print(String.format("%,16d", // System.nanoTime() - START) + " " + Thread.currentThread() + " UNLOCK READ end of \"" + getFilePath() + "\" ... ");
+							m_r.unlock();
+							// System.out.println("successful");
+						} else if (m_access == READ_WRITE_ACCESS) {
+							// System.out.print(String.format("%,16d", // System.nanoTime() - START) + " " + Thread.currentThread() + " UNLOCK WRITE end of \"" + getFilePath() + "\" ... ");
+							m_w.unlock();
+							// System.out.println("successful");
+						}
+						
+			    		if (!isOpenInAnyThread()) {
+			    			m_access = NOT_ACCESSED;
+						}
 		    		}
-		    		setOpen(false);
-  
-					if (m_access == READ_ONLY_ACCESS) {
-						// System.out.print(String.format("%,16d", // System.nanoTime() - START) + " " + Thread.currentThread() + " UNLOCK READ end of \"" + getFilePath() + "\" ... ");
-						m_r.unlock();
-						// System.out.println("successful");
-					} else if (m_access == READ_WRITE_ACCESS) {
-						// System.out.print(String.format("%,16d", // System.nanoTime() - START) + " " + Thread.currentThread() + " UNLOCK WRITE end of \"" + getFilePath() + "\" ... ");
-						m_w.unlock();
-						// System.out.println("successful");
-					}
-					
-		    		if (!isOpenInAnyThread()) {
-		    			m_access = NOT_ACCESSED;
-					}
-	    		}
-            } else {
-    			setOpen(false);
-            }
+	            } else {
+	    			setOpen(false);
+	            }
+			}
+            
+            return true;
+            
         } catch (HDF5LibraryException hle) {
-            NodeLogger.getLogger("HDF5 Files").error("File \"" + getName()
-            		+ "\" could not be closed", hle);
+            NodeLogger.getLogger("HDF5 Files").error("File \"" + getName() + "\" could not be closed: " + hle.getMessage(), hle);
         }
+		
+		return false;
 	}
 }

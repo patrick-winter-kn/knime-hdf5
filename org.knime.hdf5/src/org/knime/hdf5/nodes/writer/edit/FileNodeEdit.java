@@ -174,6 +174,22 @@ public class FileNodeEdit extends GroupNodeEdit {
 		return edit instanceof FileNodeEdit && !edit.equals(this) && ((FileNodeEdit) edit).getFilePath().equals(getFilePath())
 				&& edit.getName().equals(getName());
 	}
+	
+	@Override
+	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+		try {
+			boolean success = true;
+			if (!getEditAction().isCreateOrCopyAction()) {
+				setHdfObject(Hdf5File.openFile(getFilePath(), Hdf5File.READ_WRITE_ACCESS));
+				success = getHdfObject() != null;
+			}
+			return success && super.doAction(inputTable, flowVariables, saveColumnProperties);
+			
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+		}
+		return false;
+	}
 
 	@Override
 	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
@@ -199,22 +215,6 @@ public class FileNodeEdit extends GroupNodeEdit {
 
 	@Override
 	protected boolean modifyAction() {
-		return false;
-	}
-	
-	@Override
-	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
-		try {
-			boolean success = true;
-			if (!getEditAction().isCreateOrCopyAction()) {
-				setHdfObject(Hdf5File.openFile(getFilePath(), Hdf5File.READ_WRITE_ACCESS));
-				success = getHdfObject() != null;
-			}
-			return success && super.doAction(inputTable, flowVariables, saveColumnProperties);
-			
-		} catch (IOException ioe) {
-			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-		}
 		return false;
 	}
 }

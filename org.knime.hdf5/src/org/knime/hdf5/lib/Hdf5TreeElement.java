@@ -332,21 +332,6 @@ abstract public class Hdf5TreeElement {
 		return attribute;
 	}
 	
-	public Hdf5Attribute<?> updateAttribute(final String name) throws IOException {
-		for (Hdf5Attribute<?> attr : getAttributes()) {
-			if (attr.getName().equals(name)) {
-				removeAttribute(attr);
-				break;
-			}
-		}
-		
-		return getAttribute(name);
-	}
-	
-	public boolean existsAttribute(final String name) throws HDF5LibraryException, NullPointerException {
-		return H5.H5Aexists(getElementId(), name);
-	}
-	
 	public Hdf5Attribute<?> getAttributeByPath(final String path) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
@@ -379,6 +364,21 @@ abstract public class Hdf5TreeElement {
 		return treeElement.getAttribute(name);
 	}
 	
+	public Hdf5Attribute<?> updateAttribute(final String name) throws IOException {
+		for (Hdf5Attribute<?> attr : getAttributes()) {
+			if (attr.getName().equals(name)) {
+				removeAttribute(attr);
+				break;
+			}
+		}
+		
+		return getAttribute(name);
+	}
+	
+	public boolean existsAttribute(final String name) throws HDF5LibraryException, NullPointerException {
+		return H5.H5Aexists(getElementId(), name);
+	}
+	
 	/**
 	 * 
 	 * @param 	name the name of the attribute to delete
@@ -392,21 +392,14 @@ abstract public class Hdf5TreeElement {
 		int success = -1;
 		
 		try {
-			success = getAttribute(name).close() ? H5.H5Adelete(getElementId(), name) : -1;
+			Hdf5Attribute<?> attribute = getAttribute(name);
+			attribute.close();
+			success = !attribute.isOpen() ? H5.H5Adelete(getElementId(), name) : -1;
+			success = success >= 0 ? (removeAttribute(attribute) ? 1 : 0) : success;
+			
 		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
 			NodeLogger.getLogger(getClass()).error("Attribute \"" + getPathFromFileWithName(true) + name
 					+ "\" could not be deleted from disk: " + hlionpe.getMessage(), hlionpe);
-		}
-		
-		if (success >= 0) {
-			success = 0;
-			for (Hdf5Attribute<?> attr : m_attributes) {
-				if (name.equals(attr.getName())) {
-					removeAttribute(attr);
-					success++;
-					break;
-				}
-			}
 		}
 		
 		return success;
@@ -418,10 +411,11 @@ abstract public class Hdf5TreeElement {
 		attribute.setParent(this);
 	}
 	
-	private void removeAttribute(Hdf5Attribute<?> attribute) {
-		m_attributes.remove(attribute);
-		attribute.setPathFromFile("");
+	private boolean removeAttribute(Hdf5Attribute<?> attribute) {
 		attribute.setParent(null);
+		attribute.setPathFromFile("");
+		attribute.setAttributeId(-1);
+		return m_attributes.remove(attribute);
 	}
 	
 	public List<String> loadAttributeNames() throws IllegalStateException {
@@ -598,7 +592,7 @@ abstract public class Hdf5TreeElement {
 		}
 	}
 	
-	public abstract void open();
+	public abstract boolean open();
 	
-	public abstract void close();
+	public abstract boolean close();
 }

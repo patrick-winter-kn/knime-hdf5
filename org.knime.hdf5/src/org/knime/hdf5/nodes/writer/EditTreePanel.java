@@ -102,16 +102,15 @@ public class EditTreePanel extends JPanel {
 			
 			private int getItemId(TreeNodeEdit edit) {
 				return edit instanceof ColumnNodeEdit ? 0 : 
-					(edit instanceof AttributeNodeEdit ? 1 :
-					(edit instanceof DataSetNodeEdit ? 2 :
-					(edit instanceof FileNodeEdit ? 3 : 
-					(edit instanceof GroupNodeEdit ? 4 : -1))));
+					edit instanceof AttributeNodeEdit ? 1 :
+					edit instanceof DataSetNodeEdit ? 2 :
+					edit instanceof FileNodeEdit ? 3 : 
+					edit instanceof GroupNodeEdit ? 4 : -1;
 			}
 			
 			private int getStateId(EditAction editAction) {
-				return editAction == TreeNodeEdit.EditAction.NO_ACTION || editAction == TreeNodeEdit.EditAction.MODIFY ? 0 : 
-					(editAction.isCreateOrCopyAction() ? 1 :
-					(editAction == TreeNodeEdit.EditAction.DELETE ? 2 : -1));
+				return editAction.isCreateOrCopyAction() ? 1 :
+					editAction == TreeNodeEdit.EditAction.DELETE ? 2 : 0;
 			}
 			
 			@Override
@@ -127,7 +126,7 @@ public class EditTreePanel extends JPanel {
 					
 					if (userObject instanceof TreeNodeEdit) {
 						TreeNodeEdit edit = (TreeNodeEdit) userObject;
-						setText((edit.getEditAction() == TreeNodeEdit.EditAction.MODIFY ? "*" : "") + edit.getName());
+						setText((edit.getEditAction().isModifyAction() ? "*" : "") + edit.getName());
 						setIcon(icons[getItemId(edit)][getStateId(edit.getEditAction())]);
 						setBorder(edit.isValid() ? null : BorderFactory.createLineBorder(Color.red));
 						tree.setToolTipText(edit.getToolTipText());

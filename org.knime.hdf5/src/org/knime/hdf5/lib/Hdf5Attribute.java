@@ -227,12 +227,8 @@ public class Hdf5Attribute<Type> {
 		return m_type;
 	}
 	
-	long getDataspaceId() {
+	private long getDataspaceId() {
 		return m_dataspaceId;
-	}
-
-	void setDataspaceId(long dataspaceId) {
-		m_dataspaceId = dataspaceId;
 	}
 
 	/**
@@ -248,7 +244,7 @@ public class Hdf5Attribute<Type> {
 		return m_open;
 	}
 
-	void setOpen(boolean open) {
+	private void setOpen(boolean open) {
 		m_open = open;
 	}
 	
