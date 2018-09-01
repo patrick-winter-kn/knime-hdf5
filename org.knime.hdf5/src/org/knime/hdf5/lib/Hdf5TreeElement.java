@@ -179,7 +179,8 @@ abstract public class Hdf5TreeElement {
 			}*/
 			
 			long stringLength = edit.isCompoundAsArrayUsed() ? edit.getCompoundItemStringLength() : edit.getStringLength();
-			Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), edit.getKnimeType(), false, false, stringLength);
+			Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getOutputType(),
+					edit.getEndian()), Hdf5KnimeDataType.getKnimeDataType(edit.getInputType(), false), false, false, stringLength);
 			
 			attribute = createAttribute(edit.getName(), dimension, dataType);
 			
@@ -197,11 +198,11 @@ abstract public class Hdf5TreeElement {
 		
 		Class valuesType = values.getClass().getComponentType();
 		if (valuesType == Integer.class) {
-			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.INTEGER, Endian.BIG_ENDIAN),
+			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.INT32, Endian.BIG_ENDIAN),
 					Hdf5KnimeDataType.INTEGER, false, false, 0L);
 			
 		} else if (valuesType == Double.class) {
-			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.DOUBLE, Endian.BIG_ENDIAN),
+			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.FLOAT64, Endian.BIG_ENDIAN),
 					Hdf5KnimeDataType.DOUBLE, false, false, 0L);
 			
 		} else if (valuesType == String.class) {

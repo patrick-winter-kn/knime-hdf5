@@ -49,8 +49,8 @@ public abstract class TreeNodeEdit {
 		INPUT_PATH_FROM_FILE_WITH_NAME("inputPathFromFileWithName"),
 		FILE_PATH("filePath"),
 		EDIT_ACTION("editAction"),
-		KNIME_TYPE("knimeType"),
-		HDF_TYPE("hdfType"),
+		INPUT_TYPE("inputType"),
+		OUTPUT_TYPE("outputType"),
 		LITTLE_ENDIAN("littleEndian"),
 		FIXED("fixed"),
 		STRING_LENGTH("stringLength"),
@@ -62,13 +62,12 @@ public abstract class TreeNodeEdit {
 		CHUNK_ROW_SIZE("chunkRowSize"),
 		OVERWRITE("overwrite"),
 		OVERWRITE_POLICY("overwritePolicy"),
+		INPUT_ROW_COUNT("inputRowCount"),
+		INPUT_COLUMN_INDEX("inputColumnIndex"),
 		GROUPS("groups"),
 		DATA_SETS("dataSets"),
 		ATTRIBUTES("attributes"),
-		COLUMNS("columns"),
-		COLUMN_SPEC_TYPE("columnSpecType"),
-		INPUT_ROW_COUNT("inputRowCount"),
-		INPUT_COLUMN_INDEX("inputColumnIndex");
+		COLUMNS("columns");
 
 		private String m_key;
 
@@ -244,8 +243,12 @@ public abstract class TreeNodeEdit {
 	protected void setParent(TreeNodeEdit parent) {
 		if (m_parent != null) {
 			m_parent.updateInvalidMap(this, null);
+			updateParentEditAction();
 		}
 		m_parent = parent;
+		if (m_parent != null) {
+			updateParentEditAction();
+		}
 	}
 	
 	public Object getHdfObject() {
@@ -265,7 +268,7 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public void setEditAction(EditAction editAction) {
-		if (!editAction.isModifyAction() || m_editAction == EditAction.NO_ACTION || m_editAction.isModifyAction()) {
+		if (!editAction.isModifyAction() || m_editAction == EditAction.NO_ACTION || m_editAction == EditAction.MODIFY_CHILDREN_ONLY) {
 			m_editAction = editAction;
 			
 			if (m_parent != null && m_parent.getEditAction() == EditAction.NO_ACTION && m_editAction != EditAction.NO_ACTION) {
@@ -316,25 +319,37 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public String getInvalidCauseMessages() {
-		String messages = "";
+		StringBuilder messageBuilder = new StringBuilder();
 		
 		TreeNodeEdit[] invalidEdits = m_invalidEdits.keySet().toArray(new TreeNodeEdit[0]);
 		Arrays.sort(invalidEdits, new TreeNodeEditComparator());
+		int maxMessageCountPerCause = 10;
 		for (InvalidCause invalidCause : InvalidCause.values()) {
 			int found = 0;
+			int count = 0;
+			String curInvalidPath = null;
 			for (TreeNodeEdit invalidEdit : invalidEdits) {
 				if (invalidCause == m_invalidEdits.get(invalidEdit)) {
-					found++;
-					if (found <= 10) {
-						messages += found == 1 ? invalidCause.getMessage() + ":\n" : "";
-						messages += "- " + invalidEdit.getOutputPathFromFileWithName() + "\n";
+					if (!invalidEdit.getOutputPathFromFileWithName().equals(curInvalidPath)) {
+						found++;
+						curInvalidPath = invalidEdit.getOutputPathFromFileWithName();
+						if (found <= maxMessageCountPerCause) {
+							messageBuilder.append(found == 1 ? invalidCause.getMessage() + ":" : "");
+							messageBuilder.append(count > 1 ? " (" + count + ")" : "");
+							messageBuilder.append("\n- " + curInvalidPath);
+							count = 1;
+						}
+					} else if (found <= maxMessageCountPerCause) {
+						count++;
 					}
 				}
 			}
-			messages += found > 10 ? "- and " + (found - 10) + " more\n" : "";
+			messageBuilder.append(count > 1 ? " (" + count + ")" : "");
+			messageBuilder.append(found > maxMessageCountPerCause ? "\n- and "
+					+ (found - maxMessageCountPerCause) + " more\n" : found > 0 ? "\n" : "");
 		}
 		
-		return messages;
+		return messageBuilder.toString();
 	}
 	
 	public String getToolTipText() {
@@ -417,7 +432,7 @@ public abstract class TreeNodeEdit {
 		return editsInPath.toArray(new TreeNodeEdit[0]);
 	}
 	
-	protected void updateParentEditAction() {
+	private void updateParentEditAction() {
 		setEditAction(getEditAction());
 	}
 	
@@ -455,16 +470,20 @@ public abstract class TreeNodeEdit {
 				m_treeNode = new DefaultMutableTreeNode(this);
 			}
 			
-			Enumeration<DefaultMutableTreeNode> enumeration = parentNode.children();
-			DefaultMutableTreeNode[] siblings = Collections.list(enumeration).toArray(new DefaultMutableTreeNode[0]);
-			int insert;
-			for (insert = 0; insert < siblings.length; insert++) {
-				TreeNodeEdit edit = (TreeNodeEdit) siblings[insert].getUserObject();
-				if (TreeNodeEditComparator.compareProperties(this, edit) < 0) {
-					break;
+			if (this instanceof ColumnNodeEdit) {
+				parentNode.add(m_treeNode);
+			} else {
+				Enumeration<DefaultMutableTreeNode> enumeration = parentNode.children();
+				DefaultMutableTreeNode[] siblings = Collections.list(enumeration).toArray(new DefaultMutableTreeNode[0]);
+				int insert;
+				for (insert = 0; insert < siblings.length; insert++) {
+					TreeNodeEdit edit = (TreeNodeEdit) siblings[insert].getUserObject();
+					if (TreeNodeEditComparator.compareProperties(this, edit) < 0) {
+						break;
+					}
 				}
+				parentNode.insert(m_treeNode, insert);
 			}
-			parentNode.insert(m_treeNode, insert);
 			
 			for (TreeNodeEdit edit : getAllChildren()) {
 		        edit.addEditToNode(m_treeNode);
@@ -472,8 +491,8 @@ public abstract class TreeNodeEdit {
 		}
 	}
 	
-	protected void validate() {
-		InvalidCause cause = validateEditInternal();
+	protected void validate(BufferedDataTable inputTable) {
+		InvalidCause cause = validateEditInternal(inputTable);
 		
 		if (m_parent != null) {
 			cause = cause == null && (m_parent.getEditAction() == EditAction.DELETE && m_editAction != EditAction.DELETE) ? InvalidCause.PARENT_DELETE : cause;
@@ -496,11 +515,11 @@ public abstract class TreeNodeEdit {
 		updateInvalidMap(this, cause);
 
 		for (TreeNodeEdit edit : getAllChildren()) {
-	        edit.validate();
+	        edit.validate(inputTable);
 		}
 	}
 	
-	protected abstract InvalidCause validateEditInternal();
+	protected abstract InvalidCause validateEditInternal(BufferedDataTable inputTable);
 	
 	protected abstract boolean isInConflict(TreeNodeEdit edit);
 	

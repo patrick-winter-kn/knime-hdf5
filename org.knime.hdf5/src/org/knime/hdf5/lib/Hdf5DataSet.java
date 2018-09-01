@@ -349,6 +349,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				return (Type) ("" + ((DoubleCell) dataCell).getDoubleValue());
 			} else if (type.equals(StringCell.TYPE)) {
 				return (Type) ((StringCell) dataCell).getStringValue();
+			} else {
+				return (Type) dataCell.toString();
 			}
 		default:
 			throw new UnsupportedDataTypeException("Unknown knimeDataType");

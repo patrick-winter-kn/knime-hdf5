@@ -23,6 +23,7 @@ import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.DropMode;
+import javax.swing.Icon;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
@@ -43,7 +44,6 @@ import javax.swing.tree.DefaultMutableTreeNode;
 
 import org.knime.core.data.DataCell;
 import org.knime.core.data.DataColumnSpec;
-import org.knime.core.data.DataColumnSpecCreator;
 import org.knime.core.data.DataRow;
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.container.CloseableRowIterator;
@@ -67,9 +67,9 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	private static final String COLUMN_PROPERTY_TYPES = "knime.columntypes";
 	
-	private Hdf5KnimeDataType m_knimeType;
+	private HdfDataType m_inputType;
 	
-	private HdfDataType m_hdfType;
+	private HdfDataType m_outputType;
 
 	private Endian m_endian;
 	
@@ -92,11 +92,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	private final List<AttributeNodeEdit> m_attributeEdits = new ArrayList<>();
 	
 	public DataSetNodeEdit(GroupNodeEdit parent, String name) {
-		this(null, parent, name, EditAction.CREATE);
+		this(parent, null, name, EditAction.CREATE);
 	}
 	
-	private DataSetNodeEdit(DataSetNodeEdit copyDataSet, GroupNodeEdit parent) {
-		this(copyDataSet.getInputPathFromFileWithName(), parent, copyDataSet.getName(),
+	private DataSetNodeEdit( GroupNodeEdit parent, DataSetNodeEdit copyDataSet) {
+		this(parent, copyDataSet.getInputPathFromFileWithName(), copyDataSet.getName(),
 				copyDataSet.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
 		copyAdditionalPropertiesFrom(copyDataSet);
 		if (getEditAction() == EditAction.COPY) {
@@ -104,21 +104,20 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		}
 	}
 
-	public DataSetNodeEdit(Hdf5DataSet<?> dataSet, GroupNodeEdit parent) {
-		this(dataSet.getPathFromFileWithName(), parent, dataSet.getName(), EditAction.NO_ACTION);
-		m_knimeType = dataSet.getType().getKnimeType();
-		m_hdfType = m_knimeType.getEquivalentHdfType();
+	public DataSetNodeEdit(GroupNodeEdit parent, Hdf5DataSet<?> dataSet) {
+		this(parent, dataSet.getPathFromFileWithName(), dataSet.getName(), EditAction.NO_ACTION);
+		m_inputType = dataSet.getType().getHdfType().getType();
+		m_outputType = m_inputType;
 		m_endian = dataSet.getType().getHdfType().getEndian();
 		m_stringLength = (int) dataSet.getType().getHdfType().getStringLength();
 		m_numberOfDimensions = dataSet.getDimensions().length;
-		// TODO so far only for dataSets with 1 or 2 dimensions (0 dimensions would be scalar dataSets)
 		m_numberOfDimensions = m_numberOfDimensions > 2 ? 2 : (m_numberOfDimensions < 1 ? 1 : m_numberOfDimensions);
 		m_compressionLevel = dataSet.getCompressionLevel();
 		m_chunkRowSize = (int) dataSet.getChunkRowSize();
 		setHdfObject(dataSet);
 	}
 	
-	DataSetNodeEdit(String inputPathFromFileWithName, GroupNodeEdit parent, String name, EditAction editAction) {
+	DataSetNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name, EditAction editAction) {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editAction);
 		setTreeNodeMenu(new DataSetNodeMenu());
 		m_endian = Endian.LITTLE_ENDIAN;
@@ -126,7 +125,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	}
 	
 	public DataSetNodeEdit copyDataSetEditTo(GroupNodeEdit parent) {
-		DataSetNodeEdit newDataSetEdit = new DataSetNodeEdit(this, parent);
+		DataSetNodeEdit newDataSetEdit = new DataSetNodeEdit(parent, this);
 
 		for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
 			columnEdit.copyColumnEditTo(newDataSetEdit);
@@ -139,16 +138,16 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		return newDataSetEdit;
 	}
 
-	public Hdf5KnimeDataType getKnimeType() {
-		return m_knimeType;
+	public HdfDataType getInputType() {
+		return m_inputType;
 	}
 
-	public HdfDataType getHdfType() {
-		return m_hdfType;
+	public HdfDataType getOutputType() {
+		return m_outputType;
 	}
 
-	private void setHdfType(HdfDataType hdfType) {
-		m_hdfType = hdfType;
+	private void setOutputType(HdfDataType outputType) {
+		m_outputType = outputType;
 	}
 
 	public Endian getEndian() {
@@ -215,14 +214,14 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		m_overwritePolicy = overwritePolicy;
 	}
 	
-	public DataColumnSpec[] getColumnSpecs() {
-		List<DataColumnSpec> specs = new ArrayList<>();
+	public HdfDataType[] getColumnInputTypes() {
+		List<HdfDataType> hdfTypes = new ArrayList<>();
 		for (ColumnNodeEdit edit : m_columnEdits) {
 			if (edit.getEditAction() != EditAction.DELETE) {
-				specs.add(edit.getColumnSpec());
+				hdfTypes.add(edit.getInputType());
 			}
 		}
-		return specs.toArray(new DataColumnSpec[] {});
+		return hdfTypes.toArray(new HdfDataType[] {});
 	}
 	
 	public ColumnNodeEdit[] getColumnNodeEdits() {
@@ -234,24 +233,16 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	}
 
 	public void addColumnNodeEdit(ColumnNodeEdit edit) {
-		try {
-			Hdf5KnimeDataType knimeType = Hdf5KnimeDataType.getKnimeDataType(edit.getColumnSpec().getType());
-			m_knimeType = m_knimeType != null && knimeType.getConvertibleHdfTypes().contains(m_knimeType.getEquivalentHdfType()) ? m_knimeType : knimeType;
-			m_hdfType = m_knimeType.getConvertibleHdfTypes().contains(m_hdfType) ? m_hdfType : m_knimeType.getEquivalentHdfType();
-			m_columnEdits.add(edit);
-			edit.setParent(this);
-			edit.updateParentEditAction();
-			m_inputRowCount = m_inputRowCount == ColumnNodeEdit.UNKNOWN_ROW_COUNT ? edit.getInputRowCount() : m_inputRowCount;
-			
-		} catch (UnsupportedDataTypeException udte) {
-			NodeLogger.getLogger(getClass()).error(udte.getMessage(), udte);
-		}
+		m_inputType = m_inputType != null && edit.getInputType().getConvertibleHdfTypes().contains(m_inputType) ? m_inputType : edit.getInputType();
+		m_outputType = m_inputType.getConvertibleHdfTypes().contains(m_outputType) ? m_outputType : m_inputType;
+		m_columnEdits.add(edit);
+		edit.setParent(this);
+		m_inputRowCount = m_inputRowCount == ColumnNodeEdit.UNKNOWN_ROW_COUNT ? edit.getInputRowCount() : m_inputRowCount;
 	}
 
 	public void addAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.add(edit);
 		edit.setParent(this);
-		edit.updateParentEditAction();
 	}
 
 	public boolean existsColumnNodeEdit(ColumnNodeEdit edit) {
@@ -303,23 +294,18 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		}
 
 		// TODO find better algorithm here
-		try {
-			for (Hdf5KnimeDataType knimeType : Hdf5KnimeDataType.values()) {
-				boolean convertible = true;
-				for (DataColumnSpec spec : getColumnSpecs()) {
-					Hdf5KnimeDataType specKnimeType = Hdf5KnimeDataType.getKnimeDataType(spec.getType());
-					if (!specKnimeType.getConvertibleHdfTypes().contains(knimeType.getEquivalentHdfType())) {
-						convertible = false;
-						break;
-					}
-				}
-				if (convertible) {
-					m_knimeType = knimeType;
+		for (HdfDataType possibleInputType : HdfDataType.values()) {
+			boolean convertible = true;
+			for (HdfDataType inputType : getColumnInputTypes()) {
+				if (!inputType.getConvertibleHdfTypes().contains(possibleInputType)) {
+					convertible = false;
 					break;
 				}
 			}
-		} catch (UnsupportedDataTypeException udte) {
-			NodeLogger.getLogger(getClass()).warn(udte.getMessage(), udte);
+			if (convertible) {
+				m_inputType = possibleInputType;
+				break;
+			}
 		}
 		
 		long inputRowCount = ColumnNodeEdit.UNKNOWN_ROW_COUNT;
@@ -357,7 +343,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	/**
 	 * so far with overwrite of properties
 	 */
-	public void integrate(DataSetNodeEdit copyEdit, long inputRowCount) {
+	void integrate(DataSetNodeEdit copyEdit, long inputRowCount) {
 		m_columnEdits.clear();
 		if (getTreeNode() != null) {
 			getTreeNode().removeAllChildren();
@@ -387,8 +373,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	protected void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit) {
 		if (copyEdit instanceof DataSetNodeEdit) {
 			DataSetNodeEdit copyDataSetEdit = (DataSetNodeEdit) copyEdit;
-			m_knimeType = copyDataSetEdit.getKnimeType();
-			m_hdfType = copyDataSetEdit.getHdfType();
+			m_inputType = copyDataSetEdit.getInputType();
+			m_outputType = copyDataSetEdit.getOutputType();
 			m_endian = copyDataSetEdit.getEndian();
 			m_fixed = copyDataSetEdit.isFixed();
 			m_stringLength = copyDataSetEdit.getStringLength();
@@ -418,14 +404,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	@Override
 	public void saveSettings(NodeSettingsWO settings) {
 		super.saveSettings(settings);
-		
-		try {
-			settings.addDataType(SettingsKey.KNIME_TYPE.getKey(), m_knimeType.getColumnDataType());
-		} catch (UnsupportedDataTypeException udte) {
-			settings.addDataType(SettingsKey.KNIME_TYPE.getKey(), null);
-		}
-		
-		settings.addString(SettingsKey.HDF_TYPE.getKey(), m_hdfType.toString());
+
+		settings.addInt(SettingsKey.OUTPUT_TYPE.getKey(), m_outputType.getTypeId());
 		settings.addBoolean(SettingsKey.LITTLE_ENDIAN.getKey(), m_endian == Endian.LITTLE_ENDIAN);
 		settings.addBoolean(SettingsKey.FIXED.getKey(), m_fixed);
 		settings.addInt(SettingsKey.STRING_LENGTH.getKey(), m_stringLength);
@@ -465,7 +445,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			// nothing to do here: edit will be invalid anyway
 		}
 		
-		setHdfType(HdfDataType.valueOf(settings.getString(SettingsKey.HDF_TYPE.getKey())));
+		setOutputType(HdfDataType.get(settings.getInt(SettingsKey.OUTPUT_TYPE.getKey())));
 		setEndian(settings.getBoolean(SettingsKey.LITTLE_ENDIAN.getKey()) ? Endian.LITTLE_ENDIAN : Endian.BIG_ENDIAN);
 		setFixed(settings.getBoolean(SettingsKey.FIXED.getKey()));
 		setStringLength(settings.getInt(SettingsKey.STRING_LENGTH.getKey()));
@@ -478,9 +458,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		Enumeration<NodeSettingsRO> columnEnum = columnSettings.children();
 		while (columnEnum.hasMoreElements()) {
 			NodeSettingsRO editSettings = columnEnum.nextElement();
-			ColumnNodeEdit edit = new ColumnNodeEdit(editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()),
-					new DataColumnSpecCreator(editSettings.getString(SettingsKey.NAME.getKey()),
-					editSettings.getDataType(SettingsKey.COLUMN_SPEC_TYPE.getKey())).createSpec(), this,
+			ColumnNodeEdit edit = new ColumnNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()),
+					editSettings.getString(SettingsKey.NAME.getKey()), HdfDataType.get(editSettings.getInt(SettingsKey.INPUT_TYPE.getKey())),
 					editSettings.getLong(SettingsKey.INPUT_ROW_COUNT.getKey()), editSettings.getInt(SettingsKey.INPUT_COLUMN_INDEX.getKey()),
 					EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
 			edit.loadSettings(editSettings);
@@ -490,21 +469,16 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		Enumeration<NodeSettingsRO> attributeEnum = attributeSettings.children();
 		while (attributeEnum.hasMoreElements()) {
 			NodeSettingsRO editSettings = attributeEnum.nextElement();
-        	try {
-    			AttributeNodeEdit edit = new AttributeNodeEdit(editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()),
-    					this, editSettings.getString(SettingsKey.NAME.getKey()),
-    					Hdf5KnimeDataType.getKnimeDataType(editSettings.getDataType(SettingsKey.KNIME_TYPE.getKey())),
-    					EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
-    			edit.loadSettings(editSettings);
-    			
-    		} catch (UnsupportedDataTypeException udte) {
-    			throw new InvalidSettingsException(udte.getMessage());
-    		}
+			AttributeNodeEdit edit = new AttributeNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()),
+					editSettings.getString(SettingsKey.NAME.getKey()), HdfDataType.get(editSettings.getInt(SettingsKey.INPUT_TYPE.getKey())),
+					EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
+			edit.loadSettings(editSettings);
         }
 	}
 	
 	void loadChildrenOfHdfObject() throws IOException {
 		Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) getHdfObject();
+		HdfDataType dataType = dataSet.getType().getHdfType().getType();
 
 		long rowCount = dataSet.getDimensions().length >= 1 ? dataSet.getDimensions()[0] : 1;
 		if (dataSet.getDimensions().length == 2) {
@@ -514,31 +488,18 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			}
 			int colCount = (int) dataSet.getDimensions()[1];
 			for (int i = 0; i < colCount; i++) {
-				try {
-					DataColumnSpec spec = new DataColumnSpecCreator("col" + (i+1),
-							dataSet.getType().getKnimeType().getColumnDataType()).createSpec();
-					ColumnNodeEdit columnEdit = new ColumnNodeEdit(spec, this, rowCount, i);
-					columnEdit.addEditToNode(m_treeNode);
-        			
-				} catch (UnsupportedDataTypeException udte) {
-					NodeLogger.getLogger(getClass()).warn(udte.getMessage(), udte);
-				}
+				ColumnNodeEdit columnEdit = new ColumnNodeEdit(this, "col" + (i+1), dataType, rowCount, i);
+				columnEdit.addEditToNode(m_treeNode);
 			}
 		} else if (dataSet.getDimensions().length < 2) {
-			try {
-				DataColumnSpec spec = new DataColumnSpecCreator("col", dataSet.getType().getKnimeType().getColumnDataType()).createSpec();
-				ColumnNodeEdit columnEdit = new ColumnNodeEdit(spec, this, rowCount, 0);
-				columnEdit.addEditToNode(m_treeNode);
-    			
-			} catch (UnsupportedDataTypeException udte) {
-				NodeLogger.getLogger(getClass()).warn(udte.getMessage(), udte);
-			}
+			ColumnNodeEdit columnEdit = new ColumnNodeEdit(this, "col", dataType, rowCount, 0);
+			columnEdit.addEditToNode(m_treeNode);
 		}
 		
     	try {
     		for (String attributeName : dataSet.loadAttributeNames()) {
     			Hdf5Attribute<?> child = dataSet.updateAttribute(attributeName);
-    			AttributeNodeEdit childEdit = new AttributeNodeEdit(child, this);
+    			AttributeNodeEdit childEdit = new AttributeNodeEdit(this, child);
     			childEdit.addEditToNode(m_treeNode);
     		}
     	} catch (NullPointerException npe) {
@@ -547,7 +508,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	protected InvalidCause validateEditInternal() {
+	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
 		return getName().contains("/") ? InvalidCause.NAME_CHARS : null;
 	}
 
@@ -561,15 +522,14 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	@Override
 	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
 		DataTableSpec tableSpec = inputTable != null ? inputTable.getDataTableSpec() : null;
-		DataColumnSpec[] inputSpecs = getColumnSpecs();
 		List<ColumnNodeEdit> copyColumnEditList = new ArrayList<>();
 		Hdf5File file = (Hdf5File) getRoot().getHdfObject();
 		
-		int[] specIndices = new int[inputSpecs.length];
+		int[] specIndices = new int[getColumnInputTypes().length];
 		for (int i = 0; i < specIndices.length; i++) {
 			ColumnNodeEdit edit = getColumnNodeEdits()[i];
 			if (edit.getEditAction() == EditAction.CREATE) {
-				specIndices[i] = tableSpec.findColumnIndex(inputSpecs[i].getName());
+				specIndices[i] = tableSpec.findColumnIndex(edit.getName());
 			} else if (edit.getEditAction() == EditAction.COPY) {
 				specIndices[i] = -1;
 				copyColumnEditList.add(edit);
@@ -586,7 +546,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			}
 		}
 		
-		if (getHdfType() == HdfDataType.STRING) {
+		if (getOutputType() == HdfDataType.STRING) {
 			int stringLength = 0;
 			
 			if (inputTable != null) {
@@ -835,10 +795,16 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 						super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
 
 						if (value instanceof ColumnNodeEdit) {
-							DataColumnSpec spec = ((ColumnNodeEdit) value).getColumnSpec();
-
-							setText(spec.getName());
-							setIcon(spec.getType().getIcon());
+							ColumnNodeEdit edit = (ColumnNodeEdit) value;
+							
+							setText(edit.getName() + " (" + edit.getInputType().toString() + ")");
+							Icon icon = null;
+							try {
+								icon = Hdf5KnimeDataType.getKnimeDataType(edit.getInputType(), true).getColumnDataType().getIcon();
+							} catch (UnsupportedDataTypeException udte) {
+								
+							}
+							setIcon(icon);
 						}
 						
 						return this;
@@ -948,8 +914,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			protected void initPropertyItems() {
 				DataSetNodeEdit edit = DataSetNodeEdit.this;
 				m_nameField.setText(edit.getName());
-				m_typeField.setModel(new DefaultComboBoxModel<HdfDataType>(edit.getKnimeType().getConvertibleHdfTypes().toArray(new HdfDataType[] {})));
-				m_typeField.setSelectedItem(edit.getHdfType());
+				m_typeField.setModel(new DefaultComboBoxModel<HdfDataType>(edit.getInputType().getConvertibleHdfTypes().toArray(new HdfDataType[] {})));
+				m_typeField.setSelectedItem(edit.getOutputType());
 				m_endianField.setSelectedItem(edit.getEndian());
 				m_stringLengthAuto.setSelected(!edit.isFixed());
 				m_stringLengthFixed.setSelected(edit.isFixed());
@@ -977,7 +943,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			protected void editPropertyItems() {
 				DataSetNodeEdit edit = DataSetNodeEdit.this;
 				edit.setName(m_nameField.getText());
-				edit.setHdfType((HdfDataType) m_typeField.getSelectedItem());
+				edit.setOutputType((HdfDataType) m_typeField.getSelectedItem());
 				edit.setEndian((Endian) m_endianField.getSelectedItem());
 				edit.setFixed(m_stringLengthFixed.isSelected());
 				edit.setStringLength((Integer) m_stringLengthSpinner.getValue());

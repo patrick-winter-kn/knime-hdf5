@@ -8,7 +8,6 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 
-import javax.activation.UnsupportedDataTypeException;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
@@ -21,7 +20,7 @@ import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5Group;
-import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 public class GroupNodeEdit extends TreeNodeEdit {
 	
@@ -32,23 +31,23 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	private final List<AttributeNodeEdit> m_attributeEdits = new ArrayList<>();
 
 	public GroupNodeEdit(GroupNodeEdit parent, String name) {
-		this(null, parent, name, EditAction.CREATE);
+		this(parent, null, name, EditAction.CREATE);
 	}
 	
-	private GroupNodeEdit(GroupNodeEdit copyGroup, GroupNodeEdit parent) {
-		this(copyGroup.getInputPathFromFileWithName(), parent, copyGroup.getName(),
+	private GroupNodeEdit(GroupNodeEdit parent, GroupNodeEdit copyGroup) {
+		this(parent, copyGroup.getInputPathFromFileWithName(), copyGroup.getName(),
 				copyGroup.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
 		if (getEditAction() == EditAction.COPY) {
 			copyGroup.addIncompleteCopy(this);
 		}
 	}
 	
-	public GroupNodeEdit(Hdf5Group group, GroupNodeEdit parent) {
-		this(group.getPathFromFileWithName(), parent, group.getName(), EditAction.NO_ACTION);
+	public GroupNodeEdit(GroupNodeEdit parent, Hdf5Group group) {
+		this(parent, group.getPathFromFileWithName(), group.getName(), EditAction.NO_ACTION);
 		setHdfObject(group);
 	}
 	
-	protected GroupNodeEdit(String inputPathFromFileWithName, GroupNodeEdit parent, String name, EditAction editAction) {
+	protected GroupNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name, EditAction editAction) {
 		super(inputPathFromFileWithName, parent != null ? parent.getOutputPathFromFileWithName() : null, name, editAction);
 		setTreeNodeMenu(new GroupNodeMenu());
 		if (parent != null) {
@@ -57,7 +56,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 	
 	public GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent) {
-		GroupNodeEdit newGroupEdit = new GroupNodeEdit(this, parent);
+		GroupNodeEdit newGroupEdit = new GroupNodeEdit(parent, this);
 		
 		for (GroupNodeEdit groupEdit : getGroupNodeEdits()) {
 			groupEdit.copyGroupEditTo(newGroupEdit);
@@ -89,19 +88,16 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	public void addGroupNodeEdit(GroupNodeEdit edit) {
 		m_groupEdits.add(edit);
 		edit.setParent(this);
-		edit.updateParentEditAction();
 	}
 	
 	public void addDataSetNodeEdit(DataSetNodeEdit edit) {
 		m_dataSetEdits.add(edit);
 		edit.setParent(this);
-		edit.updateParentEditAction();
 	}
 	
 	public void addAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.add(edit);
 		edit.setParent(this);
-		edit.updateParentEditAction();
 	}
 
 	public boolean existsGroupNodeEdit(GroupNodeEdit edit) {
@@ -191,7 +187,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	/**
 	 * so far with overwrite of properties
 	 */
-	public void integrate(GroupNodeEdit copyEdit, long inputRowCount) {
+	void integrate(GroupNodeEdit copyEdit, long inputRowCount) {
 		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
 			GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
 			if (groupEdit != null && !copyGroupEdit.getEditAction().isCreateOrCopyAction()) {
@@ -299,7 +295,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
         Enumeration<NodeSettingsRO> groupEnum = groupSettings.children();
         while (groupEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = groupEnum.nextElement();
-        	GroupNodeEdit edit = new GroupNodeEdit(editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()), this, 
+        	GroupNodeEdit edit = new GroupNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()), 
         			editSettings.getString(SettingsKey.NAME.getKey()), EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
             edit.loadSettings(editSettings);
         }
@@ -308,7 +304,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
         Enumeration<NodeSettingsRO> dataSetEnum = dataSetSettings.children();
         while (dataSetEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = dataSetEnum.nextElement();
-        	DataSetNodeEdit edit = new DataSetNodeEdit(editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()), this,
+        	DataSetNodeEdit edit = new DataSetNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()),
         			editSettings.getString(SettingsKey.NAME.getKey()), EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
     		edit.loadSettings(editSettings);
         }
@@ -317,16 +313,10 @@ public class GroupNodeEdit extends TreeNodeEdit {
         Enumeration<NodeSettingsRO> attributeEnum = attributeSettings.children();
         while (attributeEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = attributeEnum.nextElement();
-        	try {
-    			AttributeNodeEdit edit = new AttributeNodeEdit(editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()), this,
-    					editSettings.getString(SettingsKey.NAME.getKey()),
-    					Hdf5KnimeDataType.getKnimeDataType(editSettings.getDataType(SettingsKey.KNIME_TYPE.getKey())),
-    					EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
-    			edit.loadSettings(editSettings);
-    			
-    		} catch (UnsupportedDataTypeException udte) {
-    			throw new InvalidSettingsException(udte.getMessage(), udte);
-    		}
+			AttributeNodeEdit edit = new AttributeNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()),
+					editSettings.getString(SettingsKey.NAME.getKey()), HdfDataType.get(editSettings.getInt(SettingsKey.INPUT_TYPE.getKey())),
+					EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
+			edit.loadSettings(editSettings);
         }
 	}
 
@@ -336,21 +326,21 @@ public class GroupNodeEdit extends TreeNodeEdit {
     	try {
     		for (String groupName : group.loadGroupNames()) {
     			Hdf5Group child = group.getGroup(groupName);
-    			GroupNodeEdit childEdit = new GroupNodeEdit(child, this);
+    			GroupNodeEdit childEdit = new GroupNodeEdit(this, child);
     			childEdit.addEditToNode(m_treeNode);
     			childEdit.loadChildrenOfHdfObject();
     		}
     		
     		for (String dataSetName : group.loadDataSetNames()) {
     			Hdf5DataSet<?> child = group.getDataSet(dataSetName);
-    			DataSetNodeEdit childEdit = new DataSetNodeEdit(child, this);
+    			DataSetNodeEdit childEdit = new DataSetNodeEdit(this, child);
     			childEdit.addEditToNode(m_treeNode);
     			childEdit.loadChildrenOfHdfObject();
     		}
     		
     		for (String attributeName : group.loadAttributeNames()) {
     			Hdf5Attribute<?> child = group.updateAttribute(attributeName);
-    			AttributeNodeEdit childEdit = new AttributeNodeEdit(child, this);
+    			AttributeNodeEdit childEdit = new AttributeNodeEdit(this, child);
     			childEdit.addEditToNode(m_treeNode);
     		}
     	} catch (NullPointerException npe) {
@@ -359,7 +349,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	protected InvalidCause validateEditInternal() {
+	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
 		return getName().contains("/") ? InvalidCause.NAME_CHARS : null;
 	}
 

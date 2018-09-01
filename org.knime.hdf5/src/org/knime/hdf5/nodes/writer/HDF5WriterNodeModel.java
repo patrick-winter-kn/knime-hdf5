@@ -18,7 +18,6 @@ import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.port.PortType;
 import org.knime.hdf5.lib.Hdf5File;
-import org.knime.hdf5.nodes.writer.edit.ColumnNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 
 public class HDF5WriterNodeModel extends NodeModel {
@@ -46,7 +45,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		checkForErrors(m_filePathSettings, m_editTreeConfig, inData[0].size());
+		checkForErrors(m_filePathSettings, m_editTreeConfig, inData[0]);
 
 		// TODO find a possibility to estimate exec.setProgress()
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
@@ -66,12 +65,12 @@ public class HDF5WriterNodeModel extends NodeModel {
 	
 	@Override
 	protected DataTableSpec[] configure(DataTableSpec[] inSpecs) throws InvalidSettingsException {
-		checkForErrors(m_filePathSettings, m_editTreeConfig, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+		checkForErrors(m_filePathSettings, m_editTreeConfig, null);
 		return null;
     }
 	
 	private static void checkForErrors(SettingsModelString filePathSettings,
-			EditTreeConfiguration editTreeConfig, long inputRowCount) throws InvalidSettingsException {
+			EditTreeConfiguration editTreeConfig, BufferedDataTable inputTable) throws InvalidSettingsException {
 		String filePath = filePathSettings.getStringValue();
 		if (filePath.trim().isEmpty()) {
 			throw new InvalidSettingsException("No file selected");
@@ -84,7 +83,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
 				fileEdit = new FileNodeEdit(file);
 				fileEdit.loadChildrenOfHdfObject();
-				fileEdit.integrate(editTreeConfig.getFileNodeEdit(), inputRowCount);
+				fileEdit.integrate(editTreeConfig.getFileNodeEdit(), inputTable);
 			} else if (Hdf5File.existsFile(filePath)) {
 				throw new InvalidSettingsException("The selected file \"" + filePath + "\" does already exist");
 			}
@@ -128,7 +127,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 		editTreeConfig.loadConfiguration(settings);
 		
-		checkForErrors(filePathSettings, editTreeConfig, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+		checkForErrors(filePathSettings, editTreeConfig, null);
 	}
 
 	@Override

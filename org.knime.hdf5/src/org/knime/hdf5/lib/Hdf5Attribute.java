@@ -121,17 +121,29 @@ public class Hdf5Attribute<Type> {
 		
 		return attribute;
 	}
+	
+	public static String[] getPathAndName(String pathWithName) {
+		int firstSlashInName = pathWithName.indexOf("\\/");
+		String pathWithFirstPartOfName = firstSlashInName == -1 ? pathWithName : pathWithName.substring(0, firstSlashInName);
+		int pathStringLength = pathWithFirstPartOfName.lastIndexOf("/");
+		
+		String name = pathWithName.substring(pathStringLength + 1);
+		name = name.replaceAll("\\\\/", "/");
+		String pathWithoutName = pathStringLength == -1 ? "" : pathWithName.substring(0, pathStringLength);
+		
+		return new String[] { pathWithoutName, name };
+	}
 
-	public static Object[] getFlowVariableValues(FlowVariable flowVariable) throws UnsupportedDataTypeException {
+	public static Object[] getFlowVariableValues(FlowVariable flowVariable) {
 		switch (flowVariable.getType()) {
 		case INTEGER:
 			return new Integer[] { flowVariable.getIntValue() };
 			
 		case DOUBLE:
 			return new Double[] { flowVariable.getDoubleValue() };
-			
-		case STRING:
-			String attr = flowVariable.getStringValue().trim();
+
+		default:
+			String attr = flowVariable.getValueAsString().trim();
 			try {
 				if (attr.matches("\\[.*\\] \\(.*\\) *")) {
 					String[] parts = attr.split("\\] \\(");
@@ -166,22 +178,7 @@ public class Hdf5Attribute<Type> {
 				// nothing to do
 			}
 			return new String[] { attr };
-			
-		default:
-			throw new UnsupportedDataTypeException("Unknown dataType of flowVariable " + flowVariable.getName());
 		}
-	}
-	
-	public static String[] getPathAndName(String pathWithName) {
-		int firstSlashInName = pathWithName.indexOf("\\/");
-		String pathWithFirstPartOfName = firstSlashInName == -1 ? pathWithName : pathWithName.substring(0, firstSlashInName);
-		int pathStringLength = pathWithFirstPartOfName.lastIndexOf("/");
-		
-		String name = pathWithName.substring(pathStringLength + 1);
-		name = name.replaceAll("\\\\/", "/");
-		String pathWithoutName = pathStringLength == -1 ? "" : pathWithName.substring(0, pathStringLength);
-		
-		return new String[] { pathWithoutName, name };
 	}
 	
 	long getAttributeId() {
@@ -271,6 +268,10 @@ public class Hdf5Attribute<Type> {
 	public String getPathFromFileWithName() {
 		return getPathFromFile() + getName();
 	}
+
+	public boolean isConvertibleToType(HdfDataType hdfType, int stringLength) {
+		return hdfType.areValuesConvertible(read(), getType().getHdfType().getType(), stringLength);
+	}
 	
 	/**
 	 * Writes {@code value} in this attribute in Hdf5 and saves it as the new value of this
@@ -308,7 +309,7 @@ public class Hdf5Attribute<Type> {
     				Class hdfClass = m_type.getHdfClass();
     				Class knimeClass = m_type.getKnimeClass();
     				for (int i = 0; i < dataIn.length; i++) {
-    					dataIn[i] = (Type) m_type.knimeToHdf(knimeClass,
+    					dataIn[i] = m_type.knimeToHdf(knimeClass,
     							knimeClass.cast(value[i]), hdfClass);
     				}
     				

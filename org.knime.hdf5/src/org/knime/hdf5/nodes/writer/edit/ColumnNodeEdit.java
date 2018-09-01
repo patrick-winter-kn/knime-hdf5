@@ -8,6 +8,7 @@ import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
+import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 public class ColumnNodeEdit extends TreeNodeEdit {
 
@@ -15,16 +16,15 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	private static final int NO_COLUMN_INDEX = -1;
 	
-	private final DataColumnSpec m_columnSpec;
+	private final HdfDataType m_inputType;
 	
 	private long m_inputRowCount;
 
 	private final int m_inputColumnIndex;
 
-	private ColumnNodeEdit(ColumnNodeEdit copyColumn, DataSetNodeEdit parent) {
-		this(copyColumn.getEditAction() == EditAction.CREATE ? copyColumn.getName() :
-				((DataSetNodeEdit) copyColumn.getParent()).getInputPathFromFileWithName(),
-				copyColumn.getColumnSpec(), parent, copyColumn.getInputRowCount(), copyColumn.getInputColumnIndex(),
+	private ColumnNodeEdit(DataSetNodeEdit parent, ColumnNodeEdit copyColumn) {
+		this(parent, copyColumn.getInputPathFromFileWithName(), copyColumn.getName(), copyColumn.getInputType(),
+				copyColumn.getInputRowCount(), copyColumn.getInputColumnIndex(),
 				copyColumn.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
 		copyAdditionalPropertiesFrom(copyColumn);
 		if (getEditAction() == EditAction.COPY) {
@@ -32,33 +32,34 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		}
 	}
 
-	public ColumnNodeEdit(DataColumnSpec columnSpec, DataSetNodeEdit parent) {
-		this(columnSpec.getName(), columnSpec, parent, UNKNOWN_ROW_COUNT, NO_COLUMN_INDEX, EditAction.CREATE);
+	public ColumnNodeEdit(DataSetNodeEdit parent, DataColumnSpec columnSpec) {
+		this(parent, columnSpec.getName(), columnSpec.getName(), HdfDataType.getHdfDataType(columnSpec.getType()),
+				UNKNOWN_ROW_COUNT, NO_COLUMN_INDEX, EditAction.CREATE);
 		if (parent.getEditAction() == EditAction.COPY) {
 			parent.setEditAction(EditAction.CREATE);
 		}
 	}
 	
-	ColumnNodeEdit(DataColumnSpec columnSpec, DataSetNodeEdit parent, long inputRowCount, int inputColumnIndex) {
-		this(columnSpec.getName(), columnSpec, parent, inputRowCount, inputColumnIndex, EditAction.NO_ACTION);
+	ColumnNodeEdit(DataSetNodeEdit parent, String name, HdfDataType inputType, long inputRowCount, int inputColumnIndex) {
+		this(parent, parent.getInputPathFromFileWithName(), name, inputType, inputRowCount, inputColumnIndex, EditAction.NO_ACTION);
 	}
 	
-	ColumnNodeEdit(String inputPathFromFileWithName, DataColumnSpec columnSpec, DataSetNodeEdit parent,
+	ColumnNodeEdit(DataSetNodeEdit parent, String inputPathFromFileWithName, String name, HdfDataType inputType,
 			long inputRowCount, int inputColumnIndex, EditAction editAction) {
-		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), columnSpec.getName(), editAction);
+		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editAction);
 		setTreeNodeMenu(new ColumnNodeMenu());
-		m_columnSpec = columnSpec;
+		m_inputType = inputType;
 		m_inputRowCount = inputRowCount;
 		m_inputColumnIndex = inputColumnIndex;
 		parent.addColumnNodeEdit(this);
 	}
 	
 	public ColumnNodeEdit copyColumnEditTo(DataSetNodeEdit parent) {
-		return new ColumnNodeEdit(this, parent);
+		return new ColumnNodeEdit(parent, this);
 	}
 
-	DataColumnSpec getColumnSpec() {
-		return m_columnSpec;
+	public HdfDataType getInputType() {
+		return m_inputType;
 	}
 
 	long getInputRowCount() {
@@ -97,8 +98,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	@Override
 	public void saveSettings(NodeSettingsWO settings) {
 		super.saveSettings(settings);
-		
-		settings.addDataType(SettingsKey.COLUMN_SPEC_TYPE.getKey(), m_columnSpec.getType());
+
+		settings.addInt(SettingsKey.INPUT_TYPE.getKey(), m_inputType.getTypeId());
 		settings.addLong(SettingsKey.INPUT_ROW_COUNT.getKey(), m_inputRowCount);
 		settings.addInt(SettingsKey.INPUT_COLUMN_INDEX.getKey(), m_inputColumnIndex);
 	}
@@ -109,9 +110,15 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	protected InvalidCause validateEditInternal() {
-		return m_inputRowCount == UNKNOWN_ROW_COUNT || m_inputRowCount == ((DataSetNodeEdit) getParent()).getInputRowCount()
+	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
+		InvalidCause cause = m_inputRowCount == UNKNOWN_ROW_COUNT || m_inputRowCount == ((DataSetNodeEdit) getParent()).getInputRowCount()
 				? null : InvalidCause.ROW_COUNT;
+		
+		if (cause == null) {
+			
+		}
+		
+		return cause;
 	}
 
 	@Override

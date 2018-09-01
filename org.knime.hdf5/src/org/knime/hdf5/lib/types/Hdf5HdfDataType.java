@@ -1,6 +1,8 @@
 package org.knime.hdf5.lib.types;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.activation.UnsupportedDataTypeException;
@@ -9,8 +11,10 @@ import org.knime.core.data.DataType;
 import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
 import org.knime.core.data.def.LongCell;
-import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
+import org.knime.core.node.workflow.FlowVariable;
+import org.knime.core.node.workflow.FlowVariable.Type;
+import org.knime.hdf5.lib.Hdf5Attribute;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -19,19 +23,20 @@ import hdf.hdf5lib.exceptions.HDF5LibraryException;
 public class Hdf5HdfDataType {
 
 	public static enum HdfDataType {
-		BYTE(110),
-		UBYTE(111),
-		SHORT(210),
-		USHORT(211),
-		INTEGER(410),
-		UINTEGER(411),
-		LONG(810),
-		ULONG(811),
-		FLOAT(420),
-		DOUBLE(820),
-		STRING(41),
-		REFERENCE(51);	// dataType is an object reference
+		INT8(110),
+		UINT8(111),
+		INT16(210),
+		UINT16(211),
+		INT32(410),
+		UINT32(411),
+		INT64(810),
+		UINT64(811),
+		FLOAT32(420),
+		FLOAT64(820),
+		STRING(2);
 		private static final Map<Integer, HdfDataType> LOOKUP = new HashMap<>();
+		
+		public static final int AUTO_STRING_LENGTH = -1;
 
 		static {
 			for (HdfDataType hdfType : HdfDataType.values()) {
@@ -45,25 +50,160 @@ public class Hdf5HdfDataType {
 			m_typeId = typeId;
 		}
 
-		static HdfDataType get(int typeId) {
+		public static HdfDataType get(int typeId) {
 			return LOOKUP.get(typeId);
 		}
 		
-		public static HdfDataType getHdfDataType(DataType type) throws UnsupportedDataTypeException {
+		public static HdfDataType getHdfDataType(DataType type) {
 			if (type.equals(IntCell.TYPE)) {	
-				return INTEGER;
+				return INT32;
 			} else if (type.equals(LongCell.TYPE)) {	
-				return LONG;
+				return INT64;
 			} else if (type.equals(DoubleCell.TYPE)) {	
-				return DOUBLE;
-			} else if (type.equals(StringCell.TYPE)) {	
+				return FLOAT64;
+			} else {	
 				return STRING;
 			}
-			throw new UnsupportedDataTypeException("Unknown dataType");
 		}
 		
-		int getTypeId() {
+		public static HdfDataType getHdfDataType(Type type) {
+			switch (type) {
+			case INTEGER:
+				return INT32;
+			case DOUBLE:	
+				return FLOAT64;
+			default:
+				return STRING;
+			}
+		}
+
+		public static List<HdfDataType> getConvertibleTypes(FlowVariable flowVariable) {
+			List<HdfDataType> types = new ArrayList<>();
+			
+			Object[] values = Hdf5Attribute.getFlowVariableValues(flowVariable);
+			HdfDataType inputType = Hdf5KnimeDataType.getKnimeDataType(values).getEquivalentHdfType();
+			
+			for (HdfDataType hdfType : inputType.getConvertibleHdfTypes()) {
+				if (hdfType.areValuesConvertible(values, inputType, AUTO_STRING_LENGTH)) {
+					types.add(hdfType);
+				}
+			}
+			
+			return types;
+		}
+		
+		public int getTypeId() {
 			return m_typeId;
+		}
+		
+		boolean isUnsigned() {
+			return m_typeId % 10 == 1;
+		}
+		
+		boolean isNumber() {
+			return (m_typeId / 10) % 10 > 0;
+		}
+		
+		boolean isFloat() {
+			return (m_typeId / 10) % 10 == 2;
+		}
+		
+		int getSize() {
+			return 8 * (m_typeId / 100);
+		}
+		
+		private double getMin() {
+			if (!isFloat()) {
+				return isUnsigned() ? 0 : -Math.pow(2, getSize()-1);
+			} else if (this == FLOAT32) {
+				return ((Float) (-Float.MAX_VALUE)).doubleValue();
+			} else if (this == FLOAT64) {
+				return -Double.MAX_VALUE;
+			}
+			return -Double.MAX_VALUE;
+		}
+		
+		private double getMax() {
+			if (!isFloat()) {
+				return Math.pow(2, getSize() - (isUnsigned() ? 0 : 1)) - 1;
+			} else if (this == FLOAT32) {
+				return  ((Float) Float.MAX_VALUE).doubleValue();
+			} else if (this == FLOAT64) {
+				return Double.MAX_VALUE;
+			}
+			return Double.MAX_VALUE;
+		}
+
+		public List<HdfDataType> getConvertibleHdfTypes() {
+			List<HdfDataType> types = new ArrayList<>();
+			
+			// TODO check this again
+			switch (this) {
+			case INT8:
+			case UINT8:
+			case INT16:
+			case UINT16:
+			case INT32:
+			case UINT32:
+			case INT64:
+			case UINT64:
+				types.add(HdfDataType.INT8);
+				types.add(HdfDataType.UINT8);
+				types.add(HdfDataType.INT16);
+				types.add(HdfDataType.UINT16);
+			case FLOAT32:
+				types.add(HdfDataType.INT32);
+				types.add(HdfDataType.UINT32);
+				types.add(HdfDataType.INT64);
+				types.add(HdfDataType.UINT64);
+			case FLOAT64:
+				types.add(HdfDataType.FLOAT32);
+				types.add(HdfDataType.FLOAT64);
+			case STRING:
+				types.add(HdfDataType.STRING);
+				break;
+			}
+			
+			return types;
+		}
+		
+		public boolean areValuesConvertible(Object[] values, HdfDataType inputType, Integer stringLength) {
+			if (isNumber()) {
+				boolean signTest = !inputType.isUnsigned() && isUnsigned();
+				boolean floatTest = inputType.isFloat() && !isFloat();
+				boolean sizeTest = inputType.getSize() + (inputType.isUnsigned() ? 1 : 0) > getSize() + (isUnsigned() ? 1 : 0);
+				if (signTest || floatTest || sizeTest) {
+					double min = getMin();
+					double max = getMax();
+					for (Object value : values) {
+						double number = ((Number) value).doubleValue();
+						
+						try {
+							if (Double.compare(number, min) < 0 || Double.compare(number, max) > 0) {
+								return false;
+							}
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
+					}
+				}
+			} else {
+				boolean autoStringLength = stringLength == AUTO_STRING_LENGTH;
+				if (autoStringLength) {
+					for (Object value : values) {
+						int newStringLength = value.toString().length();
+						stringLength = newStringLength > stringLength ? newStringLength : stringLength;
+					}
+				} else {
+					for (Object value : values) {
+						if (value.toString().length() > stringLength) {
+							return false;
+						}
+					}
+				}
+			}
+			
+			return true;
 		}
 	}
 	
@@ -88,55 +228,53 @@ public class Hdf5HdfDataType {
 		m_endian = endian;
 		
 		boolean littleEndian = m_endian == Endian.LITTLE_ENDIAN;
-		if (m_type != HdfDataType.STRING && m_type != HdfDataType.REFERENCE) {
+		if (m_type != HdfDataType.STRING) {
 			(littleEndian ? LITTLE_ENDIAN_TYPES : BIG_ENDIAN_TYPES).put(m_type, this);
 		}
 		
 		switch (m_type) {
-		case BYTE:
+		case INT8:
 			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_I8LE : HDF5Constants.H5T_STD_I8BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT8;
 			break;
-		case UBYTE:
+		case UINT8:
 			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_U8LE : HDF5Constants.H5T_STD_U8BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT8;
 			break;
-		case SHORT:
+		case INT16:
 			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_I16LE : HDF5Constants.H5T_STD_I16BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT16;
 			break;
-		case USHORT:
+		case UINT16:
 			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_U16LE : HDF5Constants.H5T_STD_U16BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT16;
 			break;
-		case INTEGER:
+		case INT32:
 			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_I32LE : HDF5Constants.H5T_STD_I32BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT32;
 			break;
-		case UINTEGER:
+		case UINT32:
 			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_U32LE : HDF5Constants.H5T_STD_U32BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT32;
 			break;
-		case LONG:
+		case INT64:
 			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_I64LE : HDF5Constants.H5T_STD_I64BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_INT64;
 			break;
-		case ULONG:
+		case UINT64:
 			m_constants[0] = littleEndian ? HDF5Constants.H5T_STD_U64LE : HDF5Constants.H5T_STD_U64BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_UINT64;
 			break;
-		case FLOAT:
+		case FLOAT32:
 			m_constants[0] = littleEndian ? HDF5Constants.H5T_IEEE_F32LE : HDF5Constants.H5T_IEEE_F32BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_FLOAT;
 			break;
-		case DOUBLE:
+		case FLOAT64:
 			m_constants[0] = littleEndian ? HDF5Constants.H5T_IEEE_F64LE : HDF5Constants.H5T_IEEE_F64BE;
 			m_constants[1] = HDF5Constants.H5T_NATIVE_DOUBLE;
 			break;
 		case STRING:
 			break;
-		case REFERENCE:
-			m_constants[0] = HDF5Constants.H5T_REFERENCE;
 		}
 	}
 
@@ -160,7 +298,7 @@ public class Hdf5HdfDataType {
 	 * 
 	 */
 	public static synchronized Hdf5HdfDataType getInstance(final HdfDataType type, final Endian endian) {
-		if (type != HdfDataType.STRING && type != HdfDataType.REFERENCE) {
+		if (type != HdfDataType.STRING) {
 			Map<HdfDataType, Hdf5HdfDataType> types = endian == Endian.LITTLE_ENDIAN ? LITTLE_ENDIAN_TYPES : BIG_ENDIAN_TYPES;
 			if (types.containsKey(type)) {
 				return types.get(type);
@@ -243,21 +381,21 @@ public class Hdf5HdfDataType {
 
 	public Object createArray(int length) throws UnsupportedDataTypeException {
 		switch (m_type) {
-		case BYTE:
-		case UBYTE:
+		case INT8:
+		case UINT8:
 			return new Byte[length];
-		case SHORT:
-		case USHORT:
+		case INT16:
+		case UINT16:
 			return new Short[length];
-		case INTEGER:
-		case UINTEGER:
+		case INT32:
+		case UINT32:
 			return new Integer[length];
-		case LONG:
-		case ULONG:
+		case INT64:
+		case UINT64:
 			return new Long[length];
-		case FLOAT:
+		case FLOAT32:
 			return new Float[length];
-		case DOUBLE:
+		case FLOAT64:
 			return new Double[length];
 		case STRING:
 			return new String[length];

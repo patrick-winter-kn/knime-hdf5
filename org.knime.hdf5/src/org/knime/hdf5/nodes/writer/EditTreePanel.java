@@ -126,7 +126,9 @@ public class EditTreePanel extends JPanel {
 					
 					if (userObject instanceof TreeNodeEdit) {
 						TreeNodeEdit edit = (TreeNodeEdit) userObject;
-						setText((edit.getEditAction().isModifyAction() ? "*" : "") + edit.getName());
+						String text = (edit.getEditAction().isModifyAction() ? "*" : "") + edit.getName();
+						text += edit instanceof ColumnNodeEdit ? " (" + ((ColumnNodeEdit) edit).getInputType().toString() + ")" : "";
+						setText(text);
 						setIcon(icons[getItemId(edit)][getStateId(edit.getEditAction())]);
 						setBorder(edit.isValid() ? null : BorderFactory.createLineBorder(Color.red));
 						tree.setToolTipText(edit.getToolTipText());
@@ -243,13 +245,13 @@ public class EditTreePanel extends JPanel {
 
                 	for (int i = 0; i < data.size(); i++) {
                 		DataColumnSpec spec = (DataColumnSpec) data.get(i);
-                		ColumnNodeEdit newEdit = new ColumnNodeEdit(spec, (DataSetNodeEdit) parentEdit);
+                		ColumnNodeEdit newEdit = new ColumnNodeEdit((DataSetNodeEdit) parentEdit, spec);
                     	newEdit.addEditToNode(parentEdit.getTreeNode());
                 	}
                 } else if (data.get(0) instanceof FlowVariable) {
                     for (int i = 0; i < data.size(); i++) {
                     	FlowVariable var = (FlowVariable) data.get(i);
-                    	AttributeNodeEdit newEdit = new AttributeNodeEdit(var, (TreeNodeEdit) parentEdit);
+                    	AttributeNodeEdit newEdit = new AttributeNodeEdit((TreeNodeEdit) parentEdit, var);
                     	newEdit.addEditToNode(parentEdit.getTreeNode());
                 	}
                 }
@@ -432,7 +434,7 @@ public class EditTreePanel extends JPanel {
 	
 	void loadConfiguration(EditTreeConfiguration editTreeConfig) {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
-		fileEdit.integrate(editTreeConfig.getFileNodeEdit(), ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+		fileEdit.integrate(editTreeConfig.getFileNodeEdit(), null);
 		fileEdit.reloadTreeWithEditVisible(true);
 	}
 }

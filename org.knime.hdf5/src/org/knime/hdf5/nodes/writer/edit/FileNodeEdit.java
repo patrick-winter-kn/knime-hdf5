@@ -99,7 +99,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 			edit.setHdfObject(file);
 	        edit.loadSettings(settings);
 	        edit.updateIncompleteCopies();
-	        edit.validate();
+	        edit.validate(null);
 	        
 		} finally {
 			if (file != null) {
@@ -110,11 +110,10 @@ public class FileNodeEdit extends GroupNodeEdit {
         return edit;
 	}
 	
-	@Override
-	public void integrate(GroupNodeEdit copyEdit, long inputRowCount) {
+	public void integrate(GroupNodeEdit copyEdit, BufferedDataTable inputTable) {
 		if (copyEdit instanceof FileNodeEdit) {
-			super.integrate(copyEdit, inputRowCount);
-			validate();
+			super.integrate(copyEdit, inputTable != null ? inputTable.size() : ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+			validate(inputTable);
 		} else {
 			throw new IllegalStateException("Cannot integrate group (which is not a file) in a file");
 		}
@@ -124,13 +123,14 @@ public class FileNodeEdit extends GroupNodeEdit {
 	public void saveSettings(NodeSettingsWO settings) {
 		super.saveSettings(settings);
 		
+		// TODO change this that this is not needed anymore
         settings.addString(SettingsKey.FILE_PATH.getKey(), m_filePath);
 	}
 	
 	@Override
 	public void loadChildrenOfHdfObject() throws IOException {
 		super.loadChildrenOfHdfObject();
-		validate();
+		validate(null);
 	}
 	
 	@Override
@@ -149,7 +149,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 
 	public void reloadTree() {
-		validate();
+		validate(null);
 		((DefaultTreeModel) (m_tree.getModel())).reload();
 	}
 	
@@ -165,7 +165,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	@Override
-	protected InvalidCause validateEditInternal() {
+	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
 		return m_filePath.endsWith(".h5") || m_filePath.endsWith(".hdf5") ? null : InvalidCause.FILE_EXTENSION;
 	}
 	

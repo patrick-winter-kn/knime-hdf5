@@ -29,6 +29,8 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.TransferHandler;
+import javax.swing.event.CaretEvent;
+import javax.swing.event.CaretListener;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
@@ -243,14 +245,17 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		listPanel.getList().setModel(listModel);
 		
 		JTextField searchField = listPanel.getSearchField();
-		JButton searchButton = listPanel.getSearchButton();
 		JLabel searchErrorLabel = listPanel.getSearchErrorLabel();
 
-        ActionListener actionListener = new ActionListener() {
-        	
-            @Override
-            public void actionPerformed(final ActionEvent e) {
-            	listModel.clear();
+        if (searchField.getCaretListeners().length > 0) {
+            searchField.removeCaretListener(searchField.getCaretListeners()[0]);
+        }
+
+		searchField.addCaretListener(new CaretListener() {
+			
+			@Override
+			public void caretUpdate(CaretEvent e) {
+				listModel.clear();
 				String searchText = searchField.getText();
 				try {
 	            	Pattern searchRegex = Pattern.compile(!searchText.equals("") ? searchText : ".*");
@@ -270,18 +275,8 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 					}
 					searchErrorLabel.setText("Error in regex at index " + pse.getIndex());
 				}
-            }
-        };
-
-        if (searchField.getActionListeners().length > 0) {
-            searchField.removeActionListener(searchField.getActionListeners()[0]);
-        }
-        if (searchButton.getActionListeners().length > 0) {
-        	searchButton.removeActionListener(searchButton.getActionListeners()[0]);
-        }
-        
-        searchField.addActionListener(actionListener);
-        searchButton.addActionListener(actionListener);
+			}
+		});
     }
     
     /**
@@ -335,9 +330,9 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		
 		private JList<Object> m_list;
 		
+		private final JLabel m_filterLabel = new JLabel("Filter:");
+		
 		private final JTextField m_searchField = new JTextField(4);
-        
-		private final JButton m_searchButton = new JButton("Search");
         
 		private final JLabel m_searchErrorLabel = new JLabel();
     	
@@ -347,9 +342,9 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     		JPanel searchPanel = new JPanel(new BorderLayout());
             add(searchPanel, BorderLayout.NORTH);
             searchPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-            
+
+            searchPanel.add(m_filterLabel, BorderLayout.WEST);
             searchPanel.add(m_searchField, BorderLayout.CENTER);
-            searchPanel.add(m_searchButton, BorderLayout.EAST);
             searchPanel.add(m_searchErrorLabel, BorderLayout.PAGE_END);
             m_searchErrorLabel.setForeground(Color.RED);
     	}
@@ -369,10 +364,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	
     	private JTextField getSearchField() {
     		return m_searchField;
-    	}
-    	
-    	private JButton getSearchButton() {
-    		return m_searchButton;
     	}
     	
     	private JLabel getSearchErrorLabel() {

@@ -1,8 +1,5 @@
 package org.knime.hdf5.lib.types;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.data.DataType;
@@ -14,28 +11,28 @@ import org.knime.core.node.workflow.FlowVariable.Type;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 public enum Hdf5KnimeDataType {
-	UNKNOWN,		// data type is unknown
-	INTEGER,		// data type is an Integer
-	LONG,			// data type is a Long
-	DOUBLE,			// data type is a Double
-	STRING;			// data type is a String
+	INTEGER,		// equivalent to INT32 in HDF
+	LONG,			// equivalent to INT64 in HDF
+	DOUBLE,			// equivalent to FLOAT64 in HDF
+	STRING,			// supports any other dataType through .toString()
+	UNKNOWN;		// unknown dataType for cases it should not be supported
 
 	public static Hdf5KnimeDataType getKnimeDataType(HdfDataType type, boolean fromDS) {
 		switch (type) {
-		case BYTE:
-		case UBYTE:
-		case SHORT:
-		case USHORT:
-		case INTEGER:
+		case INT8:
+		case UINT8:
+		case INT16:
+		case UINT16:
+		case INT32:
 			return Hdf5KnimeDataType.INTEGER;
-		case UINTEGER:
-		case LONG:
+		case UINT32:
+		case INT64:
 			if (fromDS) {
 				return Hdf5KnimeDataType.LONG;
 			}
-		case ULONG:
-		case FLOAT:
-		case DOUBLE:
+		case UINT64:
+		case FLOAT32:
+		case FLOAT64:
 			return Hdf5KnimeDataType.DOUBLE;
 		case STRING:
 			return Hdf5KnimeDataType.STRING;
@@ -44,7 +41,7 @@ public enum Hdf5KnimeDataType {
 		}
 	}
 	
-	public static Hdf5KnimeDataType getKnimeDataType(DataType type) throws UnsupportedDataTypeException {
+	public static Hdf5KnimeDataType getKnimeDataType(DataType type) {
 		if (type != null) {
 			if (type.equals(IntCell.TYPE)) {	
 				return INTEGER;
@@ -52,29 +49,25 @@ public enum Hdf5KnimeDataType {
 				return LONG;
 			} else if (type.equals(DoubleCell.TYPE)) {	
 				return DOUBLE;
-			} else if (type.equals(StringCell.TYPE)) {	
+			} else {	
 				return STRING;
 			}
 		}
-		throw new UnsupportedDataTypeException("Unknown knimeDataType");
+		return null;
 	}
 	
-	public static Hdf5KnimeDataType getKnimeDataType(Type type)/* throws UnsupportedDataTypeException*/ {
+	public static Hdf5KnimeDataType getKnimeDataType(Type type) {
 		switch (type) {
 		case INTEGER:
 			return INTEGER;
 		case DOUBLE:
 			return DOUBLE;
-		case STRING:
-			return STRING;
 		default:
-			// TODO see if useless
-			return null;
-			//throw new UnsupportedDataTypeException("Unknown dataType of flowVariable");
+			return STRING;
 		}
 	}
 	
-	public static Hdf5KnimeDataType getKnimeDataType(Object[] values)/* throws UnsupportedDataTypeException*/ {
+	public static Hdf5KnimeDataType getKnimeDataType(Object[] values) {
 		Class<?> type = values.getClass().getComponentType();
 		if (type == Integer.class) {
 			return INTEGER;
@@ -82,11 +75,9 @@ public enum Hdf5KnimeDataType {
 			return LONG;
 		} else if (type == Double.class) {
 			return DOUBLE;
-		} else if (type == String.class) {
+		} else {
 			return STRING;
 		}
-		return null;
-		//throw new UnsupportedDataTypeException("Unknown knimeDataType");
 	}
 	
 	public DataType getColumnDataType() throws UnsupportedDataTypeException {
@@ -122,36 +113,16 @@ public enum Hdf5KnimeDataType {
 	public HdfDataType getEquivalentHdfType() {
 		switch (this) {
 		case INTEGER:
-			return HdfDataType.INTEGER;
+			return HdfDataType.INT32;
 		case LONG:
-			return HdfDataType.LONG;
+			return HdfDataType.INT64;
 		case DOUBLE:
-			return HdfDataType.DOUBLE;
+			return HdfDataType.FLOAT64;
 		case STRING:
 			return HdfDataType.STRING;
 		default:
 			return null;
 		}
-	}
-	
-	public List<HdfDataType> getConvertibleHdfTypes() {
-		List<HdfDataType> types = new ArrayList<>();
-		
-		// TODO add more possible types
-		switch (this) {
-		case INTEGER:
-			types.add(HdfDataType.INTEGER);
-		case LONG:
-			types.add(HdfDataType.LONG);
-		case DOUBLE:
-			types.add(HdfDataType.DOUBLE);
-		case STRING:
-			types.add(HdfDataType.STRING);
-		case UNKNOWN:
-			break;
-		}
-		
-		return types;
 	}
 	
 	@Override

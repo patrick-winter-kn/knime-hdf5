@@ -13,6 +13,7 @@ import org.knime.core.data.DataTableSpec;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType;
+import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
 
@@ -426,10 +427,10 @@ public class Hdf5Group extends Hdf5TreeElement {
 	public Hdf5DataSet<?> createDataSetFromEdit(DataSetNodeEdit edit) {
 		Hdf5DataSet<?> dataSet = null;
 		
-		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getHdfType(), edit.getEndian()), 
-				edit.getKnimeType(), false, true, edit.getStringLength());
+		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getOutputType(), edit.getEndian()), 
+				Hdf5KnimeDataType.getKnimeDataType(edit.getInputType(), true), false, true, edit.getStringLength());
 		long[] dims = edit.getNumberOfDimensions() == 1 ? new long[] { edit.getInputRowCount() }
-				: new long[] { edit.getInputRowCount(), edit.getColumnSpecs().length };
+				: new long[] { edit.getInputRowCount(), edit.getColumnInputTypes().length };
 		
 		try {
 			dataSet = createDataSet(edit.getName(), dims, edit.getCompressionLevel(), edit.getChunkRowSize(), dataType);
