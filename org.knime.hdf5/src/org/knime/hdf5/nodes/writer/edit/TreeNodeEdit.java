@@ -120,13 +120,15 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public static enum InvalidCause {
+		FILE_EXTENSION("file extension is not .h5 or .hdf5"),
+		FILE_ALREADY_EXISTS("file already exists"),
 		NAME_DUPLICATE("name duplicate"),
 		NO_HDF_OBJECT("no hdf object available"),
 		NO_COPY_EDIT("no source available to copy from"),
 		PARENT_DELETE("parent is getting deleted so this also has to be deleted"),
 		NAME_CHARS("name contains invalid characters"),
-		FILE_EXTENSION("file extension is not .h5 or .hdf5"),
-		ROW_COUNT("dataSet has unequal row sizes");
+		ROW_COUNT("dataSet has unequal row sizes"),
+		DATA_TYPE("some values do not fit into data type");
 
 		private String m_message;
 
@@ -241,13 +243,24 @@ public abstract class TreeNodeEdit {
 	}
 	
 	protected void setParent(TreeNodeEdit parent) {
-		if (m_parent != null) {
-			m_parent.updateInvalidMap(this, null);
-			updateParentEditAction();
-		}
-		m_parent = parent;
-		if (m_parent != null) {
-			updateParentEditAction();
+		if (m_parent != parent) {
+			if (m_parent != null && parent == null) {
+				m_parent.updateInvalidMap(this, null);
+				boolean removeModifyChildrenProperty = true;
+				for (TreeNodeEdit sibling : m_parent.getAllChildren()) {
+					if (sibling != this && sibling.getEditAction() != EditAction.NO_ACTION) {
+						removeModifyChildrenProperty = false;
+						break;
+					}
+				}
+				if (removeModifyChildrenProperty) {
+					m_parent.setEditAction(EditAction.NO_ACTION);
+				}
+			}
+			m_parent = parent;
+			if (m_parent != null) {
+				updateParentEditAction();
+			}
 		}
 	}
 	
@@ -354,7 +367,7 @@ public abstract class TreeNodeEdit {
 	
 	public String getToolTipText() {
 		return getOutputPathFromFileWithName() + (isValid() ? "" : " (invalid"
-				+ (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : "") + ")");
+				+ (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : " children") + ")");
 	}
 	
 	protected void addIncompleteCopy(TreeNodeEdit edit) {

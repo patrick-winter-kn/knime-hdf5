@@ -22,6 +22,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTree;
 import javax.swing.TransferHandler;
+import javax.swing.border.Border;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.TreePath;
@@ -126,12 +127,23 @@ public class EditTreePanel extends JPanel {
 					
 					if (userObject instanceof TreeNodeEdit) {
 						TreeNodeEdit edit = (TreeNodeEdit) userObject;
-						String text = (edit.getEditAction().isModifyAction() ? "*" : "") + edit.getName();
-						text += edit instanceof ColumnNodeEdit ? " (" + ((ColumnNodeEdit) edit).getInputType().toString() + ")" : "";
-						setText(text);
-						setIcon(icons[getItemId(edit)][getStateId(edit.getEditAction())]);
-						setBorder(edit.isValid() ? null : BorderFactory.createLineBorder(Color.red));
+						setText((edit.getEditAction().isModifyAction() ? "*" : "") + edit.getName());
 						tree.setToolTipText(edit.getToolTipText());
+						setIcon(icons[getItemId(edit)][getStateId(edit.getEditAction())]);
+						
+						Border border = null;
+						if (edit.isValid()) {
+							if (edit instanceof ColumnNodeEdit) {
+								ColumnNodeEdit columnEdit = (ColumnNodeEdit) edit;
+								if (columnEdit.getEditAction() == EditAction.CREATE && columnEdit.isMaybeInvalid()) {
+									border = BorderFactory.createLineBorder(Color.ORANGE);
+									tree.setToolTipText(tree.getToolTipText() + " (type is maybe invalid - will be checked directly before execution)");
+								}
+							}
+						} else {
+							border = BorderFactory.createLineBorder(Color.RED);
+						}
+						setBorder(border);
 					} else {
 						setText(userObject.toString());
 					}
@@ -349,7 +361,11 @@ public class EditTreePanel extends JPanel {
             		NodeLogger.getLogger(getClass()).warn(ise.getMessage());
             		
             	} finally {
-    				newEdit.reloadTreeWithEditVisible();
+            		try {
+        				newEdit.reloadTreeWithEditVisible();
+            		} catch (Exception e) {
+            			e.printStackTrace();
+            		}
     				for (TreeNodeEdit copyEdit : m_copyEdits) {
     					m_tree.makeVisible(new TreePath(copyEdit.getTreeNode().getPath()));
     				}

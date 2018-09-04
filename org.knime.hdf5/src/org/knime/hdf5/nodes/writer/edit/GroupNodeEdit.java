@@ -188,6 +188,8 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	 * so far with overwrite of properties
 	 */
 	void integrate(GroupNodeEdit copyEdit, long inputRowCount) {
+		copyPropertiesFrom(copyEdit);
+		
 		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
 			GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
 			if (groupEdit != null && !copyGroupEdit.getEditAction().isCreateOrCopyAction()) {
@@ -221,8 +223,6 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			addAttributeNodeEdit(copyAttributeEdit);
 			copyAttributeEdit.addEditToNode(getTreeNode());
 		}
-		
-		copyPropertiesFrom(copyEdit);
 	}
 	
 	@Override
@@ -332,10 +332,15 @@ public class GroupNodeEdit extends TreeNodeEdit {
     		}
     		
     		for (String dataSetName : group.loadDataSetNames()) {
-    			Hdf5DataSet<?> child = group.getDataSet(dataSetName);
-    			DataSetNodeEdit childEdit = new DataSetNodeEdit(this, child);
-    			childEdit.addEditToNode(m_treeNode);
-    			childEdit.loadChildrenOfHdfObject();
+    			Hdf5DataSet<?> child = group.updateDataSet(dataSetName);
+    			if (child.getDimensions().length <= 2) {
+        			DataSetNodeEdit childEdit = new DataSetNodeEdit(this, child);
+        			childEdit.addEditToNode(m_treeNode);
+        			childEdit.loadChildrenOfHdfObject();
+    			} else {
+    				NodeLogger.getLogger(getClass()).warn("DataSet \"" + child.getPathFromFileWithName()
+							+ "\" could not be loaded  (has more than 2 dimensions (" + child.getDimensions().length + "))");
+    			}
     		}
     		
     		for (String attributeName : group.loadAttributeNames()) {

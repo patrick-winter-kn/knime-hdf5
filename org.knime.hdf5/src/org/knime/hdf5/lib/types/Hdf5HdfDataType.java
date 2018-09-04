@@ -78,12 +78,20 @@ public class Hdf5HdfDataType {
 		}
 
 		public static List<HdfDataType> getConvertibleTypes(FlowVariable flowVariable) {
-			List<HdfDataType> types = new ArrayList<>();
-			
-			Object[] values = Hdf5Attribute.getFlowVariableValues(flowVariable);
-			HdfDataType inputType = Hdf5KnimeDataType.getKnimeDataType(values).getEquivalentHdfType();
-			
-			for (HdfDataType hdfType : inputType.getConvertibleHdfTypes()) {
+			return getConvertibleTypes(HdfDataType.getHdfDataType(flowVariable.getType()),
+					Hdf5Attribute.getFlowVariableValues(flowVariable));
+		}
+
+		public static List<HdfDataType> getConvertibleTypes(Hdf5Attribute<?> attribute) {
+			return getConvertibleTypes(attribute.getType().getHdfType().getType(), attribute.read());
+		}
+		
+		public static List<HdfDataType> getConvertibleTypes(HdfDataType inputType, Object[] values) {
+			List<HdfDataType> types = inputType.getAlwaysConvertibleHdfTypes();
+
+			List<HdfDataType> maybeTypes = inputType.getPossiblyConvertibleHdfTypes();
+			maybeTypes.removeAll(types);
+			for (HdfDataType hdfType : maybeTypes) {
 				if (hdfType.areValuesConvertible(values, inputType, AUTO_STRING_LENGTH)) {
 					types.add(hdfType);
 				}
@@ -100,7 +108,7 @@ public class Hdf5HdfDataType {
 			return m_typeId % 10 == 1;
 		}
 		
-		boolean isNumber() {
+		public boolean isNumber() {
 			return (m_typeId / 10) % 10 > 0;
 		}
 		
@@ -134,7 +142,47 @@ public class Hdf5HdfDataType {
 			return Double.MAX_VALUE;
 		}
 
-		public List<HdfDataType> getConvertibleHdfTypes() {
+		public List<HdfDataType> getAlwaysConvertibleHdfTypes() {
+			List<HdfDataType> types = new ArrayList<>();
+			
+			switch (this) {
+			case INT8:
+				types.add(HdfDataType.INT8);
+			case UINT8:
+				if (isUnsigned()) {
+					types.add(HdfDataType.UINT8);
+				}
+			case INT16:
+				types.add(HdfDataType.INT16);
+			case UINT16:
+				if (isUnsigned()) {
+					types.add(HdfDataType.UINT16);
+				}
+			case INT32:
+				types.add(HdfDataType.INT32);
+			case UINT32:
+				if (isUnsigned()) {
+					types.add(HdfDataType.UINT32);
+				}
+			case INT64:
+				types.add(HdfDataType.INT64);
+			case UINT64:
+				if (isUnsigned()) {
+					types.add(HdfDataType.UINT64);
+				}
+			case FLOAT32:
+				types.add(HdfDataType.FLOAT32);
+			case FLOAT64:
+				types.add(HdfDataType.FLOAT64);
+			case STRING:
+				types.add(HdfDataType.STRING);
+				break;
+			}
+			
+			return types;
+		}
+		
+		public List<HdfDataType> getPossiblyConvertibleHdfTypes() {
 			List<HdfDataType> types = new ArrayList<>();
 			
 			// TODO check this again
@@ -169,22 +217,13 @@ public class Hdf5HdfDataType {
 		
 		public boolean areValuesConvertible(Object[] values, HdfDataType inputType, Integer stringLength) {
 			if (isNumber()) {
-				boolean signTest = !inputType.isUnsigned() && isUnsigned();
-				boolean floatTest = inputType.isFloat() && !isFloat();
-				boolean sizeTest = inputType.getSize() + (inputType.isUnsigned() ? 1 : 0) > getSize() + (isUnsigned() ? 1 : 0);
-				if (signTest || floatTest || sizeTest) {
-					double min = getMin();
-					double max = getMax();
-					for (Object value : values) {
-						double number = ((Number) value).doubleValue();
-						
-						try {
-							if (Double.compare(number, min) < 0 || Double.compare(number, max) > 0) {
-								return false;
-							}
-						} catch (Exception e) {
-							e.printStackTrace();
-						}
+				double min = getMin();
+				double max = getMax();
+				for (Object value : values) {
+					double number = ((Number) value).doubleValue();
+					
+					if (Double.compare(number, min) < 0 || Double.compare(number, max) > 0) {
+						return false;
 					}
 				}
 			} else {
@@ -379,7 +418,7 @@ public class Hdf5HdfDataType {
 		return getType() == hdfType.getType() && getEndian() == hdfType.getEndian() && getStringLength() == hdfType.getStringLength();
 	}
 
-	public Object createArray(int length) throws UnsupportedDataTypeException {
+	public Object[] createArray(int length) throws UnsupportedDataTypeException {
 		switch (m_type) {
 		case INT8:
 		case UINT8:

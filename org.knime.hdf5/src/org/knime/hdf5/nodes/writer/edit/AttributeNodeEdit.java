@@ -6,6 +6,7 @@ import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -74,6 +75,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		this(parent, attribute.getPathFromFile() + attribute.getName().replaceAll("/", "\\\\/"), attribute.getName(),
 				attribute.getType().getHdfType().getType(), EditAction.NO_ACTION);
 		m_outputType = m_inputType;
+		m_possibleOutputTypes = HdfDataType.getConvertibleTypes(attribute);
 		m_endian = attribute.getType().getHdfType().getEndian();
 		
 		if (attribute.getType().isHdfType(HdfDataType.STRING)) {
@@ -93,7 +95,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
-		m_possibleOutputTypes = m_inputType.getConvertibleHdfTypes();
 		if (parent instanceof GroupNodeEdit) {
 			((GroupNodeEdit) parent).addAttributeNodeEdit(this);
 			
@@ -110,7 +111,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
-		m_possibleOutputTypes = m_inputType.getConvertibleHdfTypes();
+		// TODO test if this really works
+		m_possibleOutputTypes = m_inputType.getPossiblyConvertibleHdfTypes();
 		parent.addAttributeNodeEdit(this);
 	}
 	
@@ -118,7 +120,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
-		m_possibleOutputTypes = m_inputType.getConvertibleHdfTypes();
+		// TODO test if this really works
+		m_possibleOutputTypes = m_inputType.getPossiblyConvertibleHdfTypes();
 		parent.addAttributeNodeEdit(this);
 	}
 	
@@ -155,6 +158,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 
 	private void setOutputType(HdfDataType outputType) {
 		m_outputType = outputType;
+	}
+
+	private HdfDataType[] getPossibleOutputTypes() {
+		return m_possibleOutputTypes.toArray(new HdfDataType[0]);
 	}
 
 	public Endian getEndian() {
@@ -218,6 +225,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		if (copyEdit instanceof AttributeNodeEdit) {
 			AttributeNodeEdit copyAttributeEdit = (AttributeNodeEdit) copyEdit;
 			m_outputType = copyAttributeEdit.getOutputType();
+			m_possibleOutputTypes = Arrays.asList(copyAttributeEdit.getPossibleOutputTypes());
 			m_compoundAsArrayPossible = copyAttributeEdit.isCompoundAsArrayPossible();
 			m_compoundAsArrayUsed = copyAttributeEdit.isCompoundAsArrayUsed();
 			m_endian = copyAttributeEdit.getEndian();
@@ -226,6 +234,11 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			m_compoundItemStringLength = copyAttributeEdit.getCompoundItemStringLength();
 			m_overwrite = copyAttributeEdit.isOverwrite();
 		}
+	}
+	
+	@Override
+	public String getToolTipText() {
+		return "(" + m_outputType.toString() + ") " + super.getToolTipText();
 	}
 	
 	@Override
@@ -419,7 +432,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			private static final long serialVersionUID = 9201153080744087510L;
 	    	
 			private JTextField m_nameField = new JTextField(15);
-			private JComboBox<HdfDataType> m_typeField = new JComboBox<>(m_possibleOutputTypes.toArray(new HdfDataType[] {}));
+			private JComboBox<HdfDataType> m_typeField = new JComboBox<>(getPossibleOutputTypes());
 			private JComboBox<Endian> m_endianField = new JComboBox<>(Endian.values());
 			private JRadioButton m_stringLengthAuto = new JRadioButton("auto");
 			private JRadioButton m_stringLengthFixed = new JRadioButton("fixed");

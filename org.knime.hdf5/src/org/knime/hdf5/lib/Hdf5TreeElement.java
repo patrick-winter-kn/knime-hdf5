@@ -256,8 +256,9 @@ abstract public class Hdf5TreeElement {
 			newAttribute = (Hdf5Attribute<Object>) createAttribute(edit, copyAttribute.getDimension());
 			
 			if (newAttribute != null) {
-				Object[] values = copyAttribute.getValue() == null ? copyAttribute.read() : copyAttribute.getValue();
-				success = newAttribute.write(values);
+				// Object[] values = copyAttribute.getValue() == null ? copyAttribute.read() : copyAttribute.getValue();
+				// success = newAttribute.write(values);
+				success = copyAttribute.copyValuesTo(newAttribute);
 				
 				try {
 					if (!success && existsAttribute(newAttribute.getName())) {
@@ -284,9 +285,9 @@ abstract public class Hdf5TreeElement {
 			newAttribute = createAttribute(newName, copyAttribute.getDimension(), Hdf5DataType.createCopyFrom(copyAttribute.getType()));
 			
 			if (newAttribute != null) {
+				success = copyAttribute.copyValuesTo(newAttribute);
+				
 				try {
-					success = H5.H5Acopy(copyAttribute.getAttributeId(), newAttribute.getAttributeId()) >= 0;
-					
 					if (!success && existsAttribute(newAttribute.getName())) {
 						deleteAttribute(newAttribute.getName());
 					}
@@ -473,6 +474,9 @@ abstract public class Hdf5TreeElement {
 					try {
 						Hdf5DataSet<?> dataSet = ((Hdf5Group) this).getDataSet(iterDS.next());
 						paths.putAll(dataSet.getAllAttributesInfo());
+						
+					} catch (UnsupportedDataTypeException udte) {
+						NodeLogger.getLogger("HDF5 Files").warn(udte.getMessage(), udte);
 						
 					} catch (IOException | NullPointerException ionpe) {
 						NodeLogger.getLogger("HDF5 Files").error(ionpe.getMessage(), ionpe);

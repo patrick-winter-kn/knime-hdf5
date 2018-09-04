@@ -95,7 +95,7 @@ public enum Hdf5KnimeDataType {
 		}
 	}
 
-	public Object createArray(int length) throws UnsupportedDataTypeException {
+	public Object[] createArray(int length) throws UnsupportedDataTypeException {
 		switch (this) {
 		case INTEGER:
 			return new Integer[length];

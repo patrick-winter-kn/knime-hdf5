@@ -165,8 +165,32 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	@Override
+	protected void validate(BufferedDataTable inputTable) {
+		Hdf5File file = null;
+		try {
+			file = (Hdf5File) getHdfObject();
+			if (file != null) {
+				file.open(Hdf5File.READ_ONLY_ACCESS);
+				super.validate(inputTable);
+			}
+		} catch (Exception e) {
+			NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
+			
+		} finally {
+			if (file != null) {
+				file.close();
+			}
+		}
+		
+	}
+	
+	@Override
 	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
-		return m_filePath.endsWith(".h5") || m_filePath.endsWith(".hdf5") ? null : InvalidCause.FILE_EXTENSION;
+		InvalidCause cause = m_filePath.endsWith(".h5") || m_filePath.endsWith(".hdf5") ? null : InvalidCause.FILE_EXTENSION;
+		
+		cause = cause == null && getEditAction() == EditAction.CREATE && Hdf5File.existsFile(getFilePath()) ? InvalidCause.FILE_ALREADY_EXISTS : cause;
+		
+		return cause;
 	}
 	
 	@Override

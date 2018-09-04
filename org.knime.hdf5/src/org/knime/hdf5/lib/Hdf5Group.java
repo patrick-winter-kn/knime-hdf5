@@ -263,6 +263,17 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return dataSet;
 	}
 	
+	public Hdf5DataSet<?> updateDataSet(final String name) throws IOException {
+		for (Hdf5DataSet<?> dataSet : getDataSets()) {
+			if (dataSet.getName().equals(name)) {
+				removeDataSet(dataSet);
+				break;
+			}
+		}
+		
+		return getDataSet(name);
+	}
+	
 	private int getObjectTypeByName(final String name) throws HDF5LibraryException, NullPointerException {
 		try {
 			if (H5.H5Lexists(getElementId(), name, HDF5Constants.H5P_DEFAULT)
@@ -368,10 +379,10 @@ public class Hdf5Group extends Hdf5TreeElement {
 					}
 				}
 			} else {
-				throw new IllegalStateException("The parent group \"" + group.getPathFromFile() + group.getName() + "\" is not open!");
+				throw new IllegalStateException("The parent group \"" + group.getPathFromFileWithName() + "\" is not open!");
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
-            NodeLogger.getLogger("HDF5 Files").error("List of objects could not be loaded", hlnpe);
+            NodeLogger.getLogger("HDF5 Files").error("List of objects could not be loaded: " + hlnpe.getMessage(), hlnpe);
         }
 		
 		return names;

@@ -110,7 +110,7 @@ public class Hdf5File extends Hdf5Group {
 	protected boolean isOpen() {
 		return m_accessors.containsKey(Thread.currentThread());
 	}
-	
+
 	protected synchronized void setOpen(boolean open) {
 		Thread curThread = Thread.currentThread();
 		if (!isOpen() && open) {

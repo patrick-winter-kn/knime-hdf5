@@ -101,7 +101,7 @@ public class Hdf5Attribute<Type> {
 		return attribute;
 	}
 	
-	static Hdf5Attribute<?> openAttribute(final Hdf5TreeElement parent, final String name) {
+	static Hdf5Attribute<?> openAttribute(final Hdf5TreeElement parent, final String name) throws UnsupportedDataTypeException {
 		Hdf5Attribute<?> attribute = null;
 		
 		try {
@@ -111,11 +111,10 @@ public class Hdf5Attribute<Type> {
 	    	parent.addAttribute(attribute);
 	    	attribute.open();
         	
-        } catch (UnsupportedDataTypeException | NullPointerException
-        		| IllegalArgumentException | IllegalStateException udtnpiaise) {
+        } catch (NullPointerException | IllegalArgumentException | IllegalStateException npiaise) {
             NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + name + "\" in \""
             		+ parent.getPathFromFileWithName() + "\" could not be opened: "
-					+ udtnpiaise.getMessage(), udtnpiaise);
+					+ npiaise.getMessage(), npiaise);
 			/* attribute stays null */
         }
 		
@@ -268,10 +267,6 @@ public class Hdf5Attribute<Type> {
 	public String getPathFromFileWithName() {
 		return getPathFromFile() + getName();
 	}
-
-	public boolean isConvertibleToType(HdfDataType hdfType, int stringLength) {
-		return hdfType.areValuesConvertible(read(), getType().getHdfType().getType(), stringLength);
-	}
 	
 	/**
 	 * Writes {@code value} in this attribute in Hdf5 and saves it as the new value of this
@@ -304,7 +299,7 @@ public class Hdf5Attribute<Type> {
     				H5.H5Awrite(m_attributeId, m_type.getConstants()[1], value);
     				
     			} else {
-    				Object[] dataIn = (Object[]) m_type.getHdfType().createArray(dim);
+    				Object[] dataIn = m_type.getHdfType().createArray(dim);
     	
     				Class hdfClass = m_type.getHdfClass();
     				Class knimeClass = m_type.getKnimeClass();
@@ -322,7 +317,7 @@ public class Hdf5Attribute<Type> {
 			
 		} catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException hudtnpe) {
             NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + getPathFromFileWithName()
-            		+ "\" could not be written", hudtnpe);
+            		+ "\" could not be written: " + hudtnpe.getMessage(), hudtnpe);
 		}
         
         return false;
@@ -372,7 +367,7 @@ public class Hdf5Attribute<Type> {
 					H5.H5Aread(m_attributeId, m_type.getConstants()[1], dataOut);
 					
 				} else {
-					Object[] dataRead = (Object[]) m_type.getHdfType().createArray(dim);
+					Object[] dataRead = m_type.getHdfType().createArray(dim);
 		            H5.H5Aread(m_attributeId, m_type.getConstants()[1], dataRead);
 		
 					Class hdfClass = m_type.getHdfClass();
@@ -389,6 +384,17 @@ public class Hdf5Attribute<Type> {
 		
 		m_value = dataOut;
 		return dataOut;
+	}
+	
+	public boolean copyValuesTo(Hdf5Attribute<?> attribute) {
+		try {
+			return H5.H5Acopy(getAttributeId(), attribute.getAttributeId()) >= 0;
+			
+		} catch (HDF5LibraryException hle) {
+			NodeLogger.getLogger(getClass()).error(hle.getMessage(), hle);
+		}
+		
+		return false;
 	}
 	
 	/**

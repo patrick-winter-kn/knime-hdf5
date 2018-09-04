@@ -237,18 +237,45 @@ public class Hdf5DataType {
 				}
 				break;
 			case LONG:
-				if (isHdfType(HdfDataType.INT64)) {
-					return hdfClass.cast((long) knimeValue);
+				long knimeValueLong = (long) knimeValue;
+				if (isHdfType(HdfDataType.INT8) || isHdfType(HdfDataType.UINT8)) {
+					return hdfClass.cast((byte) knimeValueLong);
 					
+				} else if (isHdfType(HdfDataType.INT16) || isHdfType(HdfDataType.UINT16)) {
+					return hdfClass.cast((short) knimeValueLong);
+					
+				} else if (isHdfType(HdfDataType.INT32) || isHdfType(HdfDataType.UINT32)) {
+					return hdfClass.cast((int) knimeValueLong);
+					
+				} else if (isHdfType(HdfDataType.INT64) || isHdfType(HdfDataType.UINT64)) {
+					return hdfClass.cast(knimeValueLong);
+					
+				} else if (isHdfType(HdfDataType.FLOAT32)) {
+					return hdfClass.cast((float) knimeValueLong);
+				
 				} else if (isHdfType(HdfDataType.FLOAT64)) {
-					return hdfClass.cast((double) (long) knimeValue);
+					return hdfClass.cast((double) knimeValueLong);
 				}
 				break;
 			case DOUBLE:
-				if (isHdfType(HdfDataType.FLOAT32)) {
-					return hdfClass.cast((float) knimeValue);
+				double knimeValueDouble = (double) knimeValue;
+				if (isHdfType(HdfDataType.INT8) || isHdfType(HdfDataType.UINT8)) {
+					return hdfClass.cast((byte) knimeValueDouble);
+					
+				} else if (isHdfType(HdfDataType.INT16) || isHdfType(HdfDataType.UINT16)) {
+					return hdfClass.cast((short) knimeValueDouble);
+					
+				} else if (isHdfType(HdfDataType.INT32) || isHdfType(HdfDataType.UINT32)) {
+					return hdfClass.cast((int) knimeValueDouble);
+					
+				} else if (isHdfType(HdfDataType.INT64) || isHdfType(HdfDataType.UINT64)) {
+					return hdfClass.cast((long) knimeValueDouble);
+					
+				} else if (isHdfType(HdfDataType.FLOAT32)) {
+					return hdfClass.cast((float) knimeValueDouble);
+					
 				} else if (isHdfType(HdfDataType.FLOAT64)) {
-					return hdfClass.cast((double) knimeValue);
+					return hdfClass.cast(knimeValueDouble);
 				}
 				break;
 			default:
