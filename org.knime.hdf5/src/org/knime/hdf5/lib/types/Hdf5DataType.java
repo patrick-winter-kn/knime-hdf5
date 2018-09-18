@@ -5,6 +5,7 @@ import javax.activation.UnsupportedDataTypeException;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
+import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -208,7 +209,7 @@ public class Hdf5DataType {
 		}
 	}
 
-	public <T, S> S knimeToHdf(Class<T> knimeClass, T knimeValue, Class<S> hdfClass) throws UnsupportedDataTypeException {
+	public <T, S> S knimeToHdf(Class<T> knimeClass, T knimeValue, Class<S> hdfClass, Rounding rounding) throws UnsupportedDataTypeException {
 		if (knimeClass == knimeValue.getClass() && knimeClass == getKnimeClass() && hdfClass == getHdfClass()) {
 			if (isHdfType(HdfDataType.STRING)) {
 				return hdfClass.cast(knimeValue.toString());
@@ -258,24 +259,28 @@ public class Hdf5DataType {
 				}
 				break;
 			case DOUBLE:
-				double knimeValueDouble = (double) knimeValue;
-				if (isHdfType(HdfDataType.INT8) || isHdfType(HdfDataType.UINT8)) {
-					return hdfClass.cast((byte) knimeValueDouble);
-					
-				} else if (isHdfType(HdfDataType.INT16) || isHdfType(HdfDataType.UINT16)) {
-					return hdfClass.cast((short) knimeValueDouble);
-					
-				} else if (isHdfType(HdfDataType.INT32) || isHdfType(HdfDataType.UINT32)) {
-					return hdfClass.cast((int) knimeValueDouble);
-					
-				} else if (isHdfType(HdfDataType.INT64) || isHdfType(HdfDataType.UINT64)) {
-					return hdfClass.cast((long) knimeValueDouble);
-					
-				} else if (isHdfType(HdfDataType.FLOAT32)) {
-					return hdfClass.cast((float) knimeValueDouble);
-					
-				} else if (isHdfType(HdfDataType.FLOAT64)) {
-					return hdfClass.cast(knimeValueDouble);
+				if (!getHdfType().getType().isFloat()) {
+					long knimeValueRounded = rounding.round((double) knimeValue);
+					if (isHdfType(HdfDataType.INT8) || isHdfType(HdfDataType.UINT8)) {
+						return hdfClass.cast((byte) knimeValueRounded);
+						
+					} else if (isHdfType(HdfDataType.INT16) || isHdfType(HdfDataType.UINT16)) {
+						return hdfClass.cast((short) knimeValueRounded);
+						
+					} else if (isHdfType(HdfDataType.INT32) || isHdfType(HdfDataType.UINT32)) {
+						return hdfClass.cast((int) knimeValueRounded);
+						
+					} else if (isHdfType(HdfDataType.INT64) || isHdfType(HdfDataType.UINT64)) {
+						return hdfClass.cast((long) knimeValueRounded);
+					}
+				} else {
+					double knimeValueDouble = (double) knimeValue;
+					if (isHdfType(HdfDataType.FLOAT32)) {
+						return hdfClass.cast((float) knimeValueDouble);
+						
+					} else if (isHdfType(HdfDataType.FLOAT64)) {
+						return hdfClass.cast(knimeValueDouble);
+					}
 				}
 				break;
 			default:

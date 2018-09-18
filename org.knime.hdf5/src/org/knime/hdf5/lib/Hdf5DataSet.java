@@ -17,6 +17,7 @@ import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
+import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -148,7 +149,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * @return product of the numbers in the dimensions array 
 	 */
 	public long numberOfColumns() {
-		return numberOfValuesFrom(m_dimensions.length > 0 ? 1 : 0);
+		return m_dimensions.length > 1 ? numberOfValuesFrom(1) : 1;
 	}
 	
 	/**
@@ -157,7 +158,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * @return product of the numbers in the dimensions array 
 	 */
 	public long numberOfValues() {
-		return numberOfValuesFrom(0);
+		return m_dimensions.length > 0 ? numberOfValuesFrom(0) : 1;
 	}
 	
 	/**
@@ -236,11 +237,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         return memSpaceId;
 	}
 	
-	public boolean writeRow(Type[] dataIn, long rowIndex) {
-		return writeRows(dataIn, rowIndex, rowIndex + 1);
+	public boolean writeRow(Type[] dataIn, long rowIndex, Rounding rounding) {
+		return writeRows(dataIn, rowIndex, rowIndex + 1, rounding);
 	}
 
-	private boolean writeRows(Type[] dataIn, long fromRowIndex, long toRowIndex) {
+	private boolean writeRows(Type[] dataIn, long fromRowIndex, long toRowIndex, Rounding rounding) {
     	long[] offset = new long[m_dimensions.length];
 		long[] count = m_dimensions.clone();
 		if (m_dimensions.length > 0) {
@@ -248,16 +249,16 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			count[0] = toRowIndex - fromRowIndex;
 		}
 		
-    	return write(dataIn, offset, count);
+    	return write(dataIn, offset, count, rounding);
 	}
 	
-	public boolean writeColumn(Type[] dataIn, long[] colOffset) {
+	public boolean writeColumn(Type[] dataIn, long[] colOffset, Rounding rounding) {
 		long[] count = new long[m_dimensions.length > 0 ? m_dimensions.length-1 : 0];
 		Arrays.fill(count, 1);
-		return writeColumns(dataIn, colOffset, count);
+		return writeColumns(dataIn, colOffset, count, rounding);
 	}
 	
-	private boolean writeColumns(Type[] dataIn, long[] colOffset, long[] colCount) {
+	private boolean writeColumns(Type[] dataIn, long[] colOffset, long[] colCount, Rounding rounding) {
     	long[] offset = new long[m_dimensions.length];
 		long[] count = m_dimensions.clone();
 		for (int i = 1; i < offset.length; i++) {
@@ -265,11 +266,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			count[i] = colCount[i-1];
 		}
 		
-		return write(dataIn, offset, count);
+		return write(dataIn, offset, count, rounding);
 	}
 	
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public boolean write(Type[] dataIn, long[] offset, long[] count) {
+	public boolean write(Type[] dataIn, long[] offset, long[] count, Rounding rounding) {
 		try {
 	        if (isOpen()) {
 	        	long memSpaceId = selectChunk(offset, count);
@@ -296,7 +297,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 						Class hdfClass = m_type.getHdfClass();
 						Class knimeClass = m_type.getKnimeClass();
 						for (int i = 0; i < dataWrite.length; i++) {
-							dataWrite[i] = m_type.knimeToHdf(knimeClass, knimeClass.cast(dataIn[i]), hdfClass);
+							dataWrite[i] = m_type.knimeToHdf(knimeClass, knimeClass.cast(dataIn[i]), hdfClass, rounding);
 						}
 						
 			            H5.H5Dwrite(getElementId(), m_type.getConstants()[1],
@@ -321,7 +322,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowIndex, Type[] copyValues) throws UnsupportedDataTypeException {
+	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowIndex, Type[] copyValues, Rounding rounding) throws UnsupportedDataTypeException {
 		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfColumns());
 		
 		int copyIndex = 0;
@@ -329,7 +330,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			dataIn[i] = specIndices[i] >= 0 ? getValueFromDataCell(row.getCell(specIndices[i])) : copyValues[copyIndex++];
 		}
 		
-		return writeRow(dataIn, rowIndex);
+		return writeRow(dataIn, rowIndex, rounding);
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -581,7 +582,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
     			m_chunkRowSize = chunkRowSize;
                 
 			} else {
-				throw new IllegalArgumentException("chunkRowSize must be >0 due to a compressionLevel >0");
+				throw new IllegalArgumentException("chunkRowSize must be > 0 because of compressionLevel > 0");
 			}
 		}
 		

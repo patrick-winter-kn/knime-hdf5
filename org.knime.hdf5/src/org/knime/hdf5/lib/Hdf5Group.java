@@ -16,6 +16,7 @@ import org.knime.hdf5.lib.types.Hdf5HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.EditDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -156,6 +157,47 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return dataSet;
 	}
 	
+	public synchronized boolean moveObject(final String oldName, Hdf5Group newParent, String newName) {
+		boolean success = false;
+		
+		try {
+			int objectType = getObjectTypeByName(oldName);
+			Hdf5TreeElement oldObject = objectType == HDF5Constants.H5I_GROUP ? getGroup(oldName) : getDataSet(oldName);
+			H5.H5Lmove(getElementId(), oldName, newParent.getElementId(), newName, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
+			success = getObjectTypeByName(oldName) == OBJECT_NOT_EXISTS && newParent.getObjectTypeByName(newName) == objectType;
+			if (success) {
+				if (oldObject instanceof Hdf5Group) {
+					removeGroup((Hdf5Group) oldObject);
+				} else {
+					removeDataSet((Hdf5DataSet<?>) oldObject);
+				}
+			}
+		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
+			NodeLogger.getLogger(getClass()).error("Object \"" + getPathFromFileWithName(true) + oldName
+					+ "\" could not be moved to \"" + newParent.getPathFromFileWithName(true) + "\" with new name \""
+					+ newName + "\": " + hlionpe.getMessage(), hlionpe);
+		}
+		
+		return success;
+	}
+
+	public synchronized boolean copyObject(final String oldName, Hdf5Group newParent, String newName) {
+		boolean success = false;
+		
+		try {
+			int objectType = getObjectTypeByName(oldName);
+			H5.H5Lcopy(getElementId(), oldName, newParent.getElementId(), newName, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
+			success = newParent.getObjectTypeByName(newName) == objectType;
+			
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			NodeLogger.getLogger(getClass()).error("Object \"" + getPathFromFileWithName(true) + oldName
+					+ "\" could not be copied to \"" + newParent.getPathFromFileWithName(true) + "\" with new name \""
+					+ newName + "\": " + hlnpe.getMessage(), hlnpe);
+		}
+		
+		return success;
+	}
+	
 	public synchronized Hdf5Group getGroup(final String name) throws IOException {
 		Hdf5Group group = null;
 		
@@ -291,40 +333,24 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return OBJECT_NOT_EXISTS;
 	}
 	
-	public synchronized int deleteGroup(final String name) {
+	public synchronized int deleteObject(final String name) {
 		int success = -1;
 		
 		try {
-			Hdf5Group group = getGroup(name);
-			group.close();
-			if (!group.isOpen()) {
+			Hdf5TreeElement object = getObjectTypeByName(name) == HDF5Constants.H5I_GROUP ? getGroup(name) : getDataSet(name);
+			object.close();
+			if (!object.isOpen()) {
 				H5.H5Ldelete(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 				if (getObjectTypeByName(name) == OBJECT_NOT_EXISTS) {
-					success = removeGroup(group) ? 1 : 0;
+					if (object instanceof Hdf5Group) {
+						success = removeGroup((Hdf5Group) object) ? 1 : 0;
+					} else {
+						success = removeDataSet((Hdf5DataSet<?>) object) ? 1 : 0;
+					}
 				}
 			}
 		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
-			NodeLogger.getLogger(getClass()).error("Group \"" + getPathFromFileWithName(true) + name
-					+ "\" could not be deleted from disk: " + hlionpe.getMessage(), hlionpe);
-		}
-		
-		return success;
-	}
-	
-	public synchronized int deleteDataSet(final String name) {
-		int success = -1;
-		
-		try {
-			Hdf5DataSet<?> dataSet = getDataSet(name);
-			dataSet.close();
-			if (!dataSet.isOpen()) {
-				H5.H5Ldelete(getElementId(), name, HDF5Constants.H5P_DEFAULT);
-				if (getObjectTypeByName(name) == OBJECT_NOT_EXISTS) {
-					success = removeDataSet(dataSet) ? 1 : 0;
-				}
-			}
-		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
-			NodeLogger.getLogger(getClass()).error("Group \"" + getPathFromFileWithName(true) + name
+			NodeLogger.getLogger(getClass()).error("Object \"" + getPathFromFileWithName(true) + name
 					+ "\" could not be deleted from disk: " + hlionpe.getMessage(), hlionpe);
 		}
 		
@@ -438,8 +464,9 @@ public class Hdf5Group extends Hdf5TreeElement {
 	public Hdf5DataSet<?> createDataSetFromEdit(DataSetNodeEdit edit) {
 		Hdf5DataSet<?> dataSet = null;
 		
-		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getOutputType(), edit.getEndian()), 
-				Hdf5KnimeDataType.getKnimeDataType(edit.getInputType(), true), false, true, edit.getStringLength());
+		EditDataType editDataType = edit.getEditDataType();
+		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(editDataType.getOutputType(), editDataType.getEndian()),
+				Hdf5KnimeDataType.getKnimeDataType(edit.getInputType(), true), false, true, editDataType.getStringLength());
 		long[] dims = edit.getNumberOfDimensions() == 1 ? new long[] { edit.getInputRowCount() }
 				: new long[] { edit.getInputRowCount(), edit.getColumnInputTypes().length };
 		

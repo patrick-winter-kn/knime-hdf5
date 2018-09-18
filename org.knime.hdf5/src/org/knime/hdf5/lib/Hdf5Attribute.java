@@ -7,6 +7,7 @@ import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
+import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -277,7 +278,7 @@ public class Hdf5Attribute<Type> {
 	 * 			{@code false} otherwise
 	 */
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public boolean write(final Type[] value) {
+	public boolean write(final Type[] value, Rounding rounding) {
         try {
 			int dim = (int) m_dimension;
         	if (dim > 0) {
@@ -305,7 +306,7 @@ public class Hdf5Attribute<Type> {
     				Class knimeClass = m_type.getKnimeClass();
     				for (int i = 0; i < dataIn.length; i++) {
     					dataIn[i] = m_type.knimeToHdf(knimeClass,
-    							knimeClass.cast(value[i]), hdfClass);
+    							knimeClass.cast(value[i]), hdfClass, rounding);
     				}
     				
     	            H5.H5Awrite(m_attributeId, m_type.getConstants()[1], dataIn);

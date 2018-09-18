@@ -52,6 +52,7 @@ public abstract class TreeNodeEdit {
 		INPUT_TYPE("inputType"),
 		OUTPUT_TYPE("outputType"),
 		LITTLE_ENDIAN("littleEndian"),
+		ROUNDING("rounding"),
 		FIXED("fixed"),
 		STRING_LENGTH("stringLength"),
 		COMPOUND_AS_ARRAY_POSSIBLE("compoundAsArrayPossible"),
@@ -468,13 +469,13 @@ public abstract class TreeNodeEdit {
 	
 	protected abstract void removeFromParent();
 	
-	protected void saveSettings(NodeSettingsWO settings) {
+	protected void saveSettingsTo(NodeSettingsWO settings) {
 		settings.addString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey(), m_inputPathFromFileWithName);
 		settings.addString(SettingsKey.NAME.getKey(), m_name);
 		settings.addString(SettingsKey.EDIT_ACTION.getKey(), m_editAction.getActionName());
 	}
 
-	protected abstract void loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException;
+	protected abstract void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException;
 
 	@SuppressWarnings("unchecked")
 	public void addEditToNode(DefaultMutableTreeNode parentNode) {
@@ -599,9 +600,11 @@ public abstract class TreeNodeEdit {
 		List<TreeNodeEdit> secondModifyEdits = new ArrayList<>();
 		for (TreeNodeEdit edit : modifyEdits) {
 			if (!edit.doAction(inputTable, flowVariables, saveColumnProperties)) {
+				// TODO only add it to here if the action failed due to name duplicate (which is resolved through another modifyAction), not in other fails like "inappropriate type"
 				secondModifyEdits.add(edit);
 			}
 		}
+		
 		for (TreeNodeEdit edit : secondModifyEdits) {
 			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
 		}
@@ -675,7 +678,7 @@ public abstract class TreeNodeEdit {
 							m_propertiesDialog = getPropertiesDialog();
 						}
 						
-						m_propertiesDialog.initPropertyItems();
+						m_propertiesDialog.loadFromEdit();
 						m_propertiesDialog.setVisible(true);
 					}
 				});
@@ -766,7 +769,7 @@ public abstract class TreeNodeEdit {
 				
 				@Override
 				public void actionPerformed(ActionEvent e) {
-					editPropertyItems();
+					saveToEdit();
 					setVisible(false);
 				}
 			});
@@ -834,10 +837,6 @@ public abstract class TreeNodeEdit {
 				if (northwest) {
 					nameLabel.setAlignmentY(0.0f);
 				}
-				
-//				setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.GREEN), getBorder()));
-//				nameLabel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.RED), nameLabel.getBorder()));
-//				component.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLUE), component.getBorder()));
 			}
 			
 			private JCheckBox getCheckBox() {
@@ -845,8 +844,8 @@ public abstract class TreeNodeEdit {
 			}
 		}
 		
-		protected abstract void initPropertyItems();
+		protected abstract void loadFromEdit();
 		
-		protected abstract void editPropertyItems();
+		protected abstract void saveToEdit();
 	}
 }

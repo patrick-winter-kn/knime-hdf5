@@ -19,6 +19,7 @@ import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
+import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
@@ -248,8 +249,8 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	public void saveSettings(NodeSettingsWO settings) {
-		super.saveSettings(settings);
+	public void saveSettingsTo(NodeSettingsWO settings) {
+		super.saveSettingsTo(settings);
 		
         NodeSettingsWO groupSettings = settings.addNodeSettings(SettingsKey.GROUPS.getKey());
         NodeSettingsWO dataSetSettings = settings.addNodeSettings(SettingsKey.DATA_SETS.getKey());
@@ -258,28 +259,28 @@ public class GroupNodeEdit extends TreeNodeEdit {
         for (GroupNodeEdit edit : m_groupEdits) {
         	if (edit.getEditAction() != EditAction.NO_ACTION) {
     	        NodeSettingsWO editSettings = groupSettings.addNodeSettings("" + edit.hashCode());
-    			edit.saveSettings(editSettings);
+    			edit.saveSettingsTo(editSettings);
         	}
 		}
 		
 		for (DataSetNodeEdit edit : m_dataSetEdits) {
         	if (edit.getEditAction() != EditAction.NO_ACTION) {
 		        NodeSettingsWO editSettings = dataSetSettings.addNodeSettings("" + edit.hashCode());
-				edit.saveSettings(editSettings);
+				edit.saveSettingsTo(editSettings);
         	}
 		}
 		
 		for (AttributeNodeEdit edit : m_attributeEdits) {
         	if (edit.getEditAction() != EditAction.NO_ACTION) {
 		        NodeSettingsWO editSettings = attributeSettings.addNodeSettings("" + edit.hashCode());
-				edit.saveSettings(editSettings);
+				edit.saveSettingsTo(editSettings);
         	}
 		}
 	}
 
 	@Override
 	@SuppressWarnings("unchecked")
-	protected void loadSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
+	protected void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException {
 		try {
 			if (!getEditAction().isCreateOrCopyAction() && !(this instanceof FileNodeEdit)) {
 				Hdf5Group parent = (Hdf5Group) getParent().getHdfObject();
@@ -297,7 +298,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
         	NodeSettingsRO editSettings = groupEnum.nextElement();
         	GroupNodeEdit edit = new GroupNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()), 
         			editSettings.getString(SettingsKey.NAME.getKey()), EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
-            edit.loadSettings(editSettings);
+            edit.loadSettingsFrom(editSettings);
         }
         
         NodeSettingsRO dataSetSettings = settings.getNodeSettings(SettingsKey.DATA_SETS.getKey());
@@ -306,7 +307,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
         	NodeSettingsRO editSettings = dataSetEnum.nextElement();
         	DataSetNodeEdit edit = new DataSetNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()),
         			editSettings.getString(SettingsKey.NAME.getKey()), EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
-    		edit.loadSettings(editSettings);
+    		edit.loadSettingsFrom(editSettings);
         }
         
         NodeSettingsRO attributeSettings = settings.getNodeSettings(SettingsKey.ATTRIBUTES.getKey());
@@ -316,7 +317,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			AttributeNodeEdit edit = new AttributeNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()),
 					editSettings.getString(SettingsKey.NAME.getKey()), HdfDataType.get(editSettings.getInt(SettingsKey.INPUT_TYPE.getKey())),
 					EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
-			edit.loadSettings(editSettings);
+			edit.loadSettingsFrom(editSettings);
         }
 	}
 
@@ -383,7 +384,21 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected boolean copyAction() {
-		return createAction(null, null, false);
+		try {
+			Hdf5Group oldGroup = ((Hdf5File) getRoot().getHdfObject()).getGroupByPath(getInputPathFromFileWithName());
+			
+			Hdf5Group newParent = (Hdf5Group) getParent().getHdfObject();
+			if (!newParent.isFile()) {
+				newParent.open();
+			}
+			
+			return oldGroup.getParent().copyObject(oldGroup.getName(), newParent, getName());
+			
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+		}
+		
+		return false;
 	}
 
 	@Override
@@ -394,7 +409,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		}
 		
 		String name = getInputPathFromFileWithName().substring(getInputPathFromFileWithName().lastIndexOf("/") + 1);
-		boolean success = parent.deleteGroup(name) >= 0;
+		boolean success = parent.deleteObject(name) >= 0;
 		if (success) {
 			setHdfObject((Hdf5Group) null);
 		}
@@ -404,7 +419,21 @@ public class GroupNodeEdit extends TreeNodeEdit {
 
 	@Override
 	protected boolean modifyAction() {
-		return true;
+		try {
+			Hdf5Group oldGroup = ((Hdf5File) getRoot().getHdfObject()).getGroupByPath(getInputPathFromFileWithName());
+			
+			Hdf5Group newParent = (Hdf5Group) getParent().getHdfObject();
+			if (!newParent.isFile()) {
+				newParent.open();
+			}
+			
+			return oldGroup.getParent().moveObject(oldGroup.getName(), newParent, getName());
+			
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+		}
+		
+		return false;
 	}
 	
 	public class GroupNodeMenu extends TreeNodeMenu {
@@ -453,12 +482,12 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			}
 			
 			@Override
-			protected void initPropertyItems() {
+			protected void loadFromEdit() {
 				m_nameField.setText(GroupNodeEdit.this.getName());
 			}
 
 			@Override
-			protected void editPropertyItems() {
+			protected void saveToEdit() {
 				GroupNodeEdit edit = GroupNodeEdit.this;
 				edit.setName(m_nameField.getText());
 				edit.setEditAction(EditAction.MODIFY);

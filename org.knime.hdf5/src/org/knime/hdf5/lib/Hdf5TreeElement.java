@@ -21,6 +21,8 @@ import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.EditDataType;
+import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -133,7 +135,7 @@ abstract public class Hdf5TreeElement {
 	
 	/**
 	 * 
-	 * @param endSlash {@code true} if an {@code '/'} should be added after the name and if it is no {@code Hdf5File}
+	 * @param endSlash {@code true} if an {@code '/'} should be added after the name (only possible if it is no {@code Hdf5File})
 	 * @return
 	 */
 	public String getPathFromFileWithName(boolean endSlash) {
@@ -178,9 +180,9 @@ abstract public class Hdf5TreeElement {
 				}
 			}*/
 			
-			long stringLength = edit.isCompoundAsArrayUsed() ? edit.getCompoundItemStringLength() : edit.getStringLength();
-			Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(edit.getOutputType(),
-					edit.getEndian()), Hdf5KnimeDataType.getKnimeDataType(edit.getInputType(), false), false, false, stringLength);
+			EditDataType editDataType = edit.getEditDataType();
+			Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(editDataType.getOutputType(), editDataType.getEndian()),
+					Hdf5KnimeDataType.getKnimeDataType(edit.getInputType(), false), false, false, editDataType.getStringLength());
 			
 			attribute = createAttribute(edit.getName(), dimension, dataType);
 			
@@ -217,7 +219,7 @@ abstract public class Hdf5TreeElement {
 		
 		if (dataType != null) {
 			attribute = (Hdf5Attribute<Type>) createAttribute(name, values.length, dataType);
-			return attribute.write(values);
+			return attribute.write(values, Rounding.DOWN);
 		}
 		
 		return false;
@@ -230,10 +232,11 @@ abstract public class Hdf5TreeElement {
 		Object[] values = Hdf5Attribute.getFlowVariableValues(flowVariable);
 		Hdf5Attribute<Object> attribute = (Hdf5Attribute<Object>) createAttribute(edit, values.length);
 		if (attribute != null) {
+			Rounding rounding = edit.getEditDataType().getRounding();
 			if (!edit.isCompoundAsArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
-				success = attribute.write(new String[] { flowVariable.getStringValue() });
+				success = attribute.write(new String[] { flowVariable.getStringValue() }, rounding);
 			} else {
-				success = attribute.write(values);
+				success = attribute.write(values, rounding);
 			}
 			try {
 				if (!success && existsAttribute(attribute.getName())) {
@@ -379,6 +382,23 @@ abstract public class Hdf5TreeElement {
 	
 	public boolean existsAttribute(final String name) throws HDF5LibraryException, NullPointerException {
 		return H5.H5Aexists(getElementId(), name);
+	}
+	
+	public synchronized boolean renameAttribute(String oldName, String newName) {
+		boolean success = false;
+		
+		try {
+			Hdf5Attribute<?> attribute = getAttribute(oldName);
+			success = H5.H5Arename(getElementId(), oldName, newName) >= 0;
+			if (success) {
+				removeAttribute(attribute);
+			}
+		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
+			NodeLogger.getLogger(getClass()).error("Attribute in \"" + getPathFromFileWithName(true)
+					+ "\" could not be renamed from \"" + oldName + "\" to \"" + newName + "\": " + hlionpe.getMessage(), hlionpe);
+		}
+		
+		return success;
 	}
 	
 	/**

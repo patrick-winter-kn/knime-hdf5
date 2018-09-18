@@ -116,8 +116,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	public void saveSettings(NodeSettingsWO settings) {
-		super.saveSettings(settings);
+	public void saveSettingsTo(NodeSettingsWO settings) {
+		super.saveSettingsTo(settings);
 
 		settings.addInt(SettingsKey.INPUT_TYPE.getKey(), m_inputType.getTypeId());
 		settings.addLong(SettingsKey.INPUT_ROW_COUNT.getKey(), m_inputRowCount);
@@ -125,7 +125,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	protected void loadSettings(NodeSettingsRO settings) throws InvalidSettingsException {
+	protected void loadSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
 		// nothing to do here
 	}
 	
@@ -161,18 +161,20 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 					try {
 						Hdf5DataSet<?> dataSet = ((Hdf5File) getRoot().getHdfObject()).getDataSetByPath(getInputPathFromFileWithName());
 						// only supported for dataSets with max. 2 dimensions
-						values = dataSet.readColumn(dataSet.getDimensions().length <= 1 ? new long[0] : new long[] { getInputColumnIndex() });
+						values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
 						
 					} catch (IOException ioe) {
-						NodeLogger.getLogger(getClass()).error("Validation of dataType of new column \""
-								+ getOutputPathFromFileWithName() +  "\" could not be checked: " + ioe.getMessage(), ioe);
+						cause = cause == null ? InvalidCause.NO_HDF_OBJECT : cause;
 					}
 				}
 				
-				Integer stringLength = parent.isFixed() ? parent.getStringLength() : HdfDataType.AUTO_STRING_LENGTH;
-				cause = parent.getOutputType().areValuesConvertible(values, m_inputType, stringLength) ? cause : InvalidCause.DATA_TYPE;
-				if (!parent.isFixed() && stringLength != HdfDataType.AUTO_STRING_LENGTH) {
-					parent.setStringLength(stringLength);
+				if (values != null) {
+					EditDataType parentDataType = parent.getEditDataType();
+					Integer stringLength = parentDataType.isFixed() ? parentDataType.getStringLength() : HdfDataType.AUTO_STRING_LENGTH;
+					cause = cause == null && !parentDataType.getOutputType().areValuesConvertible(values, m_inputType, stringLength) ? InvalidCause.DATA_TYPE : cause;
+					if (!parentDataType.isFixed() && stringLength != HdfDataType.AUTO_STRING_LENGTH) {
+						parentDataType.setStringLength(stringLength);
+					}
 				}
 			}
 		}
@@ -194,8 +196,9 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	public boolean isMaybeInvalid() {
-		DataSetNodeEdit parent = (DataSetNodeEdit) getParent();
-		return !m_inputType.getAlwaysConvertibleHdfTypes().contains(parent.getOutputType()) || !parent.getOutputType().isNumber() && parent.isFixed();
+		EditDataType parentDataType = ((DataSetNodeEdit) getParent()).getEditDataType();
+		return !m_inputType.getAlwaysConvertibleHdfTypes().contains(parentDataType.getOutputType())
+				|| !parentDataType.getOutputType().isNumber() && parentDataType.isFixed();
 	}
 
 	@Override

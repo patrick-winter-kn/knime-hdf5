@@ -26,7 +26,7 @@ public class EditTreeConfiguration {
 	void saveConfiguration(NodeSettingsWO settings) {
         if (m_fileEdit != null) {
             NodeSettingsWO fileSettings = settings.addNodeSettings(m_configRootName + "_File");
-	        m_fileEdit.saveSettings(fileSettings);
+	        m_fileEdit.saveSettingsTo(fileSettings);
         }
 	}
 	

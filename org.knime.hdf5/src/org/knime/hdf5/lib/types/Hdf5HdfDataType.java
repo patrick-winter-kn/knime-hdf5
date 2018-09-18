@@ -104,15 +104,19 @@ public class Hdf5HdfDataType {
 			return m_typeId;
 		}
 		
-		boolean isUnsigned() {
+		public boolean isUnsigned() {
 			return m_typeId % 10 == 1;
+		}
+		
+		public HdfDataType getSignedType() {
+			return isUnsigned() ? get(m_typeId - 1) : this;
 		}
 		
 		public boolean isNumber() {
 			return (m_typeId / 10) % 10 > 0;
 		}
 		
-		boolean isFloat() {
+		public boolean isFloat() {
 			return (m_typeId / 10) % 10 == 2;
 		}
 		

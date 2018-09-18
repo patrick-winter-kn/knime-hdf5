@@ -97,7 +97,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 				}
 			}
 			edit.setHdfObject(file);
-	        edit.loadSettings(settings);
+	        edit.loadSettingsFrom(settings);
 	        edit.updateIncompleteCopies();
 	        edit.validate(null);
 	        
@@ -120,8 +120,8 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 
 	@Override
-	public void saveSettings(NodeSettingsWO settings) {
-		super.saveSettings(settings);
+	public void saveSettingsTo(NodeSettingsWO settings) {
+		super.saveSettingsTo(settings);
 		
 		// TODO change this that this is not needed anymore
         settings.addString(SettingsKey.FILE_PATH.getKey(), m_filePath);
