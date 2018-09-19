@@ -224,9 +224,9 @@ public class Hdf5HdfDataType {
 							return false;
 						}
 					} catch (Exception e) {
-						getMin();
+						e.printStackTrace();
+						throw e;
 					}
-					
 				}
 			} else {
 				boolean autoStringLength = stringLength == AUTO_STRING_LENGTH;

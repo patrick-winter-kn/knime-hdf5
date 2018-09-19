@@ -498,7 +498,8 @@ public abstract class TreeNodeEdit {
 			try {
 				parentNode.insert(m_treeNode, insert);
 			} catch (Exception e) {
-				getEditAction();
+				e.printStackTrace();
+				throw e;
 			}
 			
 			for (TreeNodeEdit edit : getAllChildren()) {
