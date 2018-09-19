@@ -61,9 +61,9 @@ public class EditDataType {
 	
 	private Map<HdfDataType, Integer> m_possibleHdfTypes = new LinkedHashMap<>();
 
-	private Endian m_endian;
+	private Endian m_endian = Endian.LITTLE_ENDIAN;
 	
-	private Rounding m_rounding;
+	private Rounding m_rounding = Rounding.DOWN;
 	
 	private boolean m_fixed;
 	
@@ -156,20 +156,7 @@ public class EditDataType {
 				
 				@Override
 				public void actionPerformed(ActionEvent e) {
-					HdfDataType selectedType = (HdfDataType) m_typeField.getSelectedItem();
-					
-					int possibleSigns = m_possibleHdfTypes.get(selectedType.getSignedType());
-					m_unsignedField.setEnabled(possibleSigns == Sign.UNSIGNED.value() + Sign.SIGNED.value());
-					if (possibleSigns != Sign.UNSIGNED.value() + Sign.SIGNED.value()) {
-						m_unsignedField.setSelected(possibleSigns == Sign.UNSIGNED.value());
-					}
-					m_roundingField.setEnabled(m_roundingEnabled && selectedType.isNumber() && !selectedType.isFloat());
-					
-					boolean isString = selectedType == HdfDataType.STRING;
-					m_endianField.setEnabled(!isString);
-					m_stringLengthAuto.setEnabled(isString);
-					m_stringLengthFixed.setEnabled(isString);
-					m_stringLengthSpinner.setEnabled(isString && m_stringLengthFixed.isSelected());
+					setSelectableFieldsEnabled();
 				}
 			});
 			
@@ -198,6 +185,23 @@ public class EditDataType {
 					m_stringLengthSpinner.setEnabled(m_stringLengthFixed.isSelected());
 				}
 			});
+		}
+		
+		private void setSelectableFieldsEnabled() {
+			HdfDataType selectedType = (HdfDataType) m_typeField.getSelectedItem();
+			
+			int possibleSigns = m_possibleHdfTypes.get(selectedType.getSignedType());
+			m_unsignedField.setEnabled(possibleSigns == Sign.UNSIGNED.value() + Sign.SIGNED.value());
+			if (possibleSigns != Sign.UNSIGNED.value() + Sign.SIGNED.value()) {
+				m_unsignedField.setSelected(possibleSigns == Sign.UNSIGNED.value());
+			}
+			m_roundingField.setEnabled(m_roundingEnabled && selectedType.isNumber() && !selectedType.isFloat());
+			
+			boolean isString = selectedType == HdfDataType.STRING;
+			m_endianField.setEnabled(!isString);
+			m_stringLengthAuto.setEnabled(isString);
+			m_stringLengthFixed.setEnabled(isString);
+			m_stringLengthSpinner.setEnabled(isString && m_stringLengthFixed.isSelected());
 		}
 		
 		void setOnlyStringSelectable(boolean onlyString, int stringLength) {
@@ -232,12 +236,13 @@ public class EditDataType {
 			m_typeField.setSelectedItem(getOutputType().getSignedType());
 			m_unsignedField.setSelected(getOutputType().isUnsigned());
 			m_endianField.setSelectedItem(getEndian());
-			m_roundingField.setSelectedItem(m_rounding);
+			m_roundingField.setSelectedItem(getRounding());
 			m_stringLengthAuto.setSelected(!isFixed());
 			m_stringLengthFixed.setSelected(isFixed());
 			m_stringLengthSpinner.setValue(getStringLength());
 			
 			m_roundingEnabled = roundingEnabled;
+			setSelectableFieldsEnabled();
 		}
 		
 		void saveToDataType() {

@@ -129,34 +129,40 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		dataPanel.add(outputPanel);
 		outputPanel.setLayout(new BoxLayout(outputPanel, BoxLayout.Y_AXIS));
 		outputPanel.setBorder(BorderFactory.createTitledBorder(" Output "));
-		JButton updateButton = new JButton("update file path/reset config");
-		updateButton.addActionListener(new ActionListener() {
+		
+		JPanel buttonPanel = new JPanel();
+		outputPanel.add(buttonPanel);
+		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
+		
+		JButton updateFilePathButton = new JButton("Update file path");
+		updateFilePathButton.addActionListener(new ActionListener() {
 			
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				String filePath = m_filePathSettings.getStringValue();
-				//if (filePathChanged(filePath)) {
-					if (Hdf5File.existsFile(filePath)) {
-						try {
-							m_editTreePanel.updateTreeWithExistingFile(filePath);
-						} catch (IOException ioe) {
-				    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-						}
-					} else {
-						m_editTreePanel.updateTreeWithNewFile(filePath);
-					}
-				//}
-			}
-			/*
-			private boolean filePathChanged(String curFilePath) {
-				Object rootObject = ((DefaultMutableTreeNode) m_editTreePanel.getTree().getModel().getRoot()).getUserObject();
-				if (rootObject instanceof FileNodeEdit) {
-					return !curFilePath.equals(((FileNodeEdit) rootObject).getFilePath());
+				try {
+					m_editTreePanel.updateTreeWithFile(filePath, true);
+				} catch (IOException ioe) {
+		    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 				}
-				return true;
-			}*/
+			}
 		});
-		outputPanel.add(updateButton);
+		buttonPanel.add(updateFilePathButton);
+		
+		JButton resetConfigButton = new JButton("Reset config");
+		resetConfigButton.addActionListener(new ActionListener() {
+			
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				try {
+					m_editTreePanel.updateTreeWithResetConfig();
+				} catch (IOException ioe) {
+		    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+				}
+			}
+		});
+		buttonPanel.add(resetConfigButton);
+		
 		outputPanel.add(m_editTreePanel);
 	}
     
@@ -301,7 +307,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	
     	if (!m_filePathSettings.getStringValue().trim().isEmpty()) {
 			try {
-				m_editTreePanel.updateTreeWithExistingFile(m_filePathSettings.getStringValue());
+				m_editTreePanel.updateTreeWithFile(m_filePathSettings.getStringValue(), false);
 			} catch (IOException ioe) {
 	    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 			}

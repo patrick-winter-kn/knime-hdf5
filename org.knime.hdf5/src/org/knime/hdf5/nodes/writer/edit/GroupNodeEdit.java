@@ -49,7 +49,8 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 	
 	protected GroupNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name, EditAction editAction) {
-		super(inputPathFromFileWithName, parent != null ? parent.getOutputPathFromFileWithName() : null, name, editAction);
+		super(inputPathFromFileWithName, parent != null && !(parent instanceof FileNodeEdit)
+				? parent.getOutputPathFromFileWithName() : "", name, editAction);
 		setTreeNodeMenu(new GroupNodeMenu());
 		if (parent != null) {
 			parent.addGroupNodeEdit(this);
@@ -189,40 +190,46 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	 * so far with overwrite of properties
 	 */
 	void integrate(GroupNodeEdit copyEdit, long inputRowCount) {
-		copyPropertiesFrom(copyEdit);
-		
-		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
-			GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
-			if (groupEdit != null && !copyGroupEdit.getEditAction().isCreateOrCopyAction()) {
-				groupEdit.integrate(copyGroupEdit, inputRowCount);
-			} else {
-				addGroupNodeEdit(copyGroupEdit);
-				copyGroupEdit.addEditToNode(getTreeNode());
+		if (copyEdit.getEditAction() != EditAction.NO_ACTION) {
+			if (!(this instanceof FileNodeEdit)) {
+				copyPropertiesFrom(copyEdit);
 			}
-		}
-		
-		for (DataSetNodeEdit copyDataSetEdit : copyEdit.getDataSetNodeEdits()) {
-			DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
-			if (dataSetEdit != null && !copyDataSetEdit.getEditAction().isCreateOrCopyAction()) {
-				dataSetEdit.integrate(copyDataSetEdit, inputRowCount);
-			} else {
-				addDataSetNodeEdit(copyDataSetEdit);
-				copyDataSetEdit.addEditToNode(getTreeNode());
-				for (ColumnNodeEdit copyColumnEdit : copyDataSetEdit.getColumnNodeEdits()) {
-					if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
-						copyColumnEdit.setInputRowCount(inputRowCount);
+			
+			for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
+				GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
+				if (groupEdit != null && !copyGroupEdit.getEditAction().isCreateOrCopyAction()) {
+					groupEdit.integrate(copyGroupEdit, inputRowCount);
+				} else {
+					addGroupNodeEdit(copyGroupEdit);
+					copyGroupEdit.addEditToNode(getTreeNode());
+				}
+			}
+			
+			for (DataSetNodeEdit copyDataSetEdit : copyEdit.getDataSetNodeEdits()) {
+				DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
+				if (dataSetEdit != null && !copyDataSetEdit.getEditAction().isCreateOrCopyAction()) {
+					dataSetEdit.integrate(copyDataSetEdit, inputRowCount);
+				} else {
+					addDataSetNodeEdit(copyDataSetEdit);
+					copyDataSetEdit.addEditToNode(getTreeNode());
+					for (ColumnNodeEdit copyColumnEdit : copyDataSetEdit.getColumnNodeEdits()) {
+						if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
+							copyColumnEdit.setInputRowCount(inputRowCount);
+						}
 					}
 				}
 			}
-		}
-		
-		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
-			AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
-			if (attributeEdit != null && !copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
-				removeAttributeNodeEdit(attributeEdit);
+			
+			for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
+				if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
+					AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
+					if (attributeEdit != null && !copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
+						removeAttributeNodeEdit(attributeEdit);
+					}
+					addAttributeNodeEdit(copyAttributeEdit);
+					copyAttributeEdit.addEditToNode(getTreeNode());
+				}
 			}
-			addAttributeNodeEdit(copyAttributeEdit);
-			copyAttributeEdit.addEditToNode(getTreeNode());
 		}
 	}
 	

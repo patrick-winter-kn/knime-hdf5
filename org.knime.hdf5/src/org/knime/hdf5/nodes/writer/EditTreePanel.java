@@ -418,22 +418,30 @@ public class EditTreePanel extends JPanel {
 	JTree getTree() {
 		return m_tree;
 	}
-	
-	void updateTreeWithNewFile(String filePath) {
-		FileNodeEdit fileEdit = new FileNodeEdit(filePath);
-		m_editTreeConfig.setFileNodeEdit(fileEdit);
-		fileEdit.setEditAsRootOfTree(m_tree);
-	}
 
-	void updateTreeWithExistingFile(String filePath) throws IOException {
+	void updateTreeWithResetConfig() throws IOException {
+		updateTreeWithFile(m_editTreeConfig.getFileNodeEdit().getFilePath(), false);
+	}
+	
+	void updateTreeWithFile(String filePath, boolean keepConfig) throws IOException {
 		Hdf5File file = null;
+		
 		try {
-			file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-			FileNodeEdit fileEdit = new FileNodeEdit(file);
-			m_editTreeConfig.setFileNodeEdit(fileEdit);
-			fileEdit.setEditAsRootOfTree(m_tree);
-			fileEdit.loadChildrenOfHdfObject();
-			fileEdit.reloadTreeWithEditVisible(true);
+			FileNodeEdit oldFileEdit = m_editTreeConfig.getFileNodeEdit();
+			FileNodeEdit newFileEdit = null;
+			if (Hdf5File.existsFile(filePath) && Hdf5File.hasHdf5FileEnding(filePath)) {
+				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+				newFileEdit = new FileNodeEdit(file);
+			} else {
+				newFileEdit = new FileNodeEdit(filePath);
+			}
+			m_editTreeConfig.setFileNodeEdit(newFileEdit);
+			newFileEdit.setEditAsRootOfTree(m_tree);
+			newFileEdit.loadChildrenOfHdfObject();
+			if (keepConfig && oldFileEdit != null) {
+				newFileEdit.integrate(oldFileEdit, null);
+			}
+			newFileEdit.reloadTreeWithEditVisible(true);
 			
 		} finally {
 			if (file != null) {

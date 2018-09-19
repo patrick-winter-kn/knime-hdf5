@@ -36,6 +36,7 @@ import javax.swing.SpinnerNumberModel;
 import javax.swing.TransferHandler;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.tree.DefaultMutableTreeNode;
 
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataRow;
@@ -108,7 +109,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	}
 	
 	DataSetNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name, EditAction editAction) {
-		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editAction);
+		super(inputPathFromFileWithName, !(parent instanceof FileNodeEdit) ? parent.getOutputPathFromFileWithName() : "", name, editAction);
 		setTreeNodeMenu(new DataSetNodeMenu());
 		m_editDataType.setEndian(Endian.LITTLE_ENDIAN);
 		parent.addDataSetNodeEdit(this);
@@ -218,13 +219,20 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	}
 
 	public void addColumnNodeEdit(ColumnNodeEdit edit) {
-		m_inputType = m_inputType != null && edit.getInputType().getPossiblyConvertibleHdfTypes().contains(m_inputType) ? m_inputType : edit.getInputType();
-		if (!m_inputType.getPossiblyConvertibleHdfTypes().contains(m_editDataType.getOutputType())) {
-			m_editDataType.setOutputType(m_inputType);
-		}
 		m_columnEdits.add(edit);
 		edit.setParent(this);
-		m_inputRowCount = m_inputRowCount == ColumnNodeEdit.UNKNOWN_ROW_COUNT ? edit.getInputRowCount() : m_inputRowCount;
+		considerColumnNodeEdit(edit);
+	}
+	
+	void considerColumnNodeEdit(ColumnNodeEdit edit) {
+		if (edit.getEditAction() != EditAction.DELETE) {
+			m_inputType = m_inputType != null && edit.getInputType().getPossiblyConvertibleHdfTypes().contains(m_inputType) ? m_inputType : edit.getInputType();
+			if (!m_inputType.getPossiblyConvertibleHdfTypes().contains(m_editDataType.getOutputType())) {
+				m_editDataType.setOutputType(m_inputType);
+				setEditAction(EditAction.MODIFY);
+			}
+			m_inputRowCount = m_inputRowCount == ColumnNodeEdit.UNKNOWN_ROW_COUNT ? edit.getInputRowCount() : m_inputRowCount;
+		}
 	}
 
 	public void addAttributeNodeEdit(AttributeNodeEdit edit) {
@@ -279,30 +287,36 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
 		}
-
-		// TODO find better algorithm here
-		for (HdfDataType possibleInputType : HdfDataType.values()) {
-			boolean convertible = true;
-			for (HdfDataType inputType : getColumnInputTypes()) {
-				if (!inputType.getPossiblyConvertibleHdfTypes().contains(possibleInputType)) {
-					convertible = false;
+		disconsiderColumnNodeEdit(edit);
+	}
+	
+	void disconsiderColumnNodeEdit(ColumnNodeEdit edit) {
+		if (edit.getEditAction() != EditAction.DELETE) {
+			// TODO find better algorithm here
+			for (HdfDataType possibleInputType : HdfDataType.values()) {
+				boolean convertible = true;
+				for (HdfDataType inputType : getColumnInputTypes()) {
+					if (!inputType.getPossiblyConvertibleHdfTypes().contains(possibleInputType)) {
+						convertible = false;
+						break;
+					}
+				}
+				if (convertible) {
+					m_inputType = possibleInputType;
 					break;
 				}
 			}
-			if (convertible) {
-				m_inputType = possibleInputType;
-				break;
+			
+			long inputRowCount = ColumnNodeEdit.UNKNOWN_ROW_COUNT;
+			for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
+				if (columnEdit.getEditAction() != EditAction.DELETE && columnEdit != edit
+						&& columnEdit.getInputRowCount() != ColumnNodeEdit.UNKNOWN_ROW_COUNT) {
+					inputRowCount = columnEdit.getInputRowCount();
+					break;
+				}
 			}
+			m_inputRowCount = inputRowCount;
 		}
-		
-		long inputRowCount = ColumnNodeEdit.UNKNOWN_ROW_COUNT;
-		for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
-			if (columnEdit.getInputRowCount() != ColumnNodeEdit.UNKNOWN_ROW_COUNT) {
-				inputRowCount = columnEdit.getInputRowCount();
-				break;
-			}
-		}
-		m_inputRowCount = inputRowCount;
 	}
 	
 	public void removeAttributeNodeEdit(AttributeNodeEdit edit) {
@@ -312,9 +326,17 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		}
 	}
 	
-	private void setColumnEdits(List<ColumnNodeEdit> edits) {
+	private void reorderColumnEdits(List<ColumnNodeEdit> edits) {
+		List<ColumnNodeEdit> newEdits = new ArrayList<>();
+		newEdits.addAll(edits);
+		for (ColumnNodeEdit columnEdit : m_columnEdits) {
+			if (columnEdit.getEditAction() == EditAction.DELETE) {
+				newEdits.add(columnEdit);
+			}
+		}
+		
 		m_columnEdits.clear();
-		m_columnEdits.addAll(edits);
+		m_columnEdits.addAll(newEdits);
 	}
 	
 	private boolean isOneDimensionPossible() {
@@ -331,28 +353,30 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	 * so far with overwrite of properties
 	 */
 	void integrate(DataSetNodeEdit copyEdit, long inputRowCount) {
-		copyPropertiesFrom(copyEdit);
-		
-		m_columnEdits.clear();
-		if (getTreeNode() != null) {
-			getTreeNode().removeAllChildren();
-		}
-		
-		for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
-			addColumnNodeEdit(copyColumnEdit);
-			copyColumnEdit.addEditToNode(getTreeNode());
-			if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
-				copyColumnEdit.setInputRowCount(inputRowCount);
+		if (copyEdit.getEditAction() != EditAction.NO_ACTION) {
+			copyPropertiesFrom(copyEdit);
+			
+			for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
+				columnEdit.removeFromParent();
 			}
-		}
-		
-		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
-			AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
-			if (attributeEdit != null && !attributeEdit.getEditAction().isCreateOrCopyAction() && !copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
-				removeAttributeNodeEdit(attributeEdit);
+			for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
+				addColumnNodeEdit(copyColumnEdit);
+				copyColumnEdit.addEditToNode(getTreeNode());
+				if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
+					copyColumnEdit.setInputRowCount(inputRowCount);
+				}
 			}
-			addAttributeNodeEdit(copyAttributeEdit);
-			copyAttributeEdit.addEditToNode(getTreeNode());
+			
+			for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
+				if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
+					AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
+					if (attributeEdit != null && !attributeEdit.getEditAction().isCreateOrCopyAction() && !copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
+						removeAttributeNodeEdit(attributeEdit);
+					}
+					addAttributeNodeEdit(copyAttributeEdit);
+					copyAttributeEdit.addEditToNode(getTreeNode());
+				}
+			}
 		}
 	}
 	
@@ -893,18 +917,12 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				edit.setOverwritePolicy(m_overwriteYes.isSelected() ? OverwritePolicy.OVERWRITE
 						: (m_overwriteNo.isSelected() ? OverwritePolicy.ABORT : OverwritePolicy.INSERT));
 				
-				List<ColumnNodeEdit> newEdits = new ArrayList<>();
-				newEdits.addAll(Collections.list(((DefaultListModel<ColumnNodeEdit>) m_editList.getModel()).elements()));
-				for (ColumnNodeEdit columnEdit : edit.getColumnNodeEdits()) {
-					if (columnEdit.getEditAction() == EditAction.DELETE) {
-						newEdits.add(columnEdit);
-					}
-				}
-				edit.setColumnEdits(newEdits);
+				reorderColumnEdits(Collections.list(((DefaultListModel<ColumnNodeEdit>) m_editList.getModel()).elements()));
 				
-				edit.getTreeNode().removeAllChildren();
-				for (ColumnNodeEdit columnEdit : edit.getColumnNodeEdits()) {
-					edit.getTreeNode().add(columnEdit.getTreeNode());
+				for (int i = 0; i < edit.getColumnNodeEdits().length; i++) {
+					DefaultMutableTreeNode treeNode = edit.getColumnNodeEdits()[i].getTreeNode();
+					edit.getTreeNode().remove(treeNode);
+					edit.getTreeNode().insert(treeNode, i);
 				}
 				
 				edit.setEditAction(EditAction.MODIFY);

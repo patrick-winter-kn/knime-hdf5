@@ -98,10 +98,9 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 	
 	AttributeNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name, HdfDataType inputType, EditAction editAction) {
-		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editAction);
+		super(inputPathFromFileWithName, !(parent instanceof FileNodeEdit) ? parent.getOutputPathFromFileWithName() : "", name, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
-		// TODO test if this really works
 		m_possibleOutputTypes = m_inputType.getPossiblyConvertibleHdfTypes();
 		parent.addAttributeNodeEdit(this);
 	}
@@ -110,7 +109,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
-		// TODO test if this really works
 		m_possibleOutputTypes = m_inputType.getPossiblyConvertibleHdfTypes();
 		parent.addAttributeNodeEdit(this);
 	}
@@ -120,12 +118,9 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 	
 	private void updatePropertiesFromFlowVariable(FlowVariable var) {
-		// TODO maybe work directly with HdfDataType for inputType
-		Hdf5KnimeDataType knimeType = Hdf5KnimeDataType.getKnimeDataType(var.getType());
 		Object[] values = Hdf5Attribute.getFlowVariableValues(var);
-		knimeType = Hdf5KnimeDataType.getKnimeDataType(values);
-		m_inputType = knimeType.getEquivalentHdfType();
-		m_possibleOutputTypes = HdfDataType.getConvertibleTypes(var);
+		m_inputType = Hdf5KnimeDataType.getKnimeDataType(values).getEquivalentHdfType();
+		m_possibleOutputTypes = HdfDataType.getConvertibleTypes(m_inputType, values);
 		m_totalStringLength = var.getValueAsString().length();
 		
 		for (Object value : values) {

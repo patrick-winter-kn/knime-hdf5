@@ -12,7 +12,6 @@ import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
 import org.knime.core.data.def.LongCell;
 import org.knime.core.node.NodeLogger;
-import org.knime.core.node.workflow.FlowVariable;
 import org.knime.core.node.workflow.FlowVariable.Type;
 import org.knime.hdf5.lib.Hdf5Attribute;
 
@@ -75,11 +74,6 @@ public class Hdf5HdfDataType {
 			default:
 				return STRING;
 			}
-		}
-
-		public static List<HdfDataType> getConvertibleTypes(FlowVariable flowVariable) {
-			return getConvertibleTypes(HdfDataType.getHdfDataType(flowVariable.getType()),
-					Hdf5Attribute.getFlowVariableValues(flowVariable));
 		}
 
 		public static List<HdfDataType> getConvertibleTypes(Hdf5Attribute<?> attribute) {
@@ -224,11 +218,15 @@ public class Hdf5HdfDataType {
 				double min = getMin();
 				double max = getMax();
 				for (Object value : values) {
-					double number = ((Number) value).doubleValue();
-					
-					if (Double.compare(number, min) < 0 || Double.compare(number, max) > 0) {
-						return false;
+					try {
+						double number = ((Number) value).doubleValue();
+						if (Double.compare(number, min) < 0 || Double.compare(number, max) > 0) {
+							return false;
+						}
+					} catch (Exception e) {
+						getMin();
 					}
+					
 				}
 			} else {
 				boolean autoStringLength = stringLength == AUTO_STRING_LENGTH;

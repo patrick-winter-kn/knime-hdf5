@@ -247,11 +247,13 @@ public abstract class TreeNodeEdit {
 		if (m_parent != parent) {
 			if (m_parent != null && parent == null) {
 				m_parent.updateInvalidMap(this, null);
-				boolean removeModifyChildrenProperty = true;
-				for (TreeNodeEdit sibling : m_parent.getAllChildren()) {
-					if (sibling != this && sibling.getEditAction() != EditAction.NO_ACTION) {
-						removeModifyChildrenProperty = false;
-						break;
+				boolean removeModifyChildrenProperty = m_parent.getEditAction() == EditAction.MODIFY_CHILDREN_ONLY;
+				if (removeModifyChildrenProperty) {
+					for (TreeNodeEdit sibling : m_parent.getAllChildren()) {
+						if (sibling != this && sibling.getEditAction() != EditAction.NO_ACTION) {
+							removeModifyChildrenProperty = false;
+							break;
+						}
 					}
 				}
 				if (removeModifyChildrenProperty) {
@@ -415,7 +417,7 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public String getOutputPathFromFileWithName() {
-		return (m_outputPathFromFile != null ? m_outputPathFromFile + "/" : "") + m_name;
+		return (!m_outputPathFromFile.isEmpty() ? m_outputPathFromFile + "/" : "") + m_name;
 	}
 
 	public void reloadTreeWithEditVisible() {
@@ -484,19 +486,19 @@ public abstract class TreeNodeEdit {
 				m_treeNode = new DefaultMutableTreeNode(this);
 			}
 			
-			if (this instanceof ColumnNodeEdit) {
-				parentNode.add(m_treeNode);
-			} else {
-				Enumeration<DefaultMutableTreeNode> enumeration = parentNode.children();
-				DefaultMutableTreeNode[] siblings = Collections.list(enumeration).toArray(new DefaultMutableTreeNode[0]);
-				int insert;
-				for (insert = 0; insert < siblings.length; insert++) {
-					TreeNodeEdit edit = (TreeNodeEdit) siblings[insert].getUserObject();
-					if (TreeNodeEditComparator.compareProperties(this, edit) < 0) {
-						break;
-					}
+			Enumeration<DefaultMutableTreeNode> enumeration = parentNode.children();
+			DefaultMutableTreeNode[] siblings = Collections.list(enumeration).toArray(new DefaultMutableTreeNode[0]);
+			int insert;
+			for (insert = 0; insert < siblings.length; insert++) {
+				TreeNodeEdit edit = (TreeNodeEdit) siblings[insert].getUserObject();
+				if (TreeNodeEditComparator.compareProperties(this, edit) < 0) {
+					break;
 				}
+			}
+			try {
 				parentNode.insert(m_treeNode, insert);
+			} catch (Exception e) {
+				getEditAction();
 			}
 			
 			for (TreeNodeEdit edit : getAllChildren()) {
@@ -643,9 +645,8 @@ public abstract class TreeNodeEdit {
 		private static int compareProperties(TreeNodeEdit o1, TreeNodeEdit o2) {
 			int compare = Integer.compare(getClassValue(o1), getClassValue(o2));
 			if (o1 instanceof ColumnNodeEdit && o2 instanceof ColumnNodeEdit) {
-				compare = compare == 0 ? ((o1.getEditAction() == EditAction.DELETE) == (o2.getEditAction() == EditAction.DELETE) ? 0
-						: (o1.getEditAction() == EditAction.DELETE ? 1 : -1)) : compare;
-				return compare == 0 ? Integer.compare(((ColumnNodeEdit) o1).getInputColumnIndex(), ((ColumnNodeEdit) o2).getInputColumnIndex()) : compare;
+				return (o1.getEditAction() == EditAction.DELETE) == (o2.getEditAction() == EditAction.DELETE) ? 0
+						: (o1.getEditAction() == EditAction.DELETE ? 1 : -1);
 			} else {
 				return compare == 0 ? o1.getName().compareTo(o2.getName()) : compare;
 			}

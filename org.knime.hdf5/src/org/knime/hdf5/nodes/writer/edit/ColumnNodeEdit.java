@@ -103,6 +103,17 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	public String getToolTipText() {
 		return "(" + m_inputType.toString() + ") " + super.getToolTipText();
 	}
+	
+	@Override
+	void setDeletion(boolean isDelete) {
+		if (isDelete) {
+			((DataSetNodeEdit) getParent()).disconsiderColumnNodeEdit(this);
+		}
+		super.setDeletion(isDelete);
+		if (!isDelete) {
+			((DataSetNodeEdit) getParent()).considerColumnNodeEdit(this);
+		}
+	}
 
 	@Override
 	protected TreeNodeEdit[] getAllChildren() {
