@@ -21,6 +21,7 @@ import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
+import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
 import hdf.hdf5lib.exceptions.HDF5Exception;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
@@ -237,11 +238,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         return memSpaceId;
 	}
 	
-	public boolean writeRow(Type[] dataIn, long rowIndex, Rounding rounding) {
+	public boolean writeRow(Type[] dataIn, long rowIndex, Rounding rounding) throws HDF5DataspaceInterfaceException {
 		return writeRows(dataIn, rowIndex, rowIndex + 1, rounding);
 	}
 
-	private boolean writeRows(Type[] dataIn, long fromRowIndex, long toRowIndex, Rounding rounding) {
+	private boolean writeRows(Type[] dataIn, long fromRowIndex, long toRowIndex, Rounding rounding) throws HDF5DataspaceInterfaceException {
     	long[] offset = new long[m_dimensions.length];
 		long[] count = m_dimensions.clone();
 		if (m_dimensions.length > 0) {
@@ -252,13 +253,13 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
     	return write(dataIn, offset, count, rounding);
 	}
 	
-	public boolean writeColumn(Type[] dataIn, long[] colOffset, Rounding rounding) {
+	public boolean writeColumn(Type[] dataIn, long[] colOffset, Rounding rounding) throws HDF5DataspaceInterfaceException {
 		long[] count = new long[m_dimensions.length > 0 ? m_dimensions.length-1 : 0];
 		Arrays.fill(count, 1);
 		return writeColumns(dataIn, colOffset, count, rounding);
 	}
 	
-	private boolean writeColumns(Type[] dataIn, long[] colOffset, long[] colCount, Rounding rounding) {
+	private boolean writeColumns(Type[] dataIn, long[] colOffset, long[] colCount, Rounding rounding) throws HDF5DataspaceInterfaceException {
     	long[] offset = new long[m_dimensions.length];
 		long[] count = m_dimensions.clone();
 		for (int i = 1; i < offset.length; i++) {
@@ -270,7 +271,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public boolean write(Type[] dataIn, long[] offset, long[] count, Rounding rounding) {
+	public boolean write(Type[] dataIn, long[] offset, long[] count, Rounding rounding) throws HDF5DataspaceInterfaceException {
+		checkDimensions(offset, count);
+		
 		try {
 	        if (isOpen()) {
 	        	long memSpaceId = selectChunk(offset, count);
@@ -322,7 +325,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowIndex, Type[] copyValues, Rounding rounding) throws UnsupportedDataTypeException {
+	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowIndex, Type[] copyValues, Rounding rounding) throws HDF5DataspaceInterfaceException, UnsupportedDataTypeException {
 		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfColumns());
 		
 		int copyIndex = 0;
@@ -381,11 +384,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		throw new UnsupportedDataTypeException("Unsupported combination of dataCellDataType and knimeDataType while reading from dataCell");
 	}
 	
-	public Type[] readRow(long rowIndex) {
+	public Type[] readRow(long rowIndex) throws HDF5DataspaceInterfaceException {
 		return readRows(rowIndex, rowIndex + 1);
 	}
 
-	private Type[] readRows(long fromRowIndex, long toRowIndex) {
+	private Type[] readRows(long fromRowIndex, long toRowIndex) throws HDF5DataspaceInterfaceException {
     	long[] offset = new long[m_dimensions.length];
 		long[] count = m_dimensions.clone();
 		if (m_dimensions.length > 0) {
@@ -396,13 +399,13 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
     	return read(offset, count);
 	}
 	
-	public Type[] readColumn(long[] colOffset) {
+	public Type[] readColumn(long[] colOffset) throws HDF5DataspaceInterfaceException {
 		long[] colCount = new long[m_dimensions.length > 0 ? m_dimensions.length-1 : 0];
 		Arrays.fill(colCount, 1);
 		return readColumns(colOffset, colCount);
 	}
 	
-	private Type[] readColumns(long[] colOffset, long[] colCount) {
+	private Type[] readColumns(long[] colOffset, long[] colCount) throws HDF5DataspaceInterfaceException {
     	long[] offset = new long[m_dimensions.length];
 		long[] count = m_dimensions.clone();
 		for (int i = 1; i < offset.length; i++) {
@@ -414,7 +417,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	public Type[] read(long[] offset, long[] count) throws IllegalStateException {
+	public Type[] read(long[] offset, long[] count) throws IllegalStateException, HDF5DataspaceInterfaceException {
+		checkDimensions(offset, count);
+		
 		Type[] dataOut = null;
 		
 		try {
@@ -478,7 +483,20 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return dataOut;
 	}
 	
-	public void extendRow(List<DataCell> row, long rowIndex) throws UnsupportedDataTypeException {
+	private boolean checkDimensions(long[] offset, long[] count) throws HDF5DataspaceInterfaceException {
+		if (m_dimensions.length != offset.length || offset.length != count.length) {
+			throw new HDF5DataspaceInterfaceException("offset or count has wrong number of dimensions");
+		}
+		for (int i = 0; i < m_dimensions.length; i++) {
+			if (offset[i] < 0 || count[i] < 0 || offset[i] + count[i] > m_dimensions[i]) {
+				throw new HDF5DataspaceInterfaceException("offset or count is out of range");
+			}
+		}
+		
+		return true;
+	}
+	
+	public void extendRow(List<DataCell> row, long rowIndex) throws HDF5DataspaceInterfaceException, UnsupportedDataTypeException {
 		long rowNum = numberOfRows();
 		int colNum = (int) numberOfColumns();
 		

@@ -35,9 +35,9 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		this(parent, null, name, EditAction.CREATE);
 	}
 	
-	private GroupNodeEdit(GroupNodeEdit parent, GroupNodeEdit copyGroup) {
-		this(parent, copyGroup.getInputPathFromFileWithName(), copyGroup.getName(),
-				copyGroup.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
+	private GroupNodeEdit(GroupNodeEdit parent, GroupNodeEdit copyGroup, boolean noAction) {
+		this(parent, copyGroup.getInputPathFromFileWithName(), copyGroup.getName(), noAction ? EditAction.NO_ACTION
+				: (copyGroup.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY));
 		if (getEditAction() == EditAction.COPY) {
 			copyGroup.addIncompleteCopy(this);
 		}
@@ -57,19 +57,26 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		}
 	}
 	
-	public GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent) {
-		GroupNodeEdit newGroupEdit = new GroupNodeEdit(parent, this);
+	public GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent, boolean cloneOnlyWithoutChildren) {
+		GroupNodeEdit newGroupEdit = new GroupNodeEdit(parent, this, cloneOnlyWithoutChildren);
+		newGroupEdit.addEditToParentNode();
 		
 		for (GroupNodeEdit groupEdit : getGroupNodeEdits()) {
-			groupEdit.copyGroupEditTo(newGroupEdit);
+			if (!cloneOnlyWithoutChildren || groupEdit.getEditAction().isCreateOrCopyAction()) {
+				groupEdit.copyGroupEditTo(newGroupEdit, false);
+			}
 		}
 		
 		for (DataSetNodeEdit dataSetEdit : getDataSetNodeEdits()) {
-			dataSetEdit.copyDataSetEditTo(newGroupEdit);
+			if (!cloneOnlyWithoutChildren || dataSetEdit.getEditAction().isCreateOrCopyAction()) {
+				dataSetEdit.copyDataSetEditTo(newGroupEdit, false);
+			}
 		}
 		
 		for (AttributeNodeEdit attributeEdit : getAttributeNodeEdits()) {
-			attributeEdit.copyAttributeEditTo(newGroupEdit);
+			if (!cloneOnlyWithoutChildren || attributeEdit.getEditAction().isCreateOrCopyAction()) {
+				attributeEdit.copyAttributeEditTo(newGroupEdit, false);
+			}
 		}
 		
 		return newGroupEdit;
@@ -190,28 +197,28 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	 * so far with overwrite of properties
 	 */
 	void integrate(GroupNodeEdit copyEdit, long inputRowCount) {
-		if (copyEdit.getEditAction() != EditAction.NO_ACTION) {
-			if (!(this instanceof FileNodeEdit)) {
-				copyPropertiesFrom(copyEdit);
-			}
-			
-			for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
+		if (!(this instanceof FileNodeEdit) && copyEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
+			copyPropertiesFrom(copyEdit);
+		}
+		
+		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
+			if (copyGroupEdit.getEditAction() != EditAction.NO_ACTION) {
 				GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
 				if (groupEdit != null && !copyGroupEdit.getEditAction().isCreateOrCopyAction()) {
 					groupEdit.integrate(copyGroupEdit, inputRowCount);
 				} else {
-					addGroupNodeEdit(copyGroupEdit);
-					copyGroupEdit.addEditToNode(getTreeNode());
+					copyGroupEdit.copyGroupEditTo(this, !copyGroupEdit.getEditAction().isCreateOrCopyAction());
 				}
 			}
-			
-			for (DataSetNodeEdit copyDataSetEdit : copyEdit.getDataSetNodeEdits()) {
+		}
+		
+		for (DataSetNodeEdit copyDataSetEdit : copyEdit.getDataSetNodeEdits()) {
+			if (copyDataSetEdit.getEditAction() != EditAction.NO_ACTION) {
 				DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
 				if (dataSetEdit != null && !copyDataSetEdit.getEditAction().isCreateOrCopyAction()) {
 					dataSetEdit.integrate(copyDataSetEdit, inputRowCount);
 				} else {
-					addDataSetNodeEdit(copyDataSetEdit);
-					copyDataSetEdit.addEditToNode(getTreeNode());
+					copyDataSetEdit.copyDataSetEditTo(this, !copyDataSetEdit.getEditAction().isCreateOrCopyAction());
 					for (ColumnNodeEdit copyColumnEdit : copyDataSetEdit.getColumnNodeEdits()) {
 						if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
 							copyColumnEdit.setInputRowCount(inputRowCount);
@@ -219,16 +226,15 @@ public class GroupNodeEdit extends TreeNodeEdit {
 					}
 				}
 			}
-			
-			for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
-				if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
-					AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
-					if (attributeEdit != null && !copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
-						removeAttributeNodeEdit(attributeEdit);
-					}
-					addAttributeNodeEdit(copyAttributeEdit);
-					copyAttributeEdit.addEditToNode(getTreeNode());
+		}
+		
+		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
+			if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
+				AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
+				if (attributeEdit != null && !copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
+					removeAttributeNodeEdit(attributeEdit);
 				}
+				copyAttributeEdit.copyAttributeEditTo(this, !copyAttributeEdit.getEditAction().isCreateOrCopyAction());
 			}
 		}
 	}
@@ -335,7 +341,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
     		for (String groupName : group.loadGroupNames()) {
     			Hdf5Group child = group.getGroup(groupName);
     			GroupNodeEdit childEdit = new GroupNodeEdit(this, child);
-    			childEdit.addEditToNode(m_treeNode);
+    			childEdit.addEditToParentNode();
     			childEdit.loadChildrenOfHdfObject();
     		}
     		
@@ -343,7 +349,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
     			Hdf5DataSet<?> child = group.updateDataSet(dataSetName);
     			if (child.getDimensions().length <= 2) {
         			DataSetNodeEdit childEdit = new DataSetNodeEdit(this, child);
-        			childEdit.addEditToNode(m_treeNode);
+        			childEdit.addEditToParentNode();
         			childEdit.loadChildrenOfHdfObject();
     			} else {
     				NodeLogger.getLogger(getClass()).warn("DataSet \"" + child.getPathFromFileWithName()
@@ -354,7 +360,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
     		for (String attributeName : group.loadAttributeNames()) {
     			Hdf5Attribute<?> child = group.updateAttribute(attributeName);
     			AttributeNodeEdit childEdit = new AttributeNodeEdit(this, child);
-    			childEdit.addEditToNode(m_treeNode);
+    			childEdit.addEditToParentNode();
     		}
     	} catch (NullPointerException npe) {
     		throw new IOException(npe.getMessage());
@@ -461,7 +467,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			GroupNodeEdit edit = GroupNodeEdit.this;
 			String newName = getUniqueName(edit.getTreeNode(), "group");
 			GroupNodeEdit newEdit = new GroupNodeEdit(edit, newName);
-            newEdit.addEditToNode(edit.getTreeNode());
+            newEdit.addEditToParentNode();
             newEdit.reloadTreeWithEditVisible();
 		}
 

@@ -53,9 +53,9 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		updatePropertiesFromFlowVariable(var);
 	}
 
-	private AttributeNodeEdit(TreeNodeEdit parent, AttributeNodeEdit copyAttribute) {
+	private AttributeNodeEdit(TreeNodeEdit parent, AttributeNodeEdit copyAttribute, boolean noAction) {
 		this(parent, copyAttribute.getInputPathFromFileWithName(), copyAttribute.getName(), copyAttribute.getInputType(),
-				copyAttribute.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
+				noAction ? EditAction.NO_ACTION : (copyAttribute.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY));
 		copyAdditionalPropertiesFrom(copyAttribute);
 		if (getEditAction() == EditAction.COPY) {
 			copyAttribute.addIncompleteCopy(this);
@@ -82,7 +82,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 
 	private AttributeNodeEdit(TreeNodeEdit parent, String inputPathFromFileWithName, String name, HdfDataType inputType, EditAction editAction) {
-		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editAction);
+		super(inputPathFromFileWithName, !(parent instanceof FileNodeEdit) ? parent.getOutputPathFromFileWithName() : "", name, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
 		if (parent instanceof GroupNodeEdit) {
@@ -113,8 +113,11 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		parent.addAttributeNodeEdit(this);
 	}
 	
-	public AttributeNodeEdit copyAttributeEditTo(TreeNodeEdit parent) {
-		return new AttributeNodeEdit(parent, this);
+	public AttributeNodeEdit copyAttributeEditTo(TreeNodeEdit parent, boolean cloneOnlyWithoutChildren) {
+		AttributeNodeEdit newAttributeEdit = new AttributeNodeEdit(parent, this, cloneOnlyWithoutChildren);
+		newAttributeEdit.addEditToParentNode();
+		
+		return newAttributeEdit;
 	}
 	
 	private void updatePropertiesFromFlowVariable(FlowVariable var) {

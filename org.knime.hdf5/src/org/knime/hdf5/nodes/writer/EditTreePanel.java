@@ -251,20 +251,20 @@ public class EditTreePanel extends JPanel {
                 	if (!(parentEdit instanceof DataSetNodeEdit)) {
                 		String newName = TreeNodeEdit.getUniqueName(parentEdit.getTreeNode(), "dataSet");
             			DataSetNodeEdit newEdit = new DataSetNodeEdit((GroupNodeEdit) parentEdit, newName);
-                    	newEdit.addEditToNode(parentEdit.getTreeNode());
+                    	newEdit.addEditToParentNode();
                     	parentEdit = newEdit;
                 	}
 
                 	for (int i = 0; i < data.size(); i++) {
                 		DataColumnSpec spec = (DataColumnSpec) data.get(i);
                 		ColumnNodeEdit newEdit = new ColumnNodeEdit((DataSetNodeEdit) parentEdit, spec);
-                    	newEdit.addEditToNode(parentEdit.getTreeNode());
+                    	newEdit.addEditToParentNode();
                 	}
                 } else if (data.get(0) instanceof FlowVariable) {
                     for (int i = 0; i < data.size(); i++) {
                     	FlowVariable var = (FlowVariable) data.get(i);
                     	AttributeNodeEdit newEdit = new AttributeNodeEdit((TreeNodeEdit) parentEdit, var);
-                    	newEdit.addEditToNode(parentEdit.getTreeNode());
+                    	newEdit.addEditToParentNode();
                 	}
                 }
 				
@@ -283,79 +283,78 @@ public class EditTreePanel extends JPanel {
     					if (parentEdit instanceof GroupNodeEdit) {
     						GroupNodeEdit parentGroupEdit = (GroupNodeEdit) parentEdit;
     						if (copyEdit instanceof GroupNodeEdit) {
-    							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo(parentGroupEdit);
+    							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo(parentGroupEdit, false);
     							
     						} else if (copyEdit instanceof DataSetNodeEdit) {
-    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo(parentGroupEdit);
+    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo(parentGroupEdit, false);
     							
     						} else if (copyEdit instanceof ColumnNodeEdit) {
     							String newName = TreeNodeEdit.getUniqueName(parent, "dataSet");
     	            			DataSetNodeEdit newDataSetEdit = new DataSetNodeEdit(parentGroupEdit, newName);
-    	            			newDataSetEdit.addEditToNode(parent);
-    							newEdit = ((ColumnNodeEdit) copyEdit).copyColumnEditTo((DataSetNodeEdit) newDataSetEdit);
+    	            			newDataSetEdit.addEditToParentNode();
+    							newEdit = ((ColumnNodeEdit) copyEdit).copyColumnEditTo((DataSetNodeEdit) newDataSetEdit, false);
     							
     						} else if (copyEdit instanceof AttributeNodeEdit) {
-    							newEdit = ((AttributeNodeEdit) copyEdit).copyAttributeEditTo(parentGroupEdit);
+    							newEdit = ((AttributeNodeEdit) copyEdit).copyAttributeEditTo(parentGroupEdit, false);
     						}
                 		} else if (parentEdit instanceof DataSetNodeEdit) {
                 			DataSetNodeEdit parentDataSetEdit = (DataSetNodeEdit) parentEdit;
                 			if (copyEdit instanceof GroupNodeEdit) {
-    							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo((GroupNodeEdit) parentDataSetEdit.getParent());
+    							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo((GroupNodeEdit) parentDataSetEdit.getParent(), false);
     							
     						} else if (copyEdit instanceof DataSetNodeEdit) {
-    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo((GroupNodeEdit) parentDataSetEdit.getParent());
+    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo((GroupNodeEdit) parentDataSetEdit.getParent(), false);
     							
     						} else if (copyEdit instanceof ColumnNodeEdit) {
-    							newEdit = ((ColumnNodeEdit) copyEdit).copyColumnEditTo((DataSetNodeEdit) parentDataSetEdit);
+    							newEdit = ((ColumnNodeEdit) copyEdit).copyColumnEditTo((DataSetNodeEdit) parentDataSetEdit, false);
     							
     						} else if (copyEdit instanceof AttributeNodeEdit) {
-    							newEdit = ((AttributeNodeEdit) copyEdit).copyAttributeEditTo(parentDataSetEdit);
+    							newEdit = ((AttributeNodeEdit) copyEdit).copyAttributeEditTo(parentDataSetEdit, false);
     						} 
                 		} else if (parentEdit instanceof AttributeNodeEdit) {
                 			AttributeNodeEdit parentAttributeEdit = (AttributeNodeEdit) parentEdit;
 							TreeNodeEdit grandParentEdit = parentAttributeEdit.getParent();
                 			if (copyEdit instanceof GroupNodeEdit) {
                 				if (grandParentEdit instanceof GroupNodeEdit) {
-        							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo((GroupNodeEdit) grandParentEdit);
+        							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo((GroupNodeEdit) grandParentEdit, false);
                 				} else {
-        							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo((GroupNodeEdit) grandParentEdit.getParent());
+        							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo((GroupNodeEdit) grandParentEdit.getParent(), false);
                 				}
     							
     						} else if (copyEdit instanceof DataSetNodeEdit) {
 	            				if (grandParentEdit instanceof GroupNodeEdit) {
-	    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo((GroupNodeEdit) grandParentEdit);
+	    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo((GroupNodeEdit) grandParentEdit, false);
 	            				} else {
-	    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo((GroupNodeEdit) grandParentEdit.getParent());
+	    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo((GroupNodeEdit) grandParentEdit.getParent(), false);
 	            				}
     							
     						} else if (copyEdit instanceof ColumnNodeEdit) {
 	            				if (grandParentEdit instanceof DataSetNodeEdit) {
-	    							newEdit = ((ColumnNodeEdit) copyEdit).copyColumnEditTo((DataSetNodeEdit) grandParentEdit);
+	    							newEdit = ((ColumnNodeEdit) copyEdit).copyColumnEditTo((DataSetNodeEdit) grandParentEdit, false);
 	            				} else {
 	    							throw new IllegalStateException("There is no dataSet for this column to be added in");
 	            				}
     							
     						} else if (copyEdit instanceof AttributeNodeEdit) {
-    							newEdit = ((AttributeNodeEdit) copyEdit).copyAttributeEditTo(grandParentEdit);
+    							newEdit = ((AttributeNodeEdit) copyEdit).copyAttributeEditTo(grandParentEdit, false);
     						} 
                 		} else if (parentEdit instanceof ColumnNodeEdit) {
                 			ColumnNodeEdit parentColumnEdit = (ColumnNodeEdit) parentEdit;
 							TreeNodeEdit grandParentEdit = parentColumnEdit.getParent();
                 			if (copyEdit instanceof GroupNodeEdit) {
-    							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo((GroupNodeEdit) grandParentEdit.getParent());
+    							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo((GroupNodeEdit) grandParentEdit.getParent(), false);
     							
     						} else if (copyEdit instanceof DataSetNodeEdit) {
-    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo((GroupNodeEdit) grandParentEdit.getParent());
+    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo((GroupNodeEdit) grandParentEdit.getParent(), false);
     							
     						} else if (copyEdit instanceof ColumnNodeEdit) {
-    							newEdit = ((ColumnNodeEdit) copyEdit).copyColumnEditTo((DataSetNodeEdit) grandParentEdit);
+    							newEdit = ((ColumnNodeEdit) copyEdit).copyColumnEditTo((DataSetNodeEdit) grandParentEdit, false);
     							
     						} else if (copyEdit instanceof AttributeNodeEdit) {
-    							newEdit = ((AttributeNodeEdit) copyEdit).copyAttributeEditTo(grandParentEdit);
+    							newEdit = ((AttributeNodeEdit) copyEdit).copyAttributeEditTo(grandParentEdit, false);
     						} 
                 		}
     					parent = newEdit.getParent().getTreeNode();
-    					newEdit.addEditToNode(parent);
     				}
             	} catch (IllegalStateException ise) {
             		NodeLogger.getLogger(getClass()).warn(ise.getMessage());

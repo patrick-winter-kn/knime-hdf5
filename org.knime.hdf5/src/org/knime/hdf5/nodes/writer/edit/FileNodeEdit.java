@@ -110,13 +110,9 @@ public class FileNodeEdit extends GroupNodeEdit {
         return edit;
 	}
 	
-	public void integrate(GroupNodeEdit copyEdit, BufferedDataTable inputTable) {
-		if (copyEdit instanceof FileNodeEdit) {
-			super.integrate(copyEdit, inputTable != null ? inputTable.size() : ColumnNodeEdit.UNKNOWN_ROW_COUNT);
-			validate(inputTable);
-		} else {
-			throw new IllegalStateException("Cannot integrate group (which is not a file) in a file");
-		}
+	public void integrate(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
+		super.integrate(copyEdit, inputTable != null ? inputTable.size() : ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+		validate(inputTable);
 	}
 
 	@Override
@@ -134,7 +130,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	@Override
-	public void addEditToNode(DefaultMutableTreeNode parentNode) {
+	public void addEditToParentNode() {
 		// not needed here; instead use setEditAsRootOfTree[JTree]
 	}
 	

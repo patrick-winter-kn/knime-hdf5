@@ -457,7 +457,7 @@ public abstract class TreeNodeEdit {
     		removeFromParent();
     		
     	} else {
-    		m_editAction = isDelete ? EditAction.DELETE : (this instanceof ColumnNodeEdit ? EditAction.NO_ACTION : EditAction.MODIFY);
+    		m_editAction = isDelete ? EditAction.DELETE : EditAction.MODIFY;
     		updateParentEditAction();
     		m_treeNodeMenu.updateDeleteItemText();
     	}
@@ -480,8 +480,9 @@ public abstract class TreeNodeEdit {
 	protected abstract void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException;
 
 	@SuppressWarnings("unchecked")
-	public void addEditToNode(DefaultMutableTreeNode parentNode) {
-		if (parentNode != null) {
+	public void addEditToParentNode() {
+		DefaultMutableTreeNode parentNode = getParent().getTreeNode();
+		if (parentNode != null && !parentNode.isNodeChild(m_treeNode)) {
 			if (m_treeNode == null) {
 				m_treeNode = new DefaultMutableTreeNode(this);
 			}
@@ -503,7 +504,7 @@ public abstract class TreeNodeEdit {
 			}
 			
 			for (TreeNodeEdit edit : getAllChildren()) {
-		        edit.addEditToNode(m_treeNode);
+		        edit.addEditToParentNode();
 			}
 		}
 	}
@@ -512,7 +513,7 @@ public abstract class TreeNodeEdit {
 		InvalidCause cause = validateEditInternal(inputTable);
 		
 		if (m_parent != null) {
-			cause = cause == null && (m_parent.getEditAction() == EditAction.DELETE && m_editAction != EditAction.DELETE) ? InvalidCause.PARENT_DELETE : cause;
+			cause = cause == null && m_parent.getEditAction() == EditAction.DELETE && m_editAction != EditAction.DELETE ? InvalidCause.PARENT_DELETE : cause;
 			
 			if (cause == null) {
 				for (TreeNodeEdit edit : m_parent.getAllChildren()) {

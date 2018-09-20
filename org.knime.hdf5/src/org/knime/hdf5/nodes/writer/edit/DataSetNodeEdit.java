@@ -59,6 +59,8 @@ import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.nodes.writer.edit.EditDataType.DataTypeChooser;
 import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
+import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
+
 public class DataSetNodeEdit extends TreeNodeEdit {
 
 	private static final String COLUMN_PROPERTY_NAMES = "knime.columnnames";
@@ -87,9 +89,9 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		this(parent, null, name, EditAction.CREATE);
 	}
 	
-	private DataSetNodeEdit(GroupNodeEdit parent, DataSetNodeEdit copyDataSet) {
-		this(parent, copyDataSet.getInputPathFromFileWithName(), copyDataSet.getName(),
-				copyDataSet.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
+	private DataSetNodeEdit(GroupNodeEdit parent, DataSetNodeEdit copyDataSet, boolean noAction) {
+		this(parent, copyDataSet.getInputPathFromFileWithName(), copyDataSet.getName(), noAction ? EditAction.NO_ACTION
+				: (copyDataSet.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY));
 		copyAdditionalPropertiesFrom(copyDataSet);
 		if (getEditAction() == EditAction.COPY) {
 			copyDataSet.addIncompleteCopy(this);
@@ -115,15 +117,20 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		parent.addDataSetNodeEdit(this);
 	}
 	
-	public DataSetNodeEdit copyDataSetEditTo(GroupNodeEdit parent) {
-		DataSetNodeEdit newDataSetEdit = new DataSetNodeEdit(parent, this);
+	public DataSetNodeEdit copyDataSetEditTo(GroupNodeEdit parent, boolean cloneOnlyWithoutChildren) {
+		DataSetNodeEdit newDataSetEdit = new DataSetNodeEdit(parent, this, cloneOnlyWithoutChildren);
+		newDataSetEdit.addEditToParentNode();
 
 		for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
-			columnEdit.copyColumnEditTo(newDataSetEdit);
+			if (!cloneOnlyWithoutChildren || columnEdit.getEditAction().isCreateOrCopyAction()) {
+				columnEdit.copyColumnEditTo(newDataSetEdit, false);
+			}
 		}
 		
 		for (AttributeNodeEdit attributeEdit : getAttributeNodeEdits()) {
-			attributeEdit.copyAttributeEditTo(newDataSetEdit);
+			if (!cloneOnlyWithoutChildren || attributeEdit.getEditAction().isCreateOrCopyAction()) {
+				attributeEdit.copyAttributeEditTo(newDataSetEdit, false);
+			}
 		}
 		
 		return newDataSetEdit;
@@ -328,7 +335,12 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	private void reorderColumnEdits(List<ColumnNodeEdit> edits) {
 		List<ColumnNodeEdit> newEdits = new ArrayList<>();
-		newEdits.addAll(edits);
+		for (ColumnNodeEdit columnEdit : edits) {
+			newEdits.add(columnEdit);
+			if (columnEdit != m_columnEdits.get(newEdits.size()-1)) {
+				columnEdit.setEditAction(EditAction.MODIFY);
+			}
+		}
 		for (ColumnNodeEdit columnEdit : m_columnEdits) {
 			if (columnEdit.getEditAction() == EditAction.DELETE) {
 				newEdits.add(columnEdit);
@@ -353,29 +365,33 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	 * so far with overwrite of properties
 	 */
 	void integrate(DataSetNodeEdit copyEdit, long inputRowCount) {
-		if (copyEdit.getEditAction() != EditAction.NO_ACTION) {
+		if (copyEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
 			copyPropertiesFrom(copyEdit);
-			
-			for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
-				columnEdit.removeFromParent();
-			}
-			for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
-				addColumnNodeEdit(copyColumnEdit);
-				copyColumnEdit.addEditToNode(getTreeNode());
+		}
+		
+		// TODO changing the order of the columns is not supported yet
+		for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
+			if (copyColumnEdit.getEditAction().isCreateOrCopyAction()) {
+				copyColumnEdit.copyColumnEditTo(this, false);
 				if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
 					copyColumnEdit.setInputRowCount(inputRowCount);
 				}
-			}
-			
-			for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
-				if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
-					AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
-					if (attributeEdit != null && !attributeEdit.getEditAction().isCreateOrCopyAction() && !copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
-						removeAttributeNodeEdit(attributeEdit);
-					}
-					addAttributeNodeEdit(copyAttributeEdit);
-					copyAttributeEdit.addEditToNode(getTreeNode());
+			} else {
+				ColumnNodeEdit columnEdit = getColumnNodeEdit(copyColumnEdit.getInputPathFromFileWithName(), copyColumnEdit.getInputColumnIndex());
+				if (columnEdit != null && copyColumnEdit.getEditAction() != EditAction.NO_ACTION) {
+					removeColumnNodeEdit(columnEdit);
+					copyColumnEdit.copyColumnEditTo(this, !columnEdit.getEditAction().isCreateOrCopyAction());
 				}
+			}
+		}
+		
+		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
+			if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
+				AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
+				if (attributeEdit != null && !copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
+					removeAttributeNodeEdit(attributeEdit);
+				}
+				copyAttributeEdit.copyAttributeEditTo(this, !copyAttributeEdit.getEditAction().isCreateOrCopyAction());
 			}
 		}
 	}
@@ -496,11 +512,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			int colCount = (int) dataSet.getDimensions()[1];
 			for (int i = 0; i < colCount; i++) {
 				ColumnNodeEdit columnEdit = new ColumnNodeEdit(this, i, "col" + (i+1), dataType, rowCount);
-				columnEdit.addEditToNode(m_treeNode);
+				columnEdit.addEditToParentNode();
 			}
 		} else if (dataSet.getDimensions().length < 2) {
 			ColumnNodeEdit columnEdit = new ColumnNodeEdit(this, 0, "col", dataType, rowCount);
-			columnEdit.addEditToNode(m_treeNode);
+			columnEdit.addEditToParentNode();
 			
 		} else {
 			NodeLogger.getLogger(getClass()).warn("DataSet \"" + dataSet.getPathFromFileWithName()
@@ -511,7 +527,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
     		for (String attributeName : dataSet.loadAttributeNames()) {
     			Hdf5Attribute<?> child = dataSet.updateAttribute(attributeName);
     			AttributeNodeEdit childEdit = new AttributeNodeEdit(this, child);
-    			childEdit.addEditToNode(m_treeNode);
+    			childEdit.addEditToParentNode();
     		}
     	} catch (NullPointerException npe) {
     		throw new IOException(npe.getMessage());
@@ -541,7 +557,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			ColumnNodeEdit edit = getColumnNodeEdits()[i];
 			if (edit.getEditAction() == EditAction.CREATE) {
 				specIndices[i] = tableSpec.findColumnIndex(edit.getName());
-			} else if (edit.getEditAction() == EditAction.COPY) {
+			} else {
 				specIndices[i] = -1;
 				copyColumnEditList.add(edit);
 			}
@@ -586,8 +602,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 					
 					success &= dataSet.writeRowToDataSet(row, specIndices, rowIndex, copyValues, m_editDataType.getRounding());
 				}
-			} catch (UnsupportedDataTypeException udte) {
-				NodeLogger.getLogger(getClass()).error(udte.getMessage(), udte);
+			} catch (HDF5DataspaceInterfaceException | UnsupportedDataTypeException hdiudte) {
+				NodeLogger.getLogger(getClass()).error(hdiudte.getMessage(), hdiudte);
 			}
 			
 			if (iter != null) {

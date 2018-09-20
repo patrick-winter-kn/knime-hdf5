@@ -25,6 +25,8 @@ import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
+import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
+
 public class ColumnNodeEdit extends TreeNodeEdit {
 
 	public static final long UNKNOWN_ROW_COUNT = -1;
@@ -37,10 +39,10 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	private long m_inputRowCount;
 	
-	private ColumnNodeEdit(DataSetNodeEdit parent, ColumnNodeEdit copyColumn) {
+	private ColumnNodeEdit(DataSetNodeEdit parent, ColumnNodeEdit copyColumn, boolean noAction) {
 		this(parent, copyColumn.getInputPathFromFileWithName(), copyColumn.getInputColumnIndex(),
-				copyColumn.getName(), copyColumn.getInputType(), copyColumn.getInputRowCount(),
-				copyColumn.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
+				copyColumn.getName(), copyColumn.getInputType(), copyColumn.getInputRowCount(), noAction ? EditAction.NO_ACTION
+				: (copyColumn.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY));
 		copyAdditionalPropertiesFrom(copyColumn);
 		if (getEditAction() == EditAction.COPY) {
 			copyColumn.getParent().addIncompleteCopy(parent);
@@ -69,8 +71,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		parent.addColumnNodeEdit(this);
 	}
 	
-	public ColumnNodeEdit copyColumnEditTo(DataSetNodeEdit parent) {
-		return new ColumnNodeEdit(parent, this);
+	public ColumnNodeEdit copyColumnEditTo(DataSetNodeEdit parent, boolean cloneOnlyWithoutChildren) {
+		ColumnNodeEdit newColumnEdit = new ColumnNodeEdit(parent, this, cloneOnlyWithoutChildren);
+		newColumnEdit.addEditToParentNode();
+		
+		return newColumnEdit;
 	}
 	
 	int getInputColumnIndex() {
@@ -174,12 +179,12 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 						// only supported for dataSets with max. 2 dimensions
 						values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
 						
-					} catch (IOException ioe) {
+					} catch (IOException | HDF5DataspaceInterfaceException ioe) {
 						cause = cause == null ? InvalidCause.NO_HDF_OBJECT : cause;
 					}
 				}
 				
-				if (values != null) {
+				if (values != null && cause == null) {
 					EditDataType parentDataType = parent.getEditDataType();
 					Integer stringLength = parentDataType.isFixed() ? parentDataType.getStringLength() : HdfDataType.AUTO_STRING_LENGTH;
 					cause = cause == null && !parentDataType.getOutputType().areValuesConvertible(values, m_inputType, stringLength) ? InvalidCause.DATA_TYPE : cause;
