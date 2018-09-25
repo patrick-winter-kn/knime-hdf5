@@ -1,6 +1,5 @@
 package org.knime.hdf5.nodes.writer.edit;
 
-import java.awt.Dimension;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -113,8 +112,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		parent.addAttributeNodeEdit(this);
 	}
 	
-	public AttributeNodeEdit copyAttributeEditTo(TreeNodeEdit parent, boolean cloneOnlyWithoutChildren) {
-		AttributeNodeEdit newAttributeEdit = new AttributeNodeEdit(parent, this, cloneOnlyWithoutChildren);
+	public AttributeNodeEdit copyAttributeEditTo(TreeNodeEdit parent, boolean copyWithoutChildren) {
+		AttributeNodeEdit newAttributeEdit = new AttributeNodeEdit(parent, this, copyWithoutChildren);
 		newAttributeEdit.addEditToParentNode();
 		
 		return newAttributeEdit;
@@ -417,14 +416,13 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			private static final long serialVersionUID = 9201153080744087510L;
 	    	
 			private JTextField m_nameField = new JTextField(15);
-			private DataTypeChooser m_dataTypeChooser = m_editDataType.new DataTypeChooser();
+			private DataTypeChooser m_dataTypeChooser = m_editDataType.new DataTypeChooser(false);
 			private JCheckBox m_compoundAsArrayField = new JCheckBox();
 			private JRadioButton m_overwriteNo = new JRadioButton("no");
 			private JRadioButton m_overwriteYes = new JRadioButton("yes");
 			
 			private AttributePropertiesDialog() {
 				super(AttributeNodeMenu.this, "Attribute properties");
-				setMinimumSize(new Dimension(450, 300));
 
 				addProperty("Name: ", m_nameField);
 				m_dataTypeChooser.addToPropertiesDialog(this);
@@ -451,6 +449,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				overwriteField.add(m_overwriteYes);
 				overwriteGroup.add(m_overwriteYes);
 				addProperty("Overwrite: ", overwriteField);
+				
+				pack();
 			}
 			
 			@Override

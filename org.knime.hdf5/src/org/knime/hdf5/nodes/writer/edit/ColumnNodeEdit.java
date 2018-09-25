@@ -71,8 +71,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		parent.addColumnNodeEdit(this);
 	}
 	
-	public ColumnNodeEdit copyColumnEditTo(DataSetNodeEdit parent, boolean cloneOnlyWithoutChildren) {
-		ColumnNodeEdit newColumnEdit = new ColumnNodeEdit(parent, this, cloneOnlyWithoutChildren);
+	public ColumnNodeEdit copyColumnEditTo(DataSetNodeEdit parent, boolean copyWithoutChildren) {
+		ColumnNodeEdit newColumnEdit = new ColumnNodeEdit(parent, this, copyWithoutChildren);
 		newColumnEdit.addEditToParentNode();
 		
 		return newColumnEdit;
@@ -161,17 +161,27 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 						DataTableSpec tableSpec = inputTable.getDataTableSpec();
 						int columnIndex = tableSpec.findColumnIndex(getInputPathFromFileWithName());
 						values = Hdf5KnimeDataType.getKnimeDataType(tableSpec.getColumnSpec(columnIndex).getType()).createArray((int) inputTable.size());
+						Object standardValue = ((DataSetNodeEdit) getParent()).getEditDataType().getStandardValue();
 						CloseableRowIterator iter = inputTable.iterator();
 						int rowIndex = 0;
 						while (iter.hasNext()) {
 							DataRow row = iter.next();
-							DataCell cell = row.getCell(columnIndex);
-							values[rowIndex] = getValueFromDataCell(cell);
+							Object value = getValueFromDataCell(row.getCell(columnIndex));
+							if (value == null) {
+								if (standardValue != null) {
+									value = standardValue;
+								} else {
+									cause = cause == null ? InvalidCause.MISSING_VALUES : cause;
+									break;
+								}
+							}
+							values[rowIndex] = value;
 							rowIndex++;
 						}
 					} catch (UnsupportedDataTypeException udte) {
 						NodeLogger.getLogger(getClass()).error("Validation of dataType of new column \""
 								+ getOutputPathFromFileWithName() +  "\" could not be checked: " + udte.getMessage(), udte);
+						values = null;
 					}
 				} else {
 					try {
@@ -206,6 +216,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 			return (Long) ((LongCell) dataCell).getLongValue();
 		} else if (type.equals(DoubleCell.TYPE)) {	
 			return (Double) ((DoubleCell) dataCell).getDoubleValue();
+		} else if (dataCell.isMissing()) {
+			return null;
 		} else {
 			return dataCell.toString();
 		}

@@ -1,5 +1,6 @@
 package org.knime.hdf5.nodes.writer.edit;
 
+import java.awt.BorderLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
@@ -16,6 +17,7 @@ import javax.swing.JComboBox;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JSpinner;
+import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -69,6 +71,8 @@ public class EditDataType {
 	
 	private int m_stringLength;
 	
+	private Object m_standardValue;
+	
 	public HdfDataType getOutputType() {
 		return m_outputType;
 	}
@@ -89,7 +93,7 @@ public class EditDataType {
 		return m_rounding;
 	}
 
-	void setRounding(Rounding rounding) {
+	private void setRounding(Rounding rounding) {
 		m_rounding = rounding;
 	}
 
@@ -97,7 +101,7 @@ public class EditDataType {
 		return m_fixed;
 	}
 
-	void setFixed(boolean fixed) {
+	private void setFixed(boolean fixed) {
 		m_fixed = fixed;
 	}
 
@@ -108,17 +112,31 @@ public class EditDataType {
 	void setStringLength(int stringLength) {
 		m_stringLength = stringLength;
 	}
+	
+	public Object getStandardValue() {
+		return m_standardValue;
+	}
+	
+	private void setStandardValue(Object standardValue) {
+		m_standardValue = standardValue;
+	}
 
 	void setValues(EditDataType editDataType) {
-		setValues(editDataType.getOutputType(), editDataType.getEndian(), editDataType.getRounding(), editDataType.isFixed(), editDataType.getStringLength());
+		setValues(editDataType.getOutputType(), editDataType.getEndian(), editDataType.getRounding(),
+				editDataType.isFixed(), editDataType.getStringLength(), editDataType.getStandardValue());
 	}
 	
 	void setValues(HdfDataType outputType, Endian endian, Rounding rounding, boolean fixed, int stringLength) {
+		setValues(outputType, endian, rounding, fixed, stringLength, null);
+	}
+	
+	private void setValues(HdfDataType outputType, Endian endian, Rounding rounding, boolean fixed, int stringLength, Object standardValue) {
 		setOutputType(outputType);
 		setEndian(endian);
 		setRounding(rounding);
 		setFixed(fixed);
 		setStringLength(stringLength);
+		setStandardValue(standardValue);
 	}
 	
 	void saveSettingsTo(NodeSettingsWO settings) {
@@ -127,6 +145,7 @@ public class EditDataType {
 		settings.addInt(SettingsKey.ROUNDING.getKey(), m_rounding.ordinal());
 		settings.addBoolean(SettingsKey.FIXED.getKey(), m_fixed);
 		settings.addInt(SettingsKey.STRING_LENGTH.getKey(), m_stringLength);
+		settings.addString(SettingsKey.STANDARD_VALUE.getKey(), m_standardValue != null ? m_standardValue.toString() : null);
 	}
 
 	void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException {
@@ -135,6 +154,19 @@ public class EditDataType {
 		setRounding(Rounding.values()[settings.getInt(SettingsKey.ROUNDING.getKey())]);
 		setFixed(settings.getBoolean(SettingsKey.FIXED.getKey()));
 		setStringLength(settings.getInt(SettingsKey.STRING_LENGTH.getKey()));
+		
+		String standardValueString = settings.getString(SettingsKey.STANDARD_VALUE.getKey());
+		Object standardValue = null;
+		if (standardValueString != null) {
+			if (!m_outputType.isNumber()) {
+				standardValue = standardValueString;
+			} else if (m_outputType.isFloat()) {
+				standardValue = Double.parseDouble(standardValueString);
+			} else {
+				standardValue = Long.parseLong(standardValueString);
+			}
+		}
+		setStandardValue(standardValue);
 	}
 	
 	protected class DataTypeChooser {
@@ -144,14 +176,20 @@ public class EditDataType {
 		private JComboBox<Endian> m_endianField = new JComboBox<>(Endian.values());
 		private JComboBox<Rounding> m_roundingField = new JComboBox<>(Rounding.values());
 		private JPanel m_stringLengthField = new JPanel();
+		private JCheckBox m_standardValueCheckBox;
+		private JPanel m_standardValueField = new JPanel(new BorderLayout());
 		
 		private JRadioButton m_stringLengthAuto = new JRadioButton("auto");
 		private JRadioButton m_stringLengthFixed = new JRadioButton("fixed");
 		private JSpinner m_stringLengthSpinner = new JSpinner(new SpinnerNumberModel(0, 0, Integer.MAX_VALUE, 1));
+		private JSpinner m_standardValueIntSpinner = new JSpinner(new SpinnerNumberModel(0L, Long.MIN_VALUE, Long.MAX_VALUE, 1L));
+		private JSpinner m_standardValueFloatSpinner = new JSpinner(new SpinnerNumberModel(0.0, null, null, 0.1));
+		private JTextField m_standardValueStringTextField = new JTextField(15);
 		
 		private boolean m_roundingEnabled;
+		private final boolean m_standardValueEnabled;
 		
-		protected DataTypeChooser() {
+		protected DataTypeChooser(boolean standardValueEnabled) {
 			m_typeField.addActionListener(new ActionListener() {
 				
 				@Override
@@ -185,6 +223,14 @@ public class EditDataType {
 					m_stringLengthSpinner.setEnabled(m_stringLengthFixed.isSelected());
 				}
 			});
+			
+			m_standardValueEnabled = standardValueEnabled;
+			if (m_standardValueEnabled) {
+				m_standardValueField.add(m_standardValueIntSpinner, BorderLayout.NORTH);
+				m_standardValueField.add(m_standardValueFloatSpinner, BorderLayout.CENTER);
+				m_standardValueFloatSpinner.setEditor(new JSpinner.NumberEditor(m_standardValueFloatSpinner, "0.0##"));
+				m_standardValueField.add(m_standardValueStringTextField, BorderLayout.SOUTH);
+			}
 		}
 		
 		private void setSelectableFieldsEnabled() {
@@ -196,12 +242,27 @@ public class EditDataType {
 				m_unsignedField.setSelected(possibleSigns == Sign.UNSIGNED.value());
 			}
 			m_roundingField.setEnabled(m_roundingEnabled && selectedType.isNumber() && !selectedType.isFloat());
-			
+
 			boolean isString = selectedType == HdfDataType.STRING;
 			m_endianField.setEnabled(!isString);
 			m_stringLengthAuto.setEnabled(isString);
 			m_stringLengthFixed.setEnabled(isString);
 			m_stringLengthSpinner.setEnabled(isString && m_stringLengthFixed.isSelected());
+			
+			if (m_standardValueEnabled) {
+				boolean isFloat = selectedType.isFloat();
+				boolean isInteger = selectedType.isNumber() && !isFloat;
+				m_standardValueIntSpinner.setVisible(isInteger);
+				m_standardValueFloatSpinner.setVisible(isFloat);
+				m_standardValueStringTextField.setVisible(isString);
+				enableStandardValueField(m_standardValueCheckBox.isSelected());
+			}
+		}
+		
+		private void enableStandardValueField(boolean selected) {
+			m_standardValueIntSpinner.setEnabled(selected);
+			m_standardValueFloatSpinner.setEnabled(selected);
+			m_standardValueStringTextField.setEnabled(selected);
 		}
 		
 		void setOnlyStringSelectable(boolean onlyString, int stringLength) {
@@ -220,6 +281,15 @@ public class EditDataType {
 			dialog.addProperty("Endian: ", m_endianField);
 			dialog.addProperty("Rounding: ", m_roundingField);
 			dialog.addProperty("String length: ", m_stringLengthField);
+			if (m_standardValueEnabled) {
+				m_standardValueCheckBox = dialog.addProperty("Standard value for missing values: ", m_standardValueField, new ChangeListener() {
+
+					@Override
+					public void stateChanged(ChangeEvent e) {
+						enableStandardValueField(m_standardValueCheckBox.isSelected());
+					};
+				});
+			}
 		}
 		
 		void loadFromDataType(List<HdfDataType> possibleHdfTypes, boolean roundingEnabled) {
@@ -241,14 +311,35 @@ public class EditDataType {
 			m_stringLengthFixed.setSelected(isFixed());
 			m_stringLengthSpinner.setValue(getStringLength());
 			
+			if (m_standardValueEnabled && m_standardValue != null) {
+				boolean isString = m_outputType == HdfDataType.STRING;
+				boolean isFloat = m_outputType.isFloat();
+				boolean isInteger = m_outputType.isNumber() && !isFloat;
+				
+				m_standardValueStringTextField.setText(isString ? (String) m_standardValue : "");
+				m_standardValueFloatSpinner.setValue(isFloat ? (Double) m_standardValue : 0.0);
+				m_standardValueIntSpinner.setValue(isInteger ? (Long) m_standardValue : 0L);
+			}
+			
 			m_roundingEnabled = roundingEnabled;
 			setSelectableFieldsEnabled();
 		}
 		
 		void saveToDataType() {
+			Object standardValue = null;
+			if (m_standardValueEnabled && m_standardValueCheckBox.isSelected()) {
+				if (!m_outputType.isNumber()) {
+					standardValue = m_standardValueStringTextField.getText();
+				} else if (m_outputType.isFloat()) {
+					standardValue = (Double) m_standardValueFloatSpinner.getValue();
+				} else {
+					standardValue = (Long) m_standardValueIntSpinner.getValue();
+				}
+			}
+			
 			setValues(HdfDataType.get(((HdfDataType) m_typeField.getSelectedItem()).getTypeId() + (m_unsignedField.isSelected() ? 1 : 0)),
 					(Endian) m_endianField.getSelectedItem(), (Rounding) m_roundingField.getSelectedItem(), m_stringLengthFixed.isSelected(),
-					(Integer) m_stringLengthSpinner.getValue());
+					(Integer) m_stringLengthSpinner.getValue(), standardValue);
 		}
 	}
 }

@@ -229,7 +229,14 @@ public class HDF5ReaderNodeModel extends NodeModel {
 					rowSizes.get(rowCount).add(dataSetPath);
 				}
 				if (rowSizes.size() > 1) {
-					throw new InvalidSettingsException("Found unequal row sizes " + rowSizes);
+					String message = "Found unequal row sizes:";
+					for (long rowCount : rowSizes.keySet()) {
+						message += "\n" + rowCount + " rows:";
+						for (String dataSetPath : rowSizes.get(rowCount)) {
+							message += "\n- " + dataSetPath;
+						}
+					}
+					throw new InvalidSettingsException(message);
 				}
 			}
 		} finally {

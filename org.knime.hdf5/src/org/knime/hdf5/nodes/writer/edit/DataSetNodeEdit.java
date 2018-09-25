@@ -117,18 +117,18 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		parent.addDataSetNodeEdit(this);
 	}
 	
-	public DataSetNodeEdit copyDataSetEditTo(GroupNodeEdit parent, boolean cloneOnlyWithoutChildren) {
-		DataSetNodeEdit newDataSetEdit = new DataSetNodeEdit(parent, this, cloneOnlyWithoutChildren);
+	public DataSetNodeEdit copyDataSetEditTo(GroupNodeEdit parent, boolean copyWithoutChildren) {
+		DataSetNodeEdit newDataSetEdit = new DataSetNodeEdit(parent, this, copyWithoutChildren);
 		newDataSetEdit.addEditToParentNode();
 
 		for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
-			if (!cloneOnlyWithoutChildren || columnEdit.getEditAction().isCreateOrCopyAction()) {
+			if (!copyWithoutChildren || columnEdit.getEditAction().isCreateOrCopyAction()) {
 				columnEdit.copyColumnEditTo(newDataSetEdit, false);
 			}
 		}
 		
 		for (AttributeNodeEdit attributeEdit : getAttributeNodeEdits()) {
-			if (!cloneOnlyWithoutChildren || attributeEdit.getEditAction().isCreateOrCopyAction()) {
+			if (!copyWithoutChildren || attributeEdit.getEditAction().isCreateOrCopyAction()) {
 				attributeEdit.copyAttributeEditTo(newDataSetEdit, false);
 			}
 		}
@@ -439,7 +439,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		settings.addInt(SettingsKey.NUMBER_OF_DIMENSIONS.getKey(), m_numberOfDimensions);
 		settings.addInt(SettingsKey.COMPRESSION.getKey(), m_compressionLevel);
 		settings.addInt(SettingsKey.CHUNK_ROW_SIZE.getKey(), m_chunkRowSize);
-		settings.addString(SettingsKey.OVERWRITE_POLICY.getKey(), m_overwritePolicy.getName());
+		settings.addInt(SettingsKey.OVERWRITE_POLICY.getKey(), m_overwritePolicy.ordinal());
 		
 	    NodeSettingsWO columnSettings = settings.addNodeSettings(SettingsKey.COLUMNS.getKey());
 	    NodeSettingsWO attributeSettings = settings.addNodeSettings(SettingsKey.ATTRIBUTES.getKey());
@@ -475,7 +475,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		setNumberOfDimensions(settings.getInt(SettingsKey.NUMBER_OF_DIMENSIONS.getKey()));
 		setCompressionLevel(settings.getInt(SettingsKey.COMPRESSION.getKey()));
 		setChunkRowSize(settings.getInt(SettingsKey.CHUNK_ROW_SIZE.getKey()));
-		setOverwritePolicy(OverwritePolicy.get(settings.getString(SettingsKey.OVERWRITE_POLICY.getKey())));
+		setOverwritePolicy(OverwritePolicy.values()[settings.getInt(SettingsKey.OVERWRITE_POLICY.getKey())]);
 		
 		NodeSettingsRO columnSettings = settings.getNodeSettings("columns");
 		Enumeration<NodeSettingsRO> columnEnum = columnSettings.children();
@@ -600,7 +600,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 						copyValues[i] = copyDataSets[i].readRow(rowIndex)[copyColumnEdits[i].getInputColumnIndex()];
 					}
 					
-					success &= dataSet.writeRowToDataSet(row, specIndices, rowIndex, copyValues, m_editDataType.getRounding());
+					success &= dataSet.writeRowToDataSet(row, specIndices, rowIndex, copyValues, m_editDataType.getRounding(), m_editDataType.getStandardValue());
 				}
 			} catch (HDF5DataspaceInterfaceException | UnsupportedDataTypeException hdiudte) {
 				NodeLogger.getLogger(getClass()).error(hdiudte.getMessage(), hdiudte);
@@ -722,7 +722,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			private static final long serialVersionUID = -9060929832634560737L;
 
 			private JTextField m_nameField = new JTextField(15);
-			private DataTypeChooser m_dataTypeChooser = m_editDataType.new DataTypeChooser();
+			private DataTypeChooser m_dataTypeChooser = m_editDataType.new DataTypeChooser(true);
 			private JCheckBox m_useOneDimensionField = new JCheckBox();
 			private JCheckBox m_compressionCheckBox;
 			private JSpinner m_compressionField = new JSpinner(new SpinnerNumberModel(0, 0, 9, 1));
@@ -730,11 +730,10 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			private JRadioButton m_overwriteNo = new JRadioButton("no");
 			private JRadioButton m_overwriteYes = new JRadioButton("yes");
 			private JRadioButton m_overwriteInsert = new JRadioButton("insert");
-			private JList<ColumnNodeEdit> m_editList = new JList<>(new DefaultListModel<>());
+			private JList<ColumnNodeEdit> m_columnList = new JList<>(new DefaultListModel<>());
 	    	
 			private DataSetPropertiesDialog() {
 				super(DataSetNodeMenu.this, "DataSet properties");
-				setMinimumSize(new Dimension(450, 500));
 
 				addProperty("Name: ", m_nameField);
 				m_dataTypeChooser.addToPropertiesDialog(this);
@@ -745,7 +744,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 
 					@Override
 					public void stateChanged(ChangeEvent e) {
-						boolean selected = ((JCheckBox) e.getSource()).isSelected();
+						boolean selected = m_compressionCheckBox.isSelected();
 						m_compressionField.setEnabled(selected);
 						m_chunkField.setEnabled(selected);
 					}
@@ -764,14 +763,14 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				overwriteGroup.add(m_overwriteInsert);
 				addProperty("Overwrite: ", overwriteField);
 				
-				DefaultListModel<ColumnNodeEdit> editModel = (DefaultListModel<ColumnNodeEdit>) m_editList.getModel();
+				DefaultListModel<ColumnNodeEdit> editModel = (DefaultListModel<ColumnNodeEdit>) m_columnList.getModel();
 				editModel.clear();
 				for (ColumnNodeEdit edit : getColumnNodeEdits()) {
 					editModel.addElement(edit);
 				}
 				
-				m_editList.setVisibleRowCount(-1);
-				m_editList.setCellRenderer(new DefaultListCellRenderer() {
+				m_columnList.setVisibleRowCount(-1);
+				m_columnList.setCellRenderer(new DefaultListCellRenderer() {
 
 					private static final long serialVersionUID = -3499393207598804129L;
 
@@ -799,8 +798,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 					}
 				});
 				
-				m_editList.setDragEnabled(true);
-				m_editList.setTransferHandler(new TransferHandler() {
+				m_columnList.setDragEnabled(true);
+				m_columnList.setTransferHandler(new TransferHandler() {
 
 					private static final long serialVersionUID = 1192996062714565516L;
 					
@@ -841,14 +840,14 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		                	index += startIndex > index ? 0 : transferableCount;
 		                	editModel.remove(index);
 		                }
-		                m_editList.setModel(editModel);
+		                m_columnList.setModel(editModel);
 		                
 		                return true;
 		            }
 				});
-				m_editList.setDropMode(DropMode.INSERT);
+				m_columnList.setDropMode(DropMode.INSERT);
 				
-				m_editList.addMouseListener(new MouseAdapter() {
+				m_columnList.addMouseListener(new MouseAdapter() {
 					
 		    		@Override
 		    		public void mousePressed(MouseEvent e) {
@@ -865,11 +864,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		    		}
 		    		
 		    		private void createMenu(MouseEvent e) {
-		    			if (m_editList.getModel().getSize() > 1) {
-		    				int index = m_editList.locationToIndex(e.getPoint());
-			    			ColumnNodeEdit edit = m_editList.getModel().getElementAt(index);
+		    			if (m_columnList.getModel().getSize() > 1) {
+		    				int index = m_columnList.locationToIndex(e.getPoint());
+			    			ColumnNodeEdit edit = m_columnList.getModel().getElementAt(index);
 							if (edit != null) {
-								m_editList.setSelectedIndex(index);
+								m_columnList.setSelectedIndex(index);
 								JPopupMenu menu = new JPopupMenu();
 								JMenuItem itemDelete = new JMenuItem("Delete");
 				    			itemDelete.addActionListener(new ActionListener() {
@@ -880,8 +879,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 												"Are you sure to delete this column", "Warning", JOptionPane.YES_NO_OPTION);
 										if (dialogResult == JOptionPane.YES_OPTION){
 											edit.setDeletion(true);
-											((DefaultListModel<ColumnNodeEdit>) m_editList.getModel()).remove(index);
-											if (m_editList.getModel().getSize() == 1) {
+											((DefaultListModel<ColumnNodeEdit>) m_columnList.getModel()).remove(index);
+											if (m_columnList.getModel().getSize() == 1) {
 												m_useOneDimensionField.setEnabled(true);
 											}
 										}
@@ -894,8 +893,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		    		}
 				});
 				
-				final JScrollPane jsp = new JScrollPane(m_editList);
+				final JScrollPane jsp = new JScrollPane(m_columnList);
+				jsp.setPreferredSize(new Dimension(0, 100));
 				addProperty("Columns: ", jsp, 1.0);
+				
+				pack();
 			}
 			
 			@Override
@@ -911,9 +913,9 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				m_chunkField.setValue(edit.getChunkRowSize());
 				m_overwriteNo.setSelected(edit.getOverwritePolicy() == OverwritePolicy.ABORT);
 				m_overwriteYes.setSelected(edit.getOverwritePolicy() == OverwritePolicy.OVERWRITE);
-				m_overwriteInsert.setSelected(edit.getOverwritePolicy() == OverwritePolicy.INSERT);
+				m_overwriteInsert.setSelected(edit.getOverwritePolicy() == OverwritePolicy.INTEGRATE);
 				
-				DefaultListModel<ColumnNodeEdit> columnModel = (DefaultListModel<ColumnNodeEdit>) m_editList.getModel();
+				DefaultListModel<ColumnNodeEdit> columnModel = (DefaultListModel<ColumnNodeEdit>) m_columnList.getModel();
 				columnModel.clear();
 				for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
 					if (columnEdit.getEditAction() != EditAction.DELETE) {
@@ -931,9 +933,9 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				edit.setCompressionLevel(m_compressionField.isEnabled() ? (Integer) m_compressionField.getValue() : 0);
 				edit.setChunkRowSize(m_compressionField.isEnabled() ? (Integer) m_chunkField.getValue() : 1);
 				edit.setOverwritePolicy(m_overwriteYes.isSelected() ? OverwritePolicy.OVERWRITE
-						: (m_overwriteNo.isSelected() ? OverwritePolicy.ABORT : OverwritePolicy.INSERT));
+						: (m_overwriteNo.isSelected() ? OverwritePolicy.ABORT : OverwritePolicy.INTEGRATE));
 				
-				reorderColumnEdits(Collections.list(((DefaultListModel<ColumnNodeEdit>) m_editList.getModel()).elements()));
+				reorderColumnEdits(Collections.list(((DefaultListModel<ColumnNodeEdit>) m_columnList.getModel()).elements()));
 				
 				for (int i = 0; i < edit.getColumnNodeEdits().length; i++) {
 					DefaultMutableTreeNode treeNode = edit.getColumnNodeEdits()[i].getTreeNode();

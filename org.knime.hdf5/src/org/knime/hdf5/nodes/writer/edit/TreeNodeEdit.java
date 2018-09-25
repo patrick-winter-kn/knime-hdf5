@@ -55,6 +55,7 @@ public abstract class TreeNodeEdit {
 		ROUNDING("rounding"),
 		FIXED("fixed"),
 		STRING_LENGTH("stringLength"),
+		STANDARD_VALUE("standardValue"),
 		COMPOUND_AS_ARRAY_POSSIBLE("compoundAsArrayPossible"),
 		COMPOUND_AS_ARRAY_USED("compoundAsArrayUsed"),
 		COMPOUND_ITEM_STRING_LENGTH("compoundItemStringLength"),
@@ -125,11 +126,11 @@ public abstract class TreeNodeEdit {
 		FILE_ALREADY_EXISTS("file already exists"),
 		NAME_DUPLICATE("name duplicate"),
 		NO_HDF_OBJECT("no hdf object available"),
-		NO_COPY_EDIT("no source available to copy from"),
 		PARENT_DELETE("parent is getting deleted so this also has to be deleted"),
 		NAME_CHARS("name contains invalid characters"),
 		ROW_COUNT("dataSet has unequal row sizes"),
-		DATA_TYPE("some values do not fit into data type");
+		DATA_TYPE("some values do not fit into data type"),
+		MISSING_VALUES("there are some missing values");
 
 		private String m_message;
 
@@ -787,8 +788,6 @@ public abstract class TreeNodeEdit {
 				}
 			});
 			buttonPanel.add(cancelButton);
-
-//			m_contentPanel.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Color.BLUE), m_contentPanel.getBorder()));
 		}
 
 		protected JCheckBox addProperty(String description, JComponent component, ChangeListener checkBoxListener, double weighty) {

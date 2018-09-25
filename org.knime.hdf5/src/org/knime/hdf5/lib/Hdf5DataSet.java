@@ -325,12 +325,13 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowIndex, Type[] copyValues, Rounding rounding) throws HDF5DataspaceInterfaceException, UnsupportedDataTypeException {
+	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowIndex, Type[] copyValues, Rounding rounding, Type standardValue) throws HDF5DataspaceInterfaceException, UnsupportedDataTypeException {
 		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfColumns());
 		
 		int copyIndex = 0;
 		for (int i = 0; i < dataIn.length; i++) {
-			dataIn[i] = specIndices[i] >= 0 ? getValueFromDataCell(row.getCell(specIndices[i])) : copyValues[copyIndex++];
+			Type value = specIndices[i] >= 0 ? getValueFromDataCell(row.getCell(specIndices[i])) : copyValues[copyIndex++];
+			dataIn[i] = value == null ? standardValue : value;
 		}
 		
 		return writeRow(dataIn, rowIndex, rounding);
@@ -341,32 +342,32 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		DataType type = dataCell.getType();
 		switch (getType().getKnimeType()) {
 		case INTEGER:
-			if (type.equals(IntCell.TYPE)) {	
+			if (type.equals(IntCell.TYPE)) {
 				return (Type) (Integer) ((IntCell) dataCell).getIntValue();
 			}
 			break;
 		case LONG:
-			if (type.equals(IntCell.TYPE)) {	
+			if (type.equals(IntCell.TYPE)) {
 				return (Type) (Long) (long) ((IntCell) dataCell).getIntValue();
-			} else if (type.equals(LongCell.TYPE)) {	
+			} else if (type.equals(LongCell.TYPE)) {
 				return (Type) (Long) ((LongCell) dataCell).getLongValue();
 			} 
 			break;
 		case DOUBLE:
-			if (type.equals(IntCell.TYPE)) {	
+			if (type.equals(IntCell.TYPE)) {
 				return (Type) (Double) (double) ((IntCell) dataCell).getIntValue();
-			} else if (type.equals(LongCell.TYPE)) {	
+			} else if (type.equals(LongCell.TYPE)) {
 				return (Type) (Double) (double) ((LongCell) dataCell).getLongValue();
-			} else if (type.equals(DoubleCell.TYPE)) {	
+			} else if (type.equals(DoubleCell.TYPE)) {
 				return (Type) (Double) ((DoubleCell) dataCell).getDoubleValue();
 			}
 			break;
 		case STRING:
-			if (type.equals(IntCell.TYPE)) {	
+			if (type.equals(IntCell.TYPE)) {
 				return (Type) ("" + ((IntCell) dataCell).getIntValue());
-			} else if (type.equals(LongCell.TYPE)) {	
+			} else if (type.equals(LongCell.TYPE)) {
 				return (Type) ("" + ((LongCell) dataCell).getLongValue());
-			} else if (type.equals(DoubleCell.TYPE)) {	
+			} else if (type.equals(DoubleCell.TYPE)) {
 				return (Type) ("" + ((DoubleCell) dataCell).getDoubleValue());
 			} else if (type.equals(StringCell.TYPE)) {
 				return (Type) ((StringCell) dataCell).getStringValue();
@@ -378,7 +379,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		}
 		
 		if (dataCell instanceof MissingCell) {
-			throw new UnsupportedDataTypeException("Cannot find value from MissingCell");
+			return null;
 		}
 		
 		throw new UnsupportedDataTypeException("Unsupported combination of dataCellDataType and knimeDataType while reading from dataCell");

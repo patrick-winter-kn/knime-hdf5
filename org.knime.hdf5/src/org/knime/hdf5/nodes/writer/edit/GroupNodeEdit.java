@@ -1,7 +1,6 @@
 package org.knime.hdf5.nodes.writer.edit;
 
 import java.awt.BorderLayout;
-import java.awt.Dimension;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -57,24 +56,24 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		}
 	}
 	
-	public GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent, boolean cloneOnlyWithoutChildren) {
-		GroupNodeEdit newGroupEdit = new GroupNodeEdit(parent, this, cloneOnlyWithoutChildren);
+	public GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent, boolean copyWithoutChildren) {
+		GroupNodeEdit newGroupEdit = new GroupNodeEdit(parent, this, copyWithoutChildren);
 		newGroupEdit.addEditToParentNode();
 		
 		for (GroupNodeEdit groupEdit : getGroupNodeEdits()) {
-			if (!cloneOnlyWithoutChildren || groupEdit.getEditAction().isCreateOrCopyAction()) {
+			if (!copyWithoutChildren || groupEdit.getEditAction().isCreateOrCopyAction()) {
 				groupEdit.copyGroupEditTo(newGroupEdit, false);
 			}
 		}
 		
 		for (DataSetNodeEdit dataSetEdit : getDataSetNodeEdits()) {
-			if (!cloneOnlyWithoutChildren || dataSetEdit.getEditAction().isCreateOrCopyAction()) {
+			if (!copyWithoutChildren || dataSetEdit.getEditAction().isCreateOrCopyAction()) {
 				dataSetEdit.copyDataSetEditTo(newGroupEdit, false);
 			}
 		}
 		
 		for (AttributeNodeEdit attributeEdit : getAttributeNodeEdits()) {
-			if (!cloneOnlyWithoutChildren || attributeEdit.getEditAction().isCreateOrCopyAction()) {
+			if (!copyWithoutChildren || attributeEdit.getEditAction().isCreateOrCopyAction()) {
 				attributeEdit.copyAttributeEditTo(newGroupEdit, false);
 			}
 		}
@@ -487,11 +486,12 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	    	
 			private GroupPropertiesDialog() {
 				super(GroupNodeMenu.this, "Group properties");
-				setMinimumSize(new Dimension(250, 150));
 
 				JPanel namePanel = new JPanel();
 				namePanel.add(m_nameField, BorderLayout.CENTER);
 				addProperty("Name: ", namePanel);
+				
+				pack();
 			}
 			
 			@Override
