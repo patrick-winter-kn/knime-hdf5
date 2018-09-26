@@ -99,11 +99,12 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		addDialogComponent(fileInfoLabel);
         closeCurrentGroup();
         
-		
+        
+		// TODO see if structureMustMatch is still needed
 		m_structureMustMatch = SettingsFactory.createStructureMustMatchSettings();
 		DialogComponentBoolean structureMustMatch = new DialogComponentBoolean(m_structureMustMatch,
 				"Structure must match");
-		m_saveColumnProperties = SettingsFactory.createStructureMustMatchSettings();
+		m_saveColumnProperties = SettingsFactory.createSaveColumnPropertiesSettings();
 		DialogComponentBoolean saveColumnProperties = new DialogComponentBoolean(m_saveColumnProperties,
 				"Save column properties");
 		
@@ -141,14 +142,14 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			public void actionPerformed(ActionEvent e) {
 				String filePath = m_filePathSettings.getStringValue();
 				try {
-					m_editTreePanel.updateTreeWithFile(filePath, true);
+					m_editTreePanel.updateTreeWithFile(filePath, true, m_structureMustMatch.getBooleanValue());
 				} catch (IOException ioe) {
 		    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 				}
 			}
 		});
 		buttonPanel.add(updateFilePathButton);
-		
+
 		JButton resetConfigButton = new JButton("Reset config");
 		resetConfigButton.addActionListener(new ActionListener() {
 			
@@ -162,6 +163,16 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			}
 		});
 		buttonPanel.add(resetConfigButton);
+		
+		JButton removeInvalidsButton = new JButton("Remove invalids \"no hdf object\"");
+		removeInvalidsButton.addActionListener(new ActionListener() {
+			
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				m_editTreePanel.removeEditsWithoutHdfObject();
+			}
+		});
+		buttonPanel.add(removeInvalidsButton);
 		
 		outputPanel.add(m_editTreePanel);
 	}
@@ -307,7 +318,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	
     	if (!m_filePathSettings.getStringValue().trim().isEmpty()) {
 			try {
-				m_editTreePanel.updateTreeWithFile(m_filePathSettings.getStringValue(), false);
+				m_editTreePanel.updateTreeWithConfig(m_filePathSettings.getStringValue());
 			} catch (IOException ioe) {
 	    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 			}

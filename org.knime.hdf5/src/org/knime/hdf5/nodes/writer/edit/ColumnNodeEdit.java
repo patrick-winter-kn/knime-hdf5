@@ -190,7 +190,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 				}
 				
 				if (values != null && cause == null) {
-					cause = cause == null && !parentDataType.getOutputType().areValuesConvertible(values, m_inputType, parentDataType) ? InvalidCause.DATA_TYPE : cause;
+					cause = !parentDataType.getOutputType().areValuesConvertible(values, m_inputType, parentDataType) ? InvalidCause.DATA_TYPE : cause;
 				}
 			}
 		}

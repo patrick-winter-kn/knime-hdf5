@@ -34,7 +34,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 		super(new PortType[] { BufferedDataTable.TYPE_OPTIONAL }, new PortType[] {});
 		m_filePathSettings = SettingsFactory.createFilePathSettings();
 		m_structureMustMatch = SettingsFactory.createStructureMustMatchSettings();
-		m_saveColumnProperties = SettingsFactory.createStructureMustMatchSettings();
+		m_saveColumnProperties = SettingsFactory.createSaveColumnPropertiesSettings();
 		m_editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 	}
 	

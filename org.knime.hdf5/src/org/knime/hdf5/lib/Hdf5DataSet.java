@@ -8,14 +8,10 @@ import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.data.DataCell;
 import org.knime.core.data.DataRow;
-import org.knime.core.data.MissingCell;
-import org.knime.core.data.def.DoubleCell;
-import org.knime.core.data.def.IntCell;
-import org.knime.core.data.def.LongCell;
-import org.knime.core.data.def.StringCell;
 import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5DataType;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
+import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
 import hdf.hdf5lib.H5;
@@ -325,11 +321,12 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	@SuppressWarnings({ "unchecked" })
 	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowIndex, Type[] copyValues, Rounding rounding, Type standardValue) throws HDF5DataspaceInterfaceException, UnsupportedDataTypeException {
-		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfColumns());
+		Hdf5KnimeDataType knimeType = m_type.getKnimeType();
+		Type[] dataIn = (Type[]) knimeType.createArray((int) numberOfColumns());
 		
 		int copyIndex = 0;
 		for (int i = 0; i < dataIn.length; i++) {
-			Type value = specIndices[i] >= 0 ? (Type) m_type.getKnimeType().getValueFromDataCell(row.getCell(specIndices[i])) : copyValues[copyIndex++];
+			Type value = specIndices[i] >= 0 ? (Type) knimeType.getValueFromDataCell(row.getCell(specIndices[i])) : copyValues[copyIndex++];
 			dataIn[i] = value == null ? standardValue : value;
 		}
 		
@@ -449,6 +446,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	public void extendRow(List<DataCell> row, long rowIndex) throws HDF5DataspaceInterfaceException, UnsupportedDataTypeException {
+		Hdf5KnimeDataType knimeType = m_type.getKnimeType();
 		long rowNum = numberOfRows();
 		int colNum = (int) numberOfColumns();
 		
@@ -457,34 +455,15 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				Type[] dataRead = readRow(rowIndex);
 				
 				for (int c = 0; c < colNum; c++) {
-					row.add(getDataCellWithValue(dataRead[c]));
+					row.add(knimeType.getDataCellWithValue(dataRead[c]));
 				}
 			} catch (IllegalStateException ise) {
 				NodeLogger.getLogger("HDF5 Files").error(ise.getMessage(), ise);
 			}
 		} else {
 			for (int c = 0; c < colNum; c++) {
-				row.add(getDataCellWithValue(null));
+				row.add(knimeType.getDataCellWithValue(null));
 			}
-		}
-	}
-	
-	private DataCell getDataCellWithValue(Type value) throws UnsupportedDataTypeException {
-		if (value == null) {
-			return new MissingCell("(null) on joining dataSets");
-		}
-		
-		switch (getType().getKnimeType()) {
-		case INTEGER:
-			return new IntCell((int) value);
-		case LONG:
-			return new LongCell((long) value);
-		case DOUBLE:
-			return new DoubleCell((double) value);
-		case STRING:
-			return new StringCell("" + value);
-		default:
-			throw new UnsupportedDataTypeException("Unknown knimeDataType");
 		}
 	}
 	

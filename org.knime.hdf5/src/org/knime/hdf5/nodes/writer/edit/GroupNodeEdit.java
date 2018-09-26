@@ -203,10 +203,12 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
 			if (copyGroupEdit.getEditAction() != EditAction.NO_ACTION) {
 				GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
-				if (groupEdit != null && !copyGroupEdit.getEditAction().isCreateOrCopyAction()) {
+				boolean isCreateOfCopyAction = copyGroupEdit.getEditAction().isCreateOrCopyAction();
+				if (groupEdit != null && !isCreateOfCopyAction) {
 					groupEdit.integrate(copyGroupEdit, inputRowCount);
+					
 				} else {
-					copyGroupEdit.copyGroupEditTo(this, !copyGroupEdit.getEditAction().isCreateOrCopyAction());
+					copyGroupEdit.copyGroupEditTo(this, !isCreateOfCopyAction);
 				}
 			}
 		}
@@ -214,10 +216,12 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		for (DataSetNodeEdit copyDataSetEdit : copyEdit.getDataSetNodeEdits()) {
 			if (copyDataSetEdit.getEditAction() != EditAction.NO_ACTION) {
 				DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
-				if (dataSetEdit != null && !copyDataSetEdit.getEditAction().isCreateOrCopyAction()) {
+				boolean isCreateOfCopyAction = copyDataSetEdit.getEditAction().isCreateOrCopyAction();
+				if (dataSetEdit != null && !isCreateOfCopyAction) {
 					dataSetEdit.integrate(copyDataSetEdit, inputRowCount);
+					
 				} else {
-					copyDataSetEdit.copyDataSetEditTo(this, !copyDataSetEdit.getEditAction().isCreateOrCopyAction());
+					copyDataSetEdit.copyDataSetEditTo(this, !isCreateOfCopyAction);
 					for (ColumnNodeEdit copyColumnEdit : copyDataSetEdit.getColumnNodeEdits()) {
 						if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
 							copyColumnEdit.setInputRowCount(inputRowCount);
@@ -230,10 +234,11 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
 			if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
 				AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
-				if (attributeEdit != null && !copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
+				boolean isCreateOfCopyAction = copyAttributeEdit.getEditAction().isCreateOrCopyAction();
+				if (attributeEdit != null && !isCreateOfCopyAction) {
 					removeAttributeNodeEdit(attributeEdit);
 				}
-				copyAttributeEdit.copyAttributeEditTo(this, !copyAttributeEdit.getEditAction().isCreateOrCopyAction());
+				copyAttributeEdit.copyAttributeEditTo(this, !isCreateOfCopyAction);
 			}
 		}
 	}
@@ -256,6 +261,9 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected void removeFromParent() {
+		if (this instanceof FileNodeEdit) {
+			throw new IllegalStateException("Cannot remove a FileNodeEdit from a parent.");
+		}
 		((GroupNodeEdit) getParent()).removeGroupNodeEdit(this);
 		setParent(null);
 	}

@@ -163,6 +163,13 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 	
+	public void removeInvalidsWithCause(InvalidCause cause) {
+		for (TreeNodeEdit edit : getInvalidsWithCause(cause)) {
+			edit.removeFromParent();
+		}
+		reloadTree();
+	}
+	
 	@Override
 	protected void validate(BufferedDataTable inputTable) {
 		Hdf5File file = null;

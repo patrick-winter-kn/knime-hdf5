@@ -39,6 +39,7 @@ import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.GroupNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.EditAction;
+import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.InvalidCause;
 
 public class EditTreePanel extends JPanel {
 
@@ -419,10 +420,18 @@ public class EditTreePanel extends JPanel {
 	}
 
 	void updateTreeWithResetConfig() throws IOException {
-		updateTreeWithFile(m_editTreeConfig.getFileNodeEdit().getFilePath(), false);
+		updateTreeWithFile(m_editTreeConfig.getFileNodeEdit().getFilePath(), false, false);
 	}
 	
-	void updateTreeWithFile(String filePath, boolean keepConfig) throws IOException {
+	void updateTreeWithConfig(String filePath) throws IOException {
+		if (m_editTreeConfig.getFileNodeEdit() != null) {
+			updateTreeWithResetConfig();
+		} else {
+			updateTreeWithFile(filePath, false, false);
+		}
+	}
+	
+	void updateTreeWithFile(String filePath, boolean keepConfig, boolean structureMustMatch) throws IOException {
 		Hdf5File file = null;
 		
 		try {
@@ -447,6 +456,10 @@ public class EditTreePanel extends JPanel {
 				file.close();
 			}
 		}
+	}
+	
+	void removeEditsWithoutHdfObject() {
+		m_editTreeConfig.getFileNodeEdit().removeInvalidsWithCause(InvalidCause.NO_HDF_OBJECT);
 	}
 
 	void saveConfiguration(EditTreeConfiguration editTreeConfig) {

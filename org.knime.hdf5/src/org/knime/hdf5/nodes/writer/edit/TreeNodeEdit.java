@@ -248,18 +248,7 @@ public abstract class TreeNodeEdit {
 		if (m_parent != parent) {
 			if (m_parent != null && parent == null) {
 				m_parent.updateInvalidMap(this, null);
-				boolean removeModifyChildrenProperty = m_parent.getEditAction() == EditAction.MODIFY_CHILDREN_ONLY;
-				if (removeModifyChildrenProperty) {
-					for (TreeNodeEdit sibling : m_parent.getAllChildren()) {
-						if (sibling != this && sibling.getEditAction() != EditAction.NO_ACTION) {
-							removeModifyChildrenProperty = false;
-							break;
-						}
-					}
-				}
-				if (removeModifyChildrenProperty) {
-					m_parent.setEditAction(EditAction.NO_ACTION);
-				}
+				m_parent.removeModifyChildrenProperty();
 			}
 			m_parent = parent;
 			if (m_parent != null) {
@@ -333,6 +322,16 @@ public abstract class TreeNodeEdit {
 		if (m_parent != null) {
 			m_parent.updateInvalidMap(edit, cause);
 		}
+	}
+	
+	protected TreeNodeEdit[] getInvalidsWithCause(InvalidCause cause) {
+		List<TreeNodeEdit> edits = new ArrayList<>();
+		for (TreeNodeEdit edit : m_invalidEdits.keySet()) {
+			if (cause == m_invalidEdits.get(edit)) {
+				edits.add(edit);
+			}
+		}
+		return edits.toArray(new TreeNodeEdit[edits.size()]);
 	}
 	
 	public String getInvalidCauseMessages() {
@@ -451,6 +450,24 @@ public abstract class TreeNodeEdit {
 	
 	private void updateParentEditAction() {
 		setEditAction(getEditAction());
+	}
+	
+	private void removeModifyChildrenProperty() {
+		boolean removeModifyChildrenProperty = m_editAction == EditAction.MODIFY_CHILDREN_ONLY;
+		if (removeModifyChildrenProperty) {
+			for (TreeNodeEdit child : getAllChildren()) {
+				if (child.getEditAction() != EditAction.NO_ACTION) {
+					removeModifyChildrenProperty = false;
+					break;
+				}
+			}
+		}
+		if (removeModifyChildrenProperty) {
+			setEditAction(EditAction.NO_ACTION);
+			if (m_parent != null) {
+				m_parent.removeModifyChildrenProperty();
+			}
+		}
 	}
 	
 	void setDeletion(boolean isDelete) {

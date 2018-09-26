@@ -388,10 +388,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
 			if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
 				AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
-				if (attributeEdit != null && !copyAttributeEdit.getEditAction().isCreateOrCopyAction()) {
+				boolean isCreateOfCopyAction = copyAttributeEdit.getEditAction().isCreateOrCopyAction();
+				if (attributeEdit != null && !isCreateOfCopyAction) {
 					removeAttributeNodeEdit(attributeEdit);
 				}
-				copyAttributeEdit.copyAttributeEditTo(this, !copyAttributeEdit.getEditAction().isCreateOrCopyAction());
+				copyAttributeEdit.copyAttributeEditTo(this, !isCreateOfCopyAction);
 			}
 		}
 	}

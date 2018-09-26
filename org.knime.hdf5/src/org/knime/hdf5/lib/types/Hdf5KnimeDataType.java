@@ -146,6 +146,25 @@ public enum Hdf5KnimeDataType {
 		throw new UnsupportedDataTypeException("Unsupported combination of dataCellDataType and knimeDataType while reading from dataCell");
 	}
 
+	public DataCell getDataCellWithValue(Object value) throws UnsupportedDataTypeException {
+		if (value == null) {
+			return new MissingCell("(null) on joining dataSets");
+		}
+		
+		switch (this) {
+		case INTEGER:
+			return new IntCell((int) value);
+		case LONG:
+			return new LongCell((long) value);
+		case DOUBLE:
+			return new DoubleCell((double) value);
+		case STRING:
+			return new StringCell("" + value);
+		default:
+			throw new UnsupportedDataTypeException("Unknown knimeDataType");
+		}
+	}
+
 	public Object[] createArray(int length) throws UnsupportedDataTypeException {
 		switch (this) {
 		case INTEGER:
