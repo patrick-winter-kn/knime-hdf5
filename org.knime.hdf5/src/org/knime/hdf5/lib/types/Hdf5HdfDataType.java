@@ -14,6 +14,7 @@ import org.knime.core.data.def.LongCell;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.workflow.FlowVariable.Type;
 import org.knime.hdf5.lib.Hdf5Attribute;
+import org.knime.hdf5.nodes.writer.edit.EditDataType;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -86,7 +87,7 @@ public class Hdf5HdfDataType {
 			List<HdfDataType> maybeTypes = inputType.getPossiblyConvertibleHdfTypes();
 			maybeTypes.removeAll(types);
 			for (HdfDataType hdfType : maybeTypes) {
-				if (hdfType.areValuesConvertible(values, inputType, AUTO_STRING_LENGTH)) {
+				if (hdfType.areValuesConvertible(values, inputType, null)) {
 					types.add(hdfType);
 				}
 			}
@@ -109,9 +110,13 @@ public class Hdf5HdfDataType {
 		public boolean isNumber() {
 			return (m_typeId / 10) % 10 > 0;
 		}
-		
+
 		public boolean isFloat() {
 			return (m_typeId / 10) % 10 == 2;
+		}
+		
+		public boolean isMaxValueLargerThanInt() {
+			return this == UINT32 || this == INT64 || this == UINT64;
 		}
 		
 		int getSize() {
@@ -213,7 +218,7 @@ public class Hdf5HdfDataType {
 			return types;
 		}
 		
-		public boolean areValuesConvertible(Object[] values, HdfDataType inputType, Integer stringLength) {
+		public boolean areValuesConvertible(Object[] values, HdfDataType inputType, EditDataType editDataType) {
 			if (isNumber()) {
 				double min = getMin();
 				double max = getMax();
@@ -229,17 +234,20 @@ public class Hdf5HdfDataType {
 					}
 				}
 			} else {
-				boolean autoStringLength = stringLength == AUTO_STRING_LENGTH;
-				if (autoStringLength) {
-					for (Object value : values) {
-						int newStringLength = value.toString().length();
-						stringLength = newStringLength > stringLength ? newStringLength : stringLength;
-					}
-				} else {
+				int stringLength = editDataType != null ? editDataType.getStringLength() : AUTO_STRING_LENGTH;
+				if (editDataType != null && editDataType.isFixed()) {
 					for (Object value : values) {
 						if (value.toString().length() > stringLength) {
 							return false;
 						}
+					}
+				} else {
+					for (Object value : values) {
+						int newStringLength = value.toString().length();
+						stringLength = newStringLength > stringLength ? newStringLength : stringLength;
+					}
+					if (editDataType != null) {
+						editDataType.setStringLength(stringLength);
 					}
 				}
 			}

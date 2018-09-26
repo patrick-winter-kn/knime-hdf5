@@ -109,7 +109,7 @@ public class EditDataType {
 		return m_stringLength;
 	}
 
-	void setStringLength(int stringLength) {
+	public void setStringLength(int stringLength) {
 		m_stringLength = stringLength;
 	}
 	
@@ -127,7 +127,7 @@ public class EditDataType {
 	}
 	
 	void setValues(HdfDataType outputType, Endian endian, Rounding rounding, boolean fixed, int stringLength) {
-		setValues(outputType, endian, rounding, fixed, stringLength, null);
+		setValues(outputType, endian, rounding, fixed, stringLength, m_standardValue);
 	}
 	
 	private void setValues(HdfDataType outputType, Endian endian, Rounding rounding, boolean fixed, int stringLength, Object standardValue) {
@@ -162,8 +162,10 @@ public class EditDataType {
 				standardValue = standardValueString;
 			} else if (m_outputType.isFloat()) {
 				standardValue = Double.parseDouble(standardValueString);
-			} else {
+			} else if (m_outputType.isMaxValueLargerThanInt()) {
 				standardValue = Long.parseLong(standardValueString);
+			} else {
+				standardValue = Integer.parseInt(standardValueString);
 			}
 		}
 		setStandardValue(standardValue);
@@ -182,7 +184,7 @@ public class EditDataType {
 		private JRadioButton m_stringLengthAuto = new JRadioButton("auto");
 		private JRadioButton m_stringLengthFixed = new JRadioButton("fixed");
 		private JSpinner m_stringLengthSpinner = new JSpinner(new SpinnerNumberModel(0, 0, Integer.MAX_VALUE, 1));
-		private JSpinner m_standardValueIntSpinner = new JSpinner(new SpinnerNumberModel(0L, Long.MIN_VALUE, Long.MAX_VALUE, 1L));
+		private JSpinner m_standardValueIntSpinner = new JSpinner(new SpinnerNumberModel((Long) 0L, (Long) Long.MIN_VALUE, (Long) Long.MAX_VALUE, (Long) 1L));
 		private JSpinner m_standardValueFloatSpinner = new JSpinner(new SpinnerNumberModel(0.0, null, null, 0.1));
 		private JTextField m_standardValueStringTextField = new JTextField(15);
 		
@@ -318,7 +320,8 @@ public class EditDataType {
 				
 				m_standardValueStringTextField.setText(isString ? (String) m_standardValue : "");
 				m_standardValueFloatSpinner.setValue(isFloat ? (Double) m_standardValue : 0.0);
-				m_standardValueIntSpinner.setValue(isInteger ? (Long) m_standardValue : 0L);
+				m_standardValueIntSpinner.setValue(isInteger ? (m_outputType.isMaxValueLargerThanInt()
+						? (Long) m_standardValue : (long) (int) (Integer) m_standardValue) : 0L);
 			}
 			
 			m_roundingEnabled = roundingEnabled;
@@ -326,20 +329,23 @@ public class EditDataType {
 		}
 		
 		void saveToDataType() {
+			setValues(HdfDataType.get(((HdfDataType) m_typeField.getSelectedItem()).getTypeId() + (m_unsignedField.isSelected() ? 1 : 0)),
+					(Endian) m_endianField.getSelectedItem(), (Rounding) m_roundingField.getSelectedItem(), m_stringLengthFixed.isSelected(),
+					(Integer) m_stringLengthSpinner.getValue());
+			
 			Object standardValue = null;
 			if (m_standardValueEnabled && m_standardValueCheckBox.isSelected()) {
 				if (!m_outputType.isNumber()) {
 					standardValue = m_standardValueStringTextField.getText();
 				} else if (m_outputType.isFloat()) {
 					standardValue = (Double) m_standardValueFloatSpinner.getValue();
-				} else {
+				} else if (m_outputType.isMaxValueLargerThanInt()) {
 					standardValue = (Long) m_standardValueIntSpinner.getValue();
+				} else {
+					standardValue = (Integer) (int) (long) (Long) m_standardValueIntSpinner.getValue();
 				}
 			}
-			
-			setValues(HdfDataType.get(((HdfDataType) m_typeField.getSelectedItem()).getTypeId() + (m_unsignedField.isSelected() ? 1 : 0)),
-					(Endian) m_endianField.getSelectedItem(), (Rounding) m_roundingField.getSelectedItem(), m_stringLengthFixed.isSelected(),
-					(Integer) m_stringLengthSpinner.getValue(), standardValue);
+			m_standardValue = standardValue;
 		}
 	}
 }

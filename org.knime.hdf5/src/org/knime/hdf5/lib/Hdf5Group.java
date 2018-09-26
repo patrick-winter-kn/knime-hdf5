@@ -466,7 +466,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		
 		EditDataType editDataType = edit.getEditDataType();
 		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(editDataType.getOutputType(), editDataType.getEndian()),
-				Hdf5KnimeDataType.getKnimeDataType(edit.getInputType(), true), false, true, editDataType.getStringLength());
+				Hdf5KnimeDataType.getKnimeDataType(editDataType.getOutputType(), true), false, true, editDataType.getStringLength());
 		long[] dims = edit.getNumberOfDimensions() == 1 ? new long[] { edit.getInputRowCount() }
 				: new long[] { edit.getInputRowCount(), edit.getColumnInputTypes().length };
 		

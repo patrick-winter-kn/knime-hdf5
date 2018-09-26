@@ -231,7 +231,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				if (rowSizes.size() > 1) {
 					String message = "Found unequal row sizes:";
 					for (long rowCount : rowSizes.keySet()) {
-						message += "\n" + rowCount + " rows:";
+						message += "\n" + rowCount + " row" + (rowCount != 1 ? "s" : "") + ":";
 						for (String dataSetPath : rowSizes.get(rowCount)) {
 							message += "\n- " + dataSetPath;
 						}

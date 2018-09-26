@@ -5,15 +5,10 @@ import java.util.Map;
 
 import javax.activation.UnsupportedDataTypeException;
 
-import org.knime.core.data.DataCell;
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.data.DataRow;
 import org.knime.core.data.DataTableSpec;
-import org.knime.core.data.DataType;
 import org.knime.core.data.container.CloseableRowIterator;
-import org.knime.core.data.def.DoubleCell;
-import org.knime.core.data.def.IntCell;
-import org.knime.core.data.def.LongCell;
 import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeLogger;
@@ -151,22 +146,22 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 				? null : InvalidCause.ROW_COUNT;
 		
 		if (cause == null) {
-			DataSetNodeEdit parent = (DataSetNodeEdit) getParent();
-			
 			if (getEditAction() != EditAction.CREATE || inputTable != null) {
 				Object[] values = null;
-				
+
+				EditDataType parentDataType = ((DataSetNodeEdit) getParent()).getEditDataType();
 				if (getEditAction() == EditAction.CREATE) {
 					try {
 						DataTableSpec tableSpec = inputTable.getDataTableSpec();
 						int columnIndex = tableSpec.findColumnIndex(getInputPathFromFileWithName());
-						values = Hdf5KnimeDataType.getKnimeDataType(tableSpec.getColumnSpec(columnIndex).getType()).createArray((int) inputTable.size());
-						Object standardValue = ((DataSetNodeEdit) getParent()).getEditDataType().getStandardValue();
+						Hdf5KnimeDataType knimeType = Hdf5KnimeDataType.getKnimeDataType(parentDataType.getOutputType(), true);
+						values = knimeType.createArray((int) inputTable.size());
+						Object standardValue = parentDataType.getStandardValue();
 						CloseableRowIterator iter = inputTable.iterator();
 						int rowIndex = 0;
 						while (iter.hasNext()) {
 							DataRow row = iter.next();
-							Object value = getValueFromDataCell(row.getCell(columnIndex));
+							Object value = knimeType.getValueFromDataCell(row.getCell(columnIndex));
 							if (value == null) {
 								if (standardValue != null) {
 									value = standardValue;
@@ -195,32 +190,12 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 				}
 				
 				if (values != null && cause == null) {
-					EditDataType parentDataType = parent.getEditDataType();
-					Integer stringLength = parentDataType.isFixed() ? parentDataType.getStringLength() : HdfDataType.AUTO_STRING_LENGTH;
-					cause = cause == null && !parentDataType.getOutputType().areValuesConvertible(values, m_inputType, stringLength) ? InvalidCause.DATA_TYPE : cause;
-					if (!parentDataType.isFixed() && stringLength != HdfDataType.AUTO_STRING_LENGTH) {
-						parentDataType.setStringLength(stringLength);
-					}
+					cause = cause == null && !parentDataType.getOutputType().areValuesConvertible(values, m_inputType, parentDataType) ? InvalidCause.DATA_TYPE : cause;
 				}
 			}
 		}
 		
 		return cause;
-	}
-	
-	private static Object getValueFromDataCell(DataCell dataCell) {
-		DataType type = dataCell.getType();
-		if (type.equals(IntCell.TYPE)) {	
-			return (Integer) ((IntCell) dataCell).getIntValue();
-		} else if (type.equals(LongCell.TYPE)) {	
-			return (Long) ((LongCell) dataCell).getLongValue();
-		} else if (type.equals(DoubleCell.TYPE)) {	
-			return (Double) ((DoubleCell) dataCell).getDoubleValue();
-		} else if (dataCell.isMissing()) {
-			return null;
-		} else {
-			return dataCell.toString();
-		}
 	}
 	
 	public boolean isMaybeInvalid() {

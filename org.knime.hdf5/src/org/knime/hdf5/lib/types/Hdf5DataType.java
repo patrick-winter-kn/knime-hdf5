@@ -177,8 +177,8 @@ public class Hdf5DataType {
 		case INT16:
 		case UINT16:
 			return Short.class;
-		case UINT32:
 		case INT32:
+		case UINT32:
 			return Integer.class;
 		case INT64:
 		case UINT64:

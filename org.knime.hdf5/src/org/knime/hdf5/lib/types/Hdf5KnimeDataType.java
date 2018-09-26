@@ -2,7 +2,9 @@ package org.knime.hdf5.lib.types;
 
 import javax.activation.UnsupportedDataTypeException;
 
+import org.knime.core.data.DataCell;
 import org.knime.core.data.DataType;
+import org.knime.core.data.MissingCell;
 import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
 import org.knime.core.data.def.LongCell;
@@ -93,6 +95,55 @@ public enum Hdf5KnimeDataType {
 		default:
 			throw new UnsupportedDataTypeException("Unknown knimeDataType");
 		}
+	}
+
+	public Object getValueFromDataCell(DataCell dataCell) throws UnsupportedDataTypeException {
+		if (dataCell instanceof MissingCell) {
+			return null;
+		}
+		
+		DataType type = dataCell.getType();
+		switch (this) {
+		case INTEGER:
+			if (type.equals(IntCell.TYPE)) {
+				return (Integer) ((IntCell) dataCell).getIntValue();
+			} else if (type.equals(LongCell.TYPE)) {
+				return (Integer) (int) ((LongCell) dataCell).getLongValue();
+			} 
+			break;
+		case LONG:
+			if (type.equals(IntCell.TYPE)) {
+				return (Long) (long) ((IntCell) dataCell).getIntValue();
+			} else if (type.equals(LongCell.TYPE)) {
+				return (Long) ((LongCell) dataCell).getLongValue();
+			} 
+			break;
+		case DOUBLE:
+			if (type.equals(IntCell.TYPE)) {
+				return (Double) (double) ((IntCell) dataCell).getIntValue();
+			} else if (type.equals(LongCell.TYPE)) {
+				return (Double) (double) ((LongCell) dataCell).getLongValue();
+			} else if (type.equals(DoubleCell.TYPE)) {
+				return (Double) ((DoubleCell) dataCell).getDoubleValue();
+			}
+			break;
+		case STRING:
+			if (type.equals(IntCell.TYPE)) {
+				return "" + ((IntCell) dataCell).getIntValue();
+			} else if (type.equals(LongCell.TYPE)) {
+				return "" + ((LongCell) dataCell).getLongValue();
+			} else if (type.equals(DoubleCell.TYPE)) {
+				return "" + ((DoubleCell) dataCell).getDoubleValue();
+			} else if (type.equals(StringCell.TYPE)) {
+				return ((StringCell) dataCell).getStringValue();
+			} else {
+				return dataCell.toString();
+			}
+		default:
+			throw new UnsupportedDataTypeException("Unknown knimeDataType");
+		}
+		
+		throw new UnsupportedDataTypeException("Unsupported combination of dataCellDataType and knimeDataType while reading from dataCell");
 	}
 
 	public Object[] createArray(int length) throws UnsupportedDataTypeException {

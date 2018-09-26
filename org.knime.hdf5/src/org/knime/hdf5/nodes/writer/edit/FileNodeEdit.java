@@ -112,7 +112,10 @@ public class FileNodeEdit extends GroupNodeEdit {
 	
 	public void integrate(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
 		super.integrate(copyEdit, inputTable != null ? inputTable.size() : ColumnNodeEdit.UNKNOWN_ROW_COUNT);
-		validate(inputTable);
+		validate(null);
+		if (inputTable != null) {
+			copyEdit.validate(inputTable);
+		}
 	}
 
 	@Override
