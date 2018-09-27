@@ -86,7 +86,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			public void stateChanged(ChangeEvent e) {
 				String filePath = m_filePathSettings.getStringValue();
 				if (Hdf5File.hasHdf5FileEnding(filePath)) {
-					fileInfoLabel.setText("Info: File " + (Hdf5File.existsFile(filePath) ? "exists" : "does not exist"));
+					fileInfoLabel.setText("Info: File " + (Hdf5File.existsHdfFile(filePath) ? "exists" : "does not exist"));
 					
 				} else {
 					fileInfoLabel.setText("Error: File ending is not valid");

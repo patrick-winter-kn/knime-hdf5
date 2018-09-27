@@ -36,7 +36,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	private ColumnNodeEdit(DataSetNodeEdit parent, ColumnNodeEdit copyColumn, boolean noAction) {
 		this(parent, copyColumn.getInputPathFromFileWithName(), copyColumn.getInputColumnIndex(),
-				copyColumn.getName(), copyColumn.getInputType(), copyColumn.getInputRowCount(), noAction ? EditAction.NO_ACTION
+				copyColumn.getName(), copyColumn.getInputType(), copyColumn.getInputRowCount(), noAction ? copyColumn.getEditAction()
 				: (copyColumn.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY));
 		copyAdditionalPropertiesFrom(copyColumn);
 		if (getEditAction() == EditAction.COPY) {
@@ -58,7 +58,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	ColumnNodeEdit(DataSetNodeEdit parent, String inputPathFromFileWithName, int inputColumnIndex, String name, HdfDataType inputType,
 			long inputRowCount, EditAction editAction) {
-		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editAction);
+		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, EditOverwritePolicy.NONE, editAction);
 		setTreeNodeMenu(new ColumnNodeMenu());
 		m_inputColumnIndex = inputColumnIndex;
 		m_inputType = inputType;
@@ -142,8 +142,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
-		InvalidCause cause = m_inputRowCount == UNKNOWN_ROW_COUNT || m_inputRowCount == ((DataSetNodeEdit) getParent()).getInputRowCount()
-				? null : InvalidCause.ROW_COUNT;
+		InvalidCause cause = getEditAction() == EditAction.DELETE || m_inputRowCount == UNKNOWN_ROW_COUNT
+				|| m_inputRowCount == ((DataSetNodeEdit) getParent()).getInputRowCount() ? null : InvalidCause.ROW_COUNT;
 		
 		if (cause == null) {
 			if (getEditAction() != EditAction.CREATE || inputTable != null) {

@@ -47,8 +47,9 @@ public abstract class TreeNodeEdit {
 	protected static enum SettingsKey {
 		NAME("name"),
 		INPUT_PATH_FROM_FILE_WITH_NAME("inputPathFromFileWithName"),
-		FILE_PATH("filePath"),
+		EDIT_OVERWRITE_POLICY("editOverwritePolicy"),
 		EDIT_ACTION("editAction"),
+		FILE_PATH("filePath"),
 		INPUT_TYPE("inputType"),
 		OUTPUT_TYPE("outputType"),
 		LITTLE_ENDIAN("littleEndian"),
@@ -62,8 +63,6 @@ public abstract class TreeNodeEdit {
 		NUMBER_OF_DIMENSIONS("numberOfDimensions"),
 		COMPRESSION("compression"),
 		CHUNK_ROW_SIZE("chunkRowSize"),
-		OVERWRITE("overwrite"),
-		OVERWRITE_POLICY("overwritePolicy"),
 		INPUT_ROW_COUNT("inputRowCount"),
 		INPUT_COLUMN_INDEX("inputColumnIndex"),
 		GROUPS("groups"),
@@ -124,6 +123,7 @@ public abstract class TreeNodeEdit {
 	public static enum InvalidCause {
 		FILE_EXTENSION("file extension is not .h5 or .hdf5"),
 		FILE_ALREADY_EXISTS("file already exists"),
+		NO_DIR_FOR_FILE("no directory for file exists"),
 		NAME_DUPLICATE("name duplicate"),
 		NO_HDF_OBJECT("no hdf object available"),
 		PARENT_DELETE("parent is getting deleted so this also has to be deleted"),
@@ -148,6 +148,10 @@ public abstract class TreeNodeEdit {
 	private String m_outputPathFromFile;
 	
 	private String m_name;
+	
+	private EditOverwritePolicy m_editOverwritePolicy;
+	
+	private boolean m_overwrite;
 
 	private TreeNodeMenu m_treeNodeMenu;
 	
@@ -165,10 +169,11 @@ public abstract class TreeNodeEdit {
 	
 	private Map<TreeNodeEdit, InvalidCause> m_invalidEdits = new HashMap<>();
 
-	TreeNodeEdit(String inputPathFromFileWithName, String outputPathFromFile, String name, EditAction editAction) {
+	TreeNodeEdit(String inputPathFromFileWithName, String outputPathFromFile, String name, EditOverwritePolicy editOverwritePolicy, EditAction editAction) {
 		m_inputPathFromFileWithName = inputPathFromFileWithName;
 		m_outputPathFromFile = outputPathFromFile;
 		m_name = name;
+		m_editOverwritePolicy = editOverwritePolicy;
 		setEditAction(editAction);
 	}
 	
@@ -225,6 +230,22 @@ public abstract class TreeNodeEdit {
 	
 	void setName(String name) {
 		m_name = name;
+	}
+	
+	EditOverwritePolicy getEditOverwritePolicy() {
+		return m_editOverwritePolicy;
+	}
+
+	protected void setEditOverwritePolicy(EditOverwritePolicy editOverwritePolicy) {
+		m_editOverwritePolicy = editOverwritePolicy;
+	}
+
+	public boolean isOverwrite() {
+		return m_overwrite;
+	}
+	
+	private void setOverwrite(boolean overwrite) {
+		m_overwrite = overwrite;
 	}
 
 	public TreeNodeMenu getTreeNodeMenu() {
@@ -296,10 +317,11 @@ public abstract class TreeNodeEdit {
 		copyAdditionalPropertiesFrom(copyEdit);
 	}
 	
-	protected void copyCorePropertiesFrom(TreeNodeEdit copyEdit) {
-		m_name = copyEdit.getName();
+	private void copyCorePropertiesFrom(TreeNodeEdit copyEdit) {
 		m_inputPathFromFileWithName = copyEdit.getInputPathFromFileWithName();
 		m_outputPathFromFile = copyEdit.getOutputPathFromFile();
+		m_name = copyEdit.getName();
+		m_editOverwritePolicy = copyEdit.getEditOverwritePolicy();
 		setEditAction(copyEdit.getEditAction());
 		m_treeNodeMenu.updateDeleteItemText();
 		if (getEditAction() == EditAction.COPY) {
@@ -445,7 +467,20 @@ public abstract class TreeNodeEdit {
 		while (editsInPath.get(0).getParent() != null) {
 			editsInPath.add(0, editsInPath.get(0).getParent());
 		}
-		return editsInPath.toArray(new TreeNodeEdit[0]);
+		return editsInPath.toArray(new TreeNodeEdit[editsInPath.size()]);
+	}
+	
+	public boolean isEditDescendant(TreeNodeEdit other) {
+		TreeNodeEdit[] thisPath = getPath();
+		TreeNodeEdit[] otherPath = other.getPath();
+		
+		for (int i = 0; i < thisPath.length; i++) {
+			if (i >= otherPath.length || thisPath[i] != otherPath[i]) {
+				return false;
+			}
+		}
+		
+		return true;
 	}
 	
 	private void updateParentEditAction() {
@@ -471,7 +506,7 @@ public abstract class TreeNodeEdit {
 	}
 	
 	void setDeletion(boolean isDelete) {
-    	if (isDelete && getEditAction().isCreateOrCopyAction() || !isDelete && !isValid() && getEditAction() == EditAction.DELETE) {
+    	if (isDelete && getEditAction().isCreateOrCopyAction() || !isDelete && m_invalidEdits.get(this) == InvalidCause.NO_HDF_OBJECT && getEditAction() == EditAction.DELETE) {
     		removeFromParent();
     		
     	} else {
@@ -485,6 +520,15 @@ public abstract class TreeNodeEdit {
     	}
 	}
 
+	private TreeNodeEdit getChildOfClass(Class<?> editClass, String name) {
+		for (TreeNodeEdit edit : getAllChildren()) {
+			if (editClass == edit.getClass() && name.equals(edit.getName())) {
+				return edit;
+			}
+		}
+		return null;
+	}
+	
 	protected abstract TreeNodeEdit[] getAllChildren();
 	
 	protected abstract void removeFromParent();
@@ -492,6 +536,7 @@ public abstract class TreeNodeEdit {
 	protected void saveSettingsTo(NodeSettingsWO settings) {
 		settings.addString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey(), m_inputPathFromFileWithName);
 		settings.addString(SettingsKey.NAME.getKey(), m_name);
+		settings.addInt(SettingsKey.EDIT_OVERWRITE_POLICY.getKey(), m_editOverwritePolicy.ordinal());
 		settings.addString(SettingsKey.EDIT_ACTION.getKey(), m_editAction.getActionName());
 	}
 
@@ -514,17 +559,59 @@ public abstract class TreeNodeEdit {
 					break;
 				}
 			}
-			try {
-				parentNode.insert(m_treeNode, insert);
-			} catch (Exception e) {
-				e.printStackTrace();
-				throw e;
-			}
+			parentNode.insert(m_treeNode, insert);
 			
 			for (TreeNodeEdit edit : getAllChildren()) {
 		        edit.addEditToParentNode();
 			}
 		}
+	}
+	
+	/**
+	 * @param newEdit	the new edit which should be added to this edit
+	 * @return			true if {@code newEdit} was removed from its parent (because it is not needed anymore)
+	 */
+	protected boolean useOverwritePolicy(TreeNodeEdit newEdit, long inputRowCount) {
+		TreeNodeEdit editForFutureUsage = newEdit;
+		TreeNodeEdit oldEdit = getChildOfClass(newEdit.getClass(), newEdit.getName());
+		if (oldEdit != null) {
+			switch(newEdit.getEditOverwritePolicy()) {
+			case ABORT:
+				newEdit.removeFromParent();
+				editForFutureUsage = oldEdit;
+				break;
+			case OVERWRITE:
+				break;
+			case RENAME:
+				// TODO the line below isn't correct so far; also consider the names of the edits which will be added later to this edit
+				newEdit.setName(TreeNodeEdit.getUniqueName(getTreeNode(), newEdit.getName()));
+				break;
+			case INTEGRATE:
+				// TODO test it
+				if (oldEdit instanceof GroupNodeEdit) {
+					((GroupNodeEdit) oldEdit).integrate((GroupNodeEdit) newEdit, inputRowCount, true);
+					newEdit.removeFromParent();
+					((GroupNodeEdit) this).addGroupNodeEdit((GroupNodeEdit) oldEdit);
+					oldEdit.setEditAction(EditAction.MODIFY_CHILDREN_ONLY);
+					editForFutureUsage = oldEdit;
+					
+				} else if (oldEdit instanceof DataSetNodeEdit) {
+					((DataSetNodeEdit) oldEdit).integrate((DataSetNodeEdit) newEdit, inputRowCount, true);
+					newEdit.removeFromParent();
+					((GroupNodeEdit) this).addDataSetNodeEdit((DataSetNodeEdit) oldEdit);
+					oldEdit.setEditAction(newEdit.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
+					editForFutureUsage = oldEdit;
+				}
+				break;
+			default:
+				break;
+			}
+		}
+		
+		editForFutureUsage.setOverwrite(newEdit.getEditOverwritePolicy() == EditOverwritePolicy.OVERWRITE
+				|| oldEdit instanceof DataSetNodeEdit && newEdit.getEditOverwritePolicy() == EditOverwritePolicy.INTEGRATE);
+		
+		return editForFutureUsage != newEdit;
 	}
 	
 	protected void validate(BufferedDataTable inputTable) {

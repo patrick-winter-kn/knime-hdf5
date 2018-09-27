@@ -165,28 +165,30 @@ abstract public class Hdf5TreeElement {
 		return attribute;
 	}
 	
-	public Hdf5Attribute<?> createAttribute(AttributeNodeEdit edit, long dimension) throws IOException {
+	public Hdf5Attribute<?> createAttributeFromEdit(AttributeNodeEdit edit, long dimension) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
+		EditDataType editDataType = edit.getEditDataType();
+		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(editDataType.getOutputType(), editDataType.getEndian()),
+				Hdf5KnimeDataType.getKnimeDataType(edit.getInputType(), false), false, false, editDataType.getStringLength());
+		
 		try {
-			/*if (existsAttribute(edit.getName())) {
-				if (edit.isOverwrite()) {
-					deleteAttribute(edit.getName());
-					
-				} else {
-					IOException ioe = new IOException("Abort: attribute \"" + edit.getName() + "\" in \"" + getPathFromFileWithName() + "\" already exists");
-					NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-					return null;
+			String name = edit.getName();
+			if (!existsAttribute(name)) {
+				attribute = createAttribute(edit.getName(), dimension, dataType);
+			} else if (edit.isOverwrite()) {
+				attribute = getAttribute(name);
+				if (dataType.isSimilarTo(attribute.getType()) && dimension == attribute.getDimension()
+						&& attribute.clearData()) {
+					// nothing to do; only return attribute at the end
+				} else if (deleteAttribute(name) >= 0) {
+					attribute = createAttribute(edit.getName(), dimension, dataType);
 				}
-			}*/
-			
-			EditDataType editDataType = edit.getEditDataType();
-			Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(editDataType.getOutputType(), editDataType.getEndian()),
-					Hdf5KnimeDataType.getKnimeDataType(edit.getInputType(), false), false, false, editDataType.getStringLength());
-			
-			attribute = createAttribute(edit.getName(), dimension, dataType);
-			
-		} catch (/*HDF5LibraryException | */NullPointerException hlnpe) {
+			} else {
+				throw new IOException("Attribute with the same name \""
+						+ name + "\" already exists in treeElement \"" + getPathFromFileWithName() + "\"");
+			}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			NodeLogger.getLogger(getClass()).error(hlnpe.getMessage(), hlnpe);
 		}
 		
@@ -230,7 +232,7 @@ abstract public class Hdf5TreeElement {
 		boolean success = false;
 		
 		Object[] values = Hdf5Attribute.getFlowVariableValues(flowVariable);
-		Hdf5Attribute<Object> attribute = (Hdf5Attribute<Object>) createAttribute(edit, values.length);
+		Hdf5Attribute<Object> attribute = (Hdf5Attribute<Object>) createAttributeFromEdit(edit, values.length);
 		if (attribute != null) {
 			Rounding rounding = edit.getEditDataType().getRounding();
 			if (!edit.isCompoundAsArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
@@ -256,11 +258,9 @@ abstract public class Hdf5TreeElement {
 		Hdf5Attribute<Object> newAttribute = null;
 		
 		try {
-			newAttribute = (Hdf5Attribute<Object>) createAttribute(edit, copyAttribute.getDimension());
+			newAttribute = (Hdf5Attribute<Object>) createAttributeFromEdit(edit, copyAttribute.getDimension());
 			
 			if (newAttribute != null) {
-				// Object[] values = copyAttribute.getValue() == null ? copyAttribute.read() : copyAttribute.getValue();
-				// success = newAttribute.write(values);
 				success = copyAttribute.copyValuesTo(newAttribute);
 				
 				try {
@@ -304,6 +304,28 @@ abstract public class Hdf5TreeElement {
 		}
 		
 		return success ? newAttribute : null;
+	}
+	
+	public Hdf5Attribute<?> copyAttributeFromEdit(AttributeNodeEdit edit, Hdf5Attribute<?> copyAttribute) throws IOException {
+		Hdf5Attribute<?> attribute = null;
+		
+		try {
+			String name = edit.getName();
+			if (!existsAttribute(name)) {
+				attribute = copyAttribute(name, copyAttribute);
+			} else if (edit.isOverwrite()) {
+				if (deleteAttribute(name) >= 0) {
+					attribute = copyAttribute(name, copyAttribute);
+				}
+			} else {
+				throw new IOException("Attribute with the same name \""
+						+ name + "\" already exists in treeElement \"" + getPathFromFileWithName() + "\"");
+			}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			NodeLogger.getLogger(getClass()).error(hlnpe.getMessage(), hlnpe);
+		}
+		
+		return attribute;
 	}
 	
 	public synchronized Hdf5Attribute<?> getAttribute(final String name) throws IOException {

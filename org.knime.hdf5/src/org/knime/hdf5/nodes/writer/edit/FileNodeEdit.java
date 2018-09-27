@@ -34,7 +34,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	private FileNodeEdit(String filePath, EditAction editAction) {
-		super(null, null, filePath.substring(filePath.lastIndexOf(File.separator) + 1), editAction);
+		super(null, null, filePath.substring(filePath.lastIndexOf(File.separator) + 1), EditOverwritePolicy.NONE, editAction);
 		m_filePath = filePath;
 	}
 	
@@ -110,10 +110,10 @@ public class FileNodeEdit extends GroupNodeEdit {
         return edit;
 	}
 	
-	public void integrate(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
-		super.integrate(copyEdit, inputTable != null ? inputTable.size() : ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+	public void integrate(FileNodeEdit copyEdit, BufferedDataTable inputTable, boolean lastValidationBeforeExecution) {
+		super.integrate(copyEdit, inputTable != null ? inputTable.size() : ColumnNodeEdit.UNKNOWN_ROW_COUNT, lastValidationBeforeExecution);
 		validate(null);
-		if (inputTable != null) {
+		if (lastValidationBeforeExecution) {
 			copyEdit.validate(inputTable);
 		}
 	}
@@ -177,8 +177,9 @@ public class FileNodeEdit extends GroupNodeEdit {
 			file = (Hdf5File) getHdfObject();
 			if (file != null) {
 				file.open(Hdf5File.READ_ONLY_ACCESS);
-				super.validate(inputTable);
 			}
+			super.validate(inputTable);
+			
 		} catch (Exception e) {
 			NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
 			
@@ -194,7 +195,11 @@ public class FileNodeEdit extends GroupNodeEdit {
 	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
 		InvalidCause cause = m_filePath.endsWith(".h5") || m_filePath.endsWith(".hdf5") ? null : InvalidCause.FILE_EXTENSION;
 		
-		cause = cause == null && getEditAction() == EditAction.CREATE && Hdf5File.existsFile(getFilePath()) ? InvalidCause.FILE_ALREADY_EXISTS : cause;
+		cause = cause == null && getName().contains("/") ? InvalidCause.NAME_CHARS : cause;
+		
+		cause = cause == null && getEditAction() == EditAction.CREATE && Hdf5File.existsHdfFile(getFilePath()) ? InvalidCause.FILE_ALREADY_EXISTS : cause;
+		
+		cause = cause == null && getEditAction() == EditAction.CREATE && !Hdf5File.isHdfFileCreatable(getFilePath()) ? InvalidCause.NO_DIR_FOR_FILE : cause;
 		
 		return cause;
 	}

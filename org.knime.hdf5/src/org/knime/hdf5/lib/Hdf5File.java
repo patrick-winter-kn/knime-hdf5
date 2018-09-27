@@ -98,9 +98,15 @@ public class Hdf5File extends Hdf5Group {
 		
 		return file;
 	}
+
+	public synchronized static boolean existsHdfFile(final String filePath) {
+		return hasHdf5FileEnding(filePath) && new File(filePath).exists();
+	}
 	
-	public synchronized static boolean existsFile(final String filePath) {
-		return new File(filePath).exists();
+	public synchronized static boolean isHdfFileCreatable(final String filePath) {
+		String a = filePath.substring(0, filePath.lastIndexOf(File.separator));
+		File b = new File(a);
+		return hasHdf5FileEnding(filePath) && b.isDirectory() && !new File(filePath).exists();
 	}
 	
 	public static boolean hasHdf5FileEnding(final String filePath) {

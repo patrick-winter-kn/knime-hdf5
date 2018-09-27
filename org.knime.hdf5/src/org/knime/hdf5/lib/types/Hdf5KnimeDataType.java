@@ -148,7 +148,7 @@ public enum Hdf5KnimeDataType {
 
 	public DataCell getDataCellWithValue(Object value) throws UnsupportedDataTypeException {
 		if (value == null) {
-			return new MissingCell("(null) on joining dataSets");
+			return new MissingCell("(null) on joining hdf dataSets");
 		}
 		
 		switch (this) {
@@ -175,6 +175,21 @@ public enum Hdf5KnimeDataType {
 			return new Double[length];
 		case STRING:
 			return new String[length];
+		default:
+			throw new UnsupportedDataTypeException("Unknown knimeDataType");
+		}
+	}
+	
+	public Object getMissingValue() throws UnsupportedDataTypeException {
+		switch (this) {
+		case INTEGER:
+			return 0;
+		case LONG:
+			return 0L;
+		case DOUBLE:
+			return 0.0;
+		case STRING:
+			return "";
 		default:
 			throw new UnsupportedDataTypeException("Unknown knimeDataType");
 		}

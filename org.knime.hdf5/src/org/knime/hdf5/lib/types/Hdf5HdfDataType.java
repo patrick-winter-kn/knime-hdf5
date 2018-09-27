@@ -223,14 +223,9 @@ public class Hdf5HdfDataType {
 				double min = getMin();
 				double max = getMax();
 				for (Object value : values) {
-					try {
-						double number = ((Number) value).doubleValue();
-						if (Double.compare(number, min) < 0 || Double.compare(number, max) > 0) {
-							return false;
-						}
-					} catch (Exception e) {
-						e.printStackTrace();
-						throw e;
+					double number = ((Number) value).doubleValue();
+					if (Double.compare(number, min) < 0 || Double.compare(number, max) > 0) {
+						return false;
 					}
 				}
 			} else {

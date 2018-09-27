@@ -71,34 +71,35 @@ public class HDF5WriterNodeModel extends NodeModel {
 	
 	private static void checkForErrors(SettingsModelString filePathSettings,
 			EditTreeConfiguration editTreeConfig, BufferedDataTable inputTable) throws InvalidSettingsException {
-		String filePath = filePathSettings.getStringValue();
-		if (filePath.trim().isEmpty()) {
+		FileNodeEdit fileEdit = editTreeConfig.getFileNodeEdit();
+		if (fileEdit == null) {
 			throw new InvalidSettingsException("No file selected");
 		}
 		
-		Hdf5File file = null;
-		try {
-			FileNodeEdit fileEdit = editTreeConfig.getFileNodeEdit();
-			if (!fileEdit.getEditAction().isCreateOrCopyAction()) {
+		String filePath = fileEdit.getFilePath();
+		if (!fileEdit.getEditAction().isCreateOrCopyAction()) {
+			Hdf5File file = null;
+			try {
 				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-				fileEdit = new FileNodeEdit(file);
-				fileEdit.loadChildrenOfHdfObject();
-				fileEdit.integrate(editTreeConfig.getFileNodeEdit(), inputTable);
-			} else if (Hdf5File.existsFile(filePath)) {
-				throw new InvalidSettingsException("The selected file \"" + filePath + "\" does already exist");
+				FileNodeEdit oldFileEdit = new FileNodeEdit(file);
+				oldFileEdit.loadChildrenOfHdfObject();
+				oldFileEdit.integrate(fileEdit, inputTable, true);
+				
+			} catch (IOException ioe) {
+				throw new InvalidSettingsException(ioe.getMessage(), ioe.getCause());
+				
+			} finally {
+				if (file != null) {
+					file.close();
+				}
 			}
-			if (!fileEdit.isValid()) {
-				throw new InvalidSettingsException("The settings for file \"" + fileEdit.getFilePath()
-						+ "\" are not valid:\n" + fileEdit.getInvalidCauseMessages());
-			}
-			
-		} catch (IOException ioe) {
-			throw new InvalidSettingsException(ioe.getMessage(), ioe.getCause());
-			
-		} finally {
-			if (file != null) {
-				file.close();
-			}
+		} else if (Hdf5File.existsHdfFile(filePath)) {
+			throw new InvalidSettingsException("The selected file \"" + filePath + "\" does already exist");
+		}
+		
+		if (!fileEdit.isValid()) {
+			throw new InvalidSettingsException("The settings for file \"" + fileEdit.getFilePath()
+					+ "\" are not valid:\n" + fileEdit.getInvalidCauseMessages());
 		}
 	}
 

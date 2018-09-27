@@ -1,6 +1,6 @@
 package org.knime.hdf5.nodes.writer.edit;
 
-enum OverwritePolicy {
+enum EditOverwritePolicy {
 	
     /**
      * Do nothing. Throw an error if this case happens.
@@ -23,8 +23,11 @@ enum OverwritePolicy {
     RENAME,
 	
     /**
-     * Keep both TreeNodeEdits for checking their validation if their components
-     * can be integrated without issues (like name duplicates).
+     * Add all children of the new TreeNodeEdit to the old TreeNodeEdit.
      */
     INTEGRATE;
+	
+	static EditOverwritePolicy[] getValuesWithoutIntegrate() {
+		return new EditOverwritePolicy[] { NONE, ABORT, OVERWRITE, RENAME };
+	}
 }

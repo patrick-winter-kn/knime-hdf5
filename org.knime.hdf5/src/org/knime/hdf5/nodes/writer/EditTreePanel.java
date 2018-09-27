@@ -182,9 +182,16 @@ public class EditTreePanel extends JPanel {
                 TreePath path = dl.getPath();
                 
                 if (info.isDataFlavorSupported(DataFlavor.stringFlavor) && path != null) {
-                	if (!m_copyEdits.isEmpty() ) {
-                    	TreeNodeEdit edit = (TreeNodeEdit) ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject();
+                	if (!m_copyEdits.isEmpty()) {
+                		DefaultMutableTreeNode parent = (DefaultMutableTreeNode) path.getLastPathComponent();
+                    	TreeNodeEdit parentEdit = (TreeNodeEdit) parent.getUserObject();
                     	
+                		for (TreeNodeEdit copyEdit : m_copyEdits) {
+                			if (copyEdit instanceof GroupNodeEdit && copyEdit.isEditDescendant(parentEdit)) {
+                				return false;
+                			}
+                		}
+                		
                 		Class editClass = m_copyEdits.get(0).getClass();
                 		boolean allEqual = true;
                 		for (int i = 1; i < m_copyEdits.size(); i++) {
@@ -193,8 +200,8 @@ public class EditTreePanel extends JPanel {
                 		}
                 		
                 		if (!allEqual) {
-            				boolean pasteToDataSet = edit instanceof DataSetNodeEdit;
-            				boolean pasteToGroup = edit instanceof GroupNodeEdit;
+            				boolean pasteToDataSet = parentEdit instanceof DataSetNodeEdit;
+            				boolean pasteToGroup = parentEdit instanceof GroupNodeEdit;
             				
             				for (TreeNodeEdit copyEdit : m_copyEdits) {
                 				pasteToDataSet &= copyEdit instanceof ColumnNodeEdit || copyEdit instanceof AttributeNodeEdit;
@@ -437,7 +444,7 @@ public class EditTreePanel extends JPanel {
 		try {
 			FileNodeEdit oldFileEdit = m_editTreeConfig.getFileNodeEdit();
 			FileNodeEdit newFileEdit = null;
-			if (Hdf5File.existsFile(filePath) && Hdf5File.hasHdf5FileEnding(filePath)) {
+			if (Hdf5File.existsHdfFile(filePath)) {
 				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
 				newFileEdit = new FileNodeEdit(file);
 			} else {
@@ -445,9 +452,11 @@ public class EditTreePanel extends JPanel {
 			}
 			m_editTreeConfig.setFileNodeEdit(newFileEdit);
 			newFileEdit.setEditAsRootOfTree(m_tree);
-			newFileEdit.loadChildrenOfHdfObject();
+			if (!newFileEdit.getEditAction().isCreateOrCopyAction()) {
+				newFileEdit.loadChildrenOfHdfObject();
+			}
 			if (keepConfig && oldFileEdit != null) {
-				newFileEdit.integrate(oldFileEdit, null);
+				newFileEdit.integrate(oldFileEdit, null, false);
 			}
 			newFileEdit.reloadTreeWithEditVisible(true);
 			
@@ -470,7 +479,7 @@ public class EditTreePanel extends JPanel {
 	
 	void loadConfiguration(EditTreeConfiguration editTreeConfig) {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
-		fileEdit.integrate(editTreeConfig.getFileNodeEdit(), null);
+		fileEdit.integrate(editTreeConfig.getFileNodeEdit(), null, false);
 		fileEdit.reloadTreeWithEditVisible(true);
 	}
 }

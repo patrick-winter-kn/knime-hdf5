@@ -150,7 +150,7 @@ public class Hdf5DataType {
 	}
 	
 	public boolean isSimilarTo(Hdf5DataType dataType) {
-		return getHdfType().isSimilarTo(dataType.getHdfType()) && isKnimeType(dataType.getKnimeType())
+		return getHdfType().isSimilarTo(dataType.getHdfType()) /* not necessary: && isKnimeType(dataType.getKnimeType()) */
 				&& isVlen() == dataType.isVlen() && isFromDS() == dataType.isFromDS();
 	}
 	

@@ -319,7 +319,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		return false;
 	}
 	
-	@SuppressWarnings({ "unchecked" })
+	@SuppressWarnings("unchecked")
 	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowIndex, Type[] copyValues, Rounding rounding, Type standardValue) throws HDF5DataspaceInterfaceException, UnsupportedDataTypeException {
 		Hdf5KnimeDataType knimeType = m_type.getKnimeType();
 		Type[] dataIn = (Type[]) knimeType.createArray((int) numberOfColumns());
@@ -331,6 +331,23 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		}
 		
 		return writeRow(dataIn, rowIndex, rounding);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public boolean clearData() {
+		boolean success = false;
+		try {
+			success = true;
+			Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfColumns());
+			Arrays.fill(dataIn, (Type) m_type.getKnimeType().getMissingValue());
+			for (int i = 0; i < numberOfRows(); i++) {
+				success &= writeRow(dataIn, i, Rounding.DOWN);
+			}
+		} catch (HDF5DataspaceInterfaceException | UnsupportedDataTypeException hdiudte) {
+			NodeLogger.getLogger(getClass()).error(hdiudte.getMessage(), hdiudte);
+		}
+		
+		return success;
 	}
 	
 	public Type[] readRow(long rowIndex) throws HDF5DataspaceInterfaceException {

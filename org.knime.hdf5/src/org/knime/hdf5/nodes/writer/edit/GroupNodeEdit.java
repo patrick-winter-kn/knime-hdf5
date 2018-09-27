@@ -1,13 +1,12 @@
 package org.knime.hdf5.nodes.writer.edit;
 
-import java.awt.BorderLayout;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 
-import javax.swing.JPanel;
+import javax.swing.JComboBox;
 import javax.swing.JTextField;
 
 import org.knime.core.node.BufferedDataTable;
@@ -31,32 +30,36 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	private final List<AttributeNodeEdit> m_attributeEdits = new ArrayList<>();
 
 	public GroupNodeEdit(GroupNodeEdit parent, String name) {
-		this(parent, null, name, EditAction.CREATE);
+		this(parent, null, name, EditOverwritePolicy.NONE, EditAction.CREATE);
 	}
 	
 	private GroupNodeEdit(GroupNodeEdit parent, GroupNodeEdit copyGroup, boolean noAction) {
-		this(parent, copyGroup.getInputPathFromFileWithName(), copyGroup.getName(), noAction ? EditAction.NO_ACTION
-				: (copyGroup.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY));
+		this(parent, copyGroup.getInputPathFromFileWithName(), copyGroup.getName(), copyGroup.getEditOverwritePolicy(),
+				noAction ? copyGroup.getEditAction() : (copyGroup.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY));
 		if (getEditAction() == EditAction.COPY) {
 			copyGroup.addIncompleteCopy(this);
 		}
 	}
 	
 	public GroupNodeEdit(GroupNodeEdit parent, Hdf5Group group) {
-		this(parent, group.getPathFromFileWithName(), group.getName(), EditAction.NO_ACTION);
+		this(parent, group.getPathFromFileWithName(), group.getName(), EditOverwritePolicy.NONE, EditAction.NO_ACTION);
 		setHdfObject(group);
 	}
 	
-	protected GroupNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name, EditAction editAction) {
+	protected GroupNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name, EditOverwritePolicy editOverwritePolicy, EditAction editAction) {
 		super(inputPathFromFileWithName, parent != null && !(parent instanceof FileNodeEdit)
-				? parent.getOutputPathFromFileWithName() : "", name, editAction);
+				? parent.getOutputPathFromFileWithName() : "", name, editOverwritePolicy, editAction);
 		setTreeNodeMenu(new GroupNodeMenu());
 		if (parent != null) {
 			parent.addGroupNodeEdit(this);
 		}
 	}
 	
-	public GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent, boolean copyWithoutChildren) {
+	public GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent, boolean copyWithoutChildren) throws IllegalStateException {
+		if (isEditDescendant(parent)) {
+			throw new IllegalStateException("Cannot add group to ifself");
+		}
+		
 		GroupNodeEdit newGroupEdit = new GroupNodeEdit(parent, this, copyWithoutChildren);
 		newGroupEdit.addEditToParentNode();
 		
@@ -80,7 +83,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		
 		return newGroupEdit;
 	}
-	
+
 	public GroupNodeEdit[] getGroupNodeEdits() {
 		return m_groupEdits.toArray(new GroupNodeEdit[] {});
 	}
@@ -106,33 +109,6 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	public void addAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.add(edit);
 		edit.setParent(this);
-	}
-
-	public boolean existsGroupNodeEdit(GroupNodeEdit edit) {
-		for (GroupNodeEdit groupEdit : m_groupEdits) {
-			if (edit.getName().equals(groupEdit.getName())) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
-	public boolean existsDataSetNodeEdit(DataSetNodeEdit edit) {
-		for (DataSetNodeEdit dataSetEdit : m_dataSetEdits) {
-			if (edit.getName().equals(dataSetEdit.getName())) {
-				return true;
-			}
-		}
-		return false;
-	}
-	
-	public boolean existsAttributeNodeEdit(AttributeNodeEdit edit) {
-		for (AttributeNodeEdit attributeEdit : m_attributeEdits) {
-			if (edit.getName().equals(attributeEdit.getName())) {
-				return true;
-			}
-		}
-		return false;
 	}
 	
 	GroupNodeEdit getGroupNodeEdit(String inputPathFromFileWithName) {
@@ -195,17 +171,19 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	/**
 	 * so far with overwrite of properties
 	 */
-	void integrate(GroupNodeEdit copyEdit, long inputRowCount) {
-		if (!(this instanceof FileNodeEdit) && copyEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
-			copyPropertiesFrom(copyEdit);
-		}
-		
+	void integrate(GroupNodeEdit copyEdit, long inputRowCount, boolean lastValidationBeforeExecution) {
 		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
 			if (copyGroupEdit.getEditAction() != EditAction.NO_ACTION) {
+				if (lastValidationBeforeExecution && useOverwritePolicy(copyGroupEdit, inputRowCount)) {
+					continue;
+				}
 				GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
 				boolean isCreateOfCopyAction = copyGroupEdit.getEditAction().isCreateOrCopyAction();
 				if (groupEdit != null && !isCreateOfCopyAction) {
-					groupEdit.integrate(copyGroupEdit, inputRowCount);
+					if (copyGroupEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
+						groupEdit.copyPropertiesFrom(copyGroupEdit);
+					}
+					groupEdit.integrate(copyGroupEdit, inputRowCount, lastValidationBeforeExecution);
 					
 				} else {
 					copyGroupEdit.copyGroupEditTo(this, !isCreateOfCopyAction);
@@ -215,10 +193,16 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		
 		for (DataSetNodeEdit copyDataSetEdit : copyEdit.getDataSetNodeEdits()) {
 			if (copyDataSetEdit.getEditAction() != EditAction.NO_ACTION) {
+				if (lastValidationBeforeExecution && useOverwritePolicy(copyDataSetEdit, inputRowCount)) {
+					continue;
+				}
 				DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
 				boolean isCreateOfCopyAction = copyDataSetEdit.getEditAction().isCreateOrCopyAction();
 				if (dataSetEdit != null && !isCreateOfCopyAction) {
-					dataSetEdit.integrate(copyDataSetEdit, inputRowCount);
+					if (copyDataSetEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
+						dataSetEdit.copyPropertiesFrom(copyDataSetEdit);
+					}
+					dataSetEdit.integrate(copyDataSetEdit, inputRowCount, lastValidationBeforeExecution);
 					
 				} else {
 					copyDataSetEdit.copyDataSetEditTo(this, !isCreateOfCopyAction);
@@ -233,12 +217,16 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		
 		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
 			if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
+				if (lastValidationBeforeExecution && useOverwritePolicy(copyAttributeEdit, inputRowCount)) {
+					continue;
+				}
 				AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
 				boolean isCreateOfCopyAction = copyAttributeEdit.getEditAction().isCreateOrCopyAction();
 				if (attributeEdit != null && !isCreateOfCopyAction) {
-					removeAttributeNodeEdit(attributeEdit);
+					attributeEdit.copyPropertiesFrom(copyAttributeEdit);
+				} else {
+					copyAttributeEdit.copyAttributeEditTo(this, !isCreateOfCopyAction);
 				}
-				copyAttributeEdit.copyAttributeEditTo(this, !isCreateOfCopyAction);
 			}
 		}
 	}
@@ -317,7 +305,8 @@ public class GroupNodeEdit extends TreeNodeEdit {
         while (groupEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = groupEnum.nextElement();
         	GroupNodeEdit edit = new GroupNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()), 
-        			editSettings.getString(SettingsKey.NAME.getKey()), EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
+        			editSettings.getString(SettingsKey.NAME.getKey()), EditOverwritePolicy.values()[editSettings.getInt(SettingsKey.EDIT_OVERWRITE_POLICY.getKey())],
+        			EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
             edit.loadSettingsFrom(editSettings);
         }
         
@@ -326,7 +315,8 @@ public class GroupNodeEdit extends TreeNodeEdit {
         while (dataSetEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = dataSetEnum.nextElement();
         	DataSetNodeEdit edit = new DataSetNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()),
-        			editSettings.getString(SettingsKey.NAME.getKey()), EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
+        			editSettings.getString(SettingsKey.NAME.getKey()), EditOverwritePolicy.values()[editSettings.getInt(SettingsKey.EDIT_OVERWRITE_POLICY.getKey())],
+        			EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
     		edit.loadSettingsFrom(editSettings);
         }
         
@@ -335,8 +325,8 @@ public class GroupNodeEdit extends TreeNodeEdit {
         while (attributeEnum.hasMoreElements()) {
         	NodeSettingsRO editSettings = attributeEnum.nextElement();
 			AttributeNodeEdit edit = new AttributeNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()),
-					editSettings.getString(SettingsKey.NAME.getKey()), HdfDataType.get(editSettings.getInt(SettingsKey.INPUT_TYPE.getKey())),
-					EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
+					editSettings.getString(SettingsKey.NAME.getKey()), EditOverwritePolicy.values()[editSettings.getInt(SettingsKey.EDIT_OVERWRITE_POLICY.getKey())],
+					HdfDataType.get(editSettings.getInt(SettingsKey.INPUT_TYPE.getKey())), EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
 			edit.loadSettingsFrom(editSettings);
         }
 	}
@@ -381,8 +371,10 @@ public class GroupNodeEdit extends TreeNodeEdit {
 
 	@Override
 	protected boolean isInConflict(TreeNodeEdit edit) {
-		return (edit instanceof GroupNodeEdit || edit instanceof DataSetNodeEdit) && !edit.equals(this)
-				&& edit.getName().equals(getName()) && getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
+		return (edit instanceof GroupNodeEdit || edit instanceof DataSetNodeEdit) && this != edit && getName().equals(edit.getName())
+				&& getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE
+				&& (!(edit instanceof GroupNodeEdit) || getEditOverwritePolicy() == EditOverwritePolicy.NONE && edit.getEditOverwritePolicy() == EditOverwritePolicy.NONE
+						|| getEditOverwritePolicy() == EditOverwritePolicy.OVERWRITE && edit.getEditOverwritePolicy() == EditOverwritePolicy.OVERWRITE);
 	}
 
 	@Override
@@ -392,7 +384,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			if (!parent.isFile()) {
 				parent.open();
 			}
-			Hdf5Group group = parent.createGroup(getName());
+			Hdf5Group group = parent.createGroupFromEdit(this);
 			setHdfObject(group);
 			return group != null;
 			
@@ -404,34 +396,26 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected boolean copyAction() {
-		try {
-			Hdf5Group oldGroup = ((Hdf5File) getRoot().getHdfObject()).getGroupByPath(getInputPathFromFileWithName());
-			
-			Hdf5Group newParent = (Hdf5Group) getParent().getHdfObject();
-			if (!newParent.isFile()) {
-				newParent.open();
-			}
-			
-			return oldGroup.getParent().copyObject(oldGroup.getName(), newParent, getName());
-			
-		} catch (IOException ioe) {
-			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-		}
-		
-		return false;
+		return createAction(null, null, false);
 	}
 
 	@Override
 	protected boolean deleteAction() {
+		boolean success = false;
+		
 		Hdf5Group parent = (Hdf5Group) getParent().getHdfObject();
 		if (!parent.isFile()) {
 			parent.open();
 		}
 		
 		String name = getInputPathFromFileWithName().substring(getInputPathFromFileWithName().lastIndexOf("/") + 1);
-		boolean success = parent.deleteObject(name) >= 0;
-		if (success) {
-			setHdfObject((Hdf5Group) null);
+		try {
+			success = parent.deleteObject(name) >= 0;
+			if (success) {
+				setHdfObject((Hdf5Group) null);
+			}
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 		}
 		
 		return success;
@@ -447,7 +431,9 @@ public class GroupNodeEdit extends TreeNodeEdit {
 				newParent.open();
 			}
 			
-			return oldGroup.getParent().moveObject(oldGroup.getName(), newParent, getName());
+			Hdf5Group newGroup = (Hdf5Group) oldGroup.getParent().moveObject(oldGroup.getName(), newParent, getName());
+			setHdfObject(newGroup);
+			return newGroup != null;
 			
 		} catch (IOException ioe) {
 			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
@@ -491,26 +477,29 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	    	private static final long serialVersionUID = 1254593831386973543L;
 	    	
 			private JTextField m_nameField = new JTextField(15);
+			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.values());
 	    	
 			private GroupPropertiesDialog() {
 				super(GroupNodeMenu.this, "Group properties");
 
-				JPanel namePanel = new JPanel();
-				namePanel.add(m_nameField, BorderLayout.CENTER);
-				addProperty("Name: ", namePanel);
+				addProperty("Name: ", m_nameField);
+				addProperty("Overwrite: ", m_overwriteField);
 				
 				pack();
 			}
 			
 			@Override
 			protected void loadFromEdit() {
-				m_nameField.setText(GroupNodeEdit.this.getName());
+				GroupNodeEdit edit = GroupNodeEdit.this;
+				m_nameField.setText(edit.getName());
+				m_overwriteField.setSelectedItem(edit.getEditOverwritePolicy());
 			}
 
 			@Override
 			protected void saveToEdit() {
 				GroupNodeEdit edit = GroupNodeEdit.this;
 				edit.setName(m_nameField.getText());
+				edit.setEditOverwritePolicy((EditOverwritePolicy) m_overwriteField.getSelectedItem());
 				edit.setEditAction(EditAction.MODIFY);
 
 				edit.reloadTreeWithEditVisible();

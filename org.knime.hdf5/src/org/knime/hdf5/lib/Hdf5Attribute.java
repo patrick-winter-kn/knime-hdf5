@@ -1,5 +1,7 @@
 package org.knime.hdf5.lib;
 
+import java.util.Arrays;
+
 import javax.activation.UnsupportedDataTypeException;
 
 import org.knime.core.node.NodeLogger;
@@ -324,6 +326,31 @@ public class Hdf5Attribute<Type> {
         return false;
 	}
 	
+	public boolean copyValuesTo(Hdf5Attribute<?> attribute) {
+		try {
+			return H5.H5Acopy(getAttributeId(), attribute.getAttributeId()) >= 0;
+			
+		} catch (HDF5LibraryException hle) {
+			NodeLogger.getLogger(getClass()).error(hle.getMessage(), hle);
+		}
+		
+		return false;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public boolean clearData() {
+		try {
+			Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) m_dimension);
+			Arrays.fill(dataIn, (Type) m_type.getKnimeType().getMissingValue());
+			return write(dataIn, Rounding.DOWN);
+			
+		} catch (UnsupportedDataTypeException udte) {
+			NodeLogger.getLogger(getClass()).error(udte.getMessage(), udte);
+		}
+		
+		return false;
+	}
+	
 	/**
 	 * Reads the data array of this attribute in Hdf5 and saves it as the new value of this
 	 * attribute which can be retrieved with {@code getValue()}.
@@ -385,17 +412,6 @@ public class Hdf5Attribute<Type> {
 		
 		m_value = dataOut;
 		return dataOut;
-	}
-	
-	public boolean copyValuesTo(Hdf5Attribute<?> attribute) {
-		try {
-			return H5.H5Acopy(getAttributeId(), attribute.getAttributeId()) >= 0;
-			
-		} catch (HDF5LibraryException hle) {
-			NodeLogger.getLogger(getClass()).error(hle.getMessage(), hle);
-		}
-		
-		return false;
 	}
 	
 	/**

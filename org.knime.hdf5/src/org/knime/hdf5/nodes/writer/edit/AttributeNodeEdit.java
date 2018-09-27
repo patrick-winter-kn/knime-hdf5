@@ -5,10 +5,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import javax.swing.ButtonGroup;
 import javax.swing.JCheckBox;
-import javax.swing.JPanel;
-import javax.swing.JRadioButton;
+import javax.swing.JComboBox;
 import javax.swing.JTextField;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -44,17 +42,15 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	private int m_compoundItemStringLength;
 	
-	private boolean m_overwrite;
-	
 	public AttributeNodeEdit(TreeNodeEdit parent, FlowVariable var) {
-		this(parent, var.getName(), var.getName().replaceAll("\\\\/", "/"),
+		this(parent, var.getName(), var.getName().replaceAll("\\\\/", "/"), EditOverwritePolicy.NONE,
 				HdfDataType.getHdfDataType(var.getType()), EditAction.CREATE);
 		updatePropertiesFromFlowVariable(var);
 	}
 
 	private AttributeNodeEdit(TreeNodeEdit parent, AttributeNodeEdit copyAttribute, boolean noAction) {
-		this(parent, copyAttribute.getInputPathFromFileWithName(), copyAttribute.getName(), copyAttribute.getInputType(),
-				noAction ? EditAction.NO_ACTION : (copyAttribute.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY));
+		this(parent, copyAttribute.getInputPathFromFileWithName(), copyAttribute.getName(), copyAttribute.getEditOverwritePolicy(), copyAttribute.getInputType(),
+				noAction ? copyAttribute.getEditAction() : (copyAttribute.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY));
 		copyAdditionalPropertiesFrom(copyAttribute);
 		if (getEditAction() == EditAction.COPY) {
 			copyAttribute.addIncompleteCopy(this);
@@ -62,7 +58,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 
 	public AttributeNodeEdit(TreeNodeEdit parent, Hdf5Attribute<?> attribute) {
-		this(parent, attribute.getPathFromFile() + attribute.getName().replaceAll("/", "\\\\/"), attribute.getName(),
+		this(parent, attribute.getPathFromFile() + attribute.getName().replaceAll("/", "\\\\/"), attribute.getName(), EditOverwritePolicy.NONE,
 				attribute.getType().getHdfType().getType(), EditAction.NO_ACTION);
 		
 		if (attribute.getType().isHdfType(HdfDataType.STRING)) {
@@ -80,8 +76,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		setHdfObject(attribute);
 	}
 
-	private AttributeNodeEdit(TreeNodeEdit parent, String inputPathFromFileWithName, String name, HdfDataType inputType, EditAction editAction) {
-		super(inputPathFromFileWithName, !(parent instanceof FileNodeEdit) ? parent.getOutputPathFromFileWithName() : "", name, editAction);
+	private AttributeNodeEdit(TreeNodeEdit parent, String inputPathFromFileWithName, String name, EditOverwritePolicy editOverwritePolicy, HdfDataType inputType, EditAction editAction) {
+		super(inputPathFromFileWithName, !(parent instanceof FileNodeEdit) ? parent.getOutputPathFromFileWithName() : "", name, editOverwritePolicy, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
 		if (parent instanceof GroupNodeEdit) {
@@ -96,16 +92,16 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		}
 	}
 	
-	AttributeNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name, HdfDataType inputType, EditAction editAction) {
-		super(inputPathFromFileWithName, !(parent instanceof FileNodeEdit) ? parent.getOutputPathFromFileWithName() : "", name, editAction);
+	AttributeNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name, EditOverwritePolicy editOverwritePolicy, HdfDataType inputType, EditAction editAction) {
+		super(inputPathFromFileWithName, !(parent instanceof FileNodeEdit) ? parent.getOutputPathFromFileWithName() : "", name, editOverwritePolicy, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
 		m_possibleOutputTypes = m_inputType.getPossiblyConvertibleHdfTypes();
 		parent.addAttributeNodeEdit(this);
 	}
 	
-	AttributeNodeEdit(DataSetNodeEdit parent, String inputPathFromFileWithName, String name, HdfDataType inputType, EditAction editAction) {
-		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editAction);
+	AttributeNodeEdit(DataSetNodeEdit parent, String inputPathFromFileWithName, String name, EditOverwritePolicy editOverwritePolicy, HdfDataType inputType, EditAction editAction) {
+		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editOverwritePolicy, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
 		m_possibleOutputTypes = m_inputType.getPossiblyConvertibleHdfTypes();
@@ -175,14 +171,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_compoundItemStringLength = compoundItemStringLength;
 	}
 
-	public boolean isOverwrite() {
-		return m_overwrite;
-	}
-
-	private void setOverwrite(boolean overwrite) {
-		m_overwrite = overwrite;
-	}
-
 	private boolean havePropertiesChanged() {
 		boolean propertiesChanged = true;
 		
@@ -212,7 +200,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			m_compoundAsArrayPossible = copyAttributeEdit.isCompoundAsArrayPossible();
 			m_compoundAsArrayUsed = copyAttributeEdit.isCompoundAsArrayUsed();
 			m_compoundItemStringLength = copyAttributeEdit.getCompoundItemStringLength();
-			m_overwrite = copyAttributeEdit.isOverwrite();
 		}
 	}
 	
@@ -246,7 +233,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		settings.addBoolean(SettingsKey.COMPOUND_AS_ARRAY_POSSIBLE.getKey(), m_compoundAsArrayPossible);
 		settings.addBoolean(SettingsKey.COMPOUND_AS_ARRAY_USED.getKey(), m_compoundAsArrayUsed);
 		settings.addInt(SettingsKey.COMPOUND_ITEM_STRING_LENGTH.getKey(), m_compoundItemStringLength);
-		settings.addBoolean(SettingsKey.OVERWRITE.getKey(), m_overwrite);
 	}
 
 	@Override
@@ -261,12 +247,12 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		} catch (IOException ioe) {
 			// nothing to do here: edit will be invalid anyway
 		}
-		
+
+		setEditOverwritePolicy(EditOverwritePolicy.values()[settings.getInt(SettingsKey.EDIT_OVERWRITE_POLICY.getKey())]);
 		m_editDataType.loadSettingsFrom(settings);
 		setCompoundAsArrayPossible(settings.getBoolean(SettingsKey.COMPOUND_AS_ARRAY_POSSIBLE.getKey()));
 		setCompoundAsArrayUsed(settings.getBoolean(SettingsKey.COMPOUND_AS_ARRAY_USED.getKey()));
 		setCompoundItemStringLength(settings.getInt(SettingsKey.COMPOUND_ITEM_STRING_LENGTH.getKey()));
-		setOverwrite(settings.getBoolean(SettingsKey.OVERWRITE.getKey()));
 	}
 	
 	@Override
@@ -276,8 +262,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 
 	@Override
 	protected boolean isInConflict(TreeNodeEdit edit) {
-		return edit instanceof AttributeNodeEdit && !edit.equals(this) && edit.getName().equals(getName())
-				&& getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
+		return edit instanceof AttributeNodeEdit && this != edit && getName().equals(edit.getName())
+				&& getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE
+				&& (getEditOverwritePolicy() == EditOverwritePolicy.NONE && edit.getEditOverwritePolicy() == EditOverwritePolicy.NONE
+						|| getEditOverwritePolicy() == EditOverwritePolicy.OVERWRITE && edit.getEditOverwritePolicy() == EditOverwritePolicy.OVERWRITE);
 	}
 
 	@Override
@@ -311,7 +299,12 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			
 			Hdf5Attribute<?> newAttribute = null;
 			try {
-				newAttribute = parent.createAndWriteAttribute(this, copyAttribute);
+				if (!havePropertiesChanged()) {
+					newAttribute = parent.copyAttribute(getName(), copyAttribute);
+					
+				} else {
+					newAttribute = parent.createAndWriteAttribute(this, copyAttribute);
+				}
 			} catch (IOException ioe) {
 				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 			}
@@ -416,15 +409,15 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			private static final long serialVersionUID = 9201153080744087510L;
 	    	
 			private JTextField m_nameField = new JTextField(15);
+			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getValuesWithoutIntegrate());
 			private DataTypeChooser m_dataTypeChooser = m_editDataType.new DataTypeChooser(false);
 			private JCheckBox m_compoundAsArrayField = new JCheckBox();
-			private JRadioButton m_overwriteNo = new JRadioButton("no");
-			private JRadioButton m_overwriteYes = new JRadioButton("yes");
 			
 			private AttributePropertiesDialog() {
 				super(AttributeNodeMenu.this, "Attribute properties");
 
 				addProperty("Name: ", m_nameField);
+				addProperty("Overwrite: ", m_overwriteField);
 				m_dataTypeChooser.addToPropertiesDialog(this);
 				
 				if (m_compoundAsArrayPossible) {
@@ -441,14 +434,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 					m_compoundAsArrayField.setEnabled(false);
 				}
 				addProperty("Use values from flowVariable array: ", m_compoundAsArrayField);
-
-				JPanel overwriteField = new JPanel();
-				ButtonGroup overwriteGroup = new ButtonGroup();
-				overwriteField.add(m_overwriteNo);
-				overwriteGroup.add(m_overwriteNo);
-				overwriteField.add(m_overwriteYes);
-				overwriteGroup.add(m_overwriteYes);
-				addProperty("Overwrite: ", overwriteField);
 				
 				pack();
 			}
@@ -457,19 +442,18 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			protected void loadFromEdit() {
 				AttributeNodeEdit edit = AttributeNodeEdit.this;
 				m_nameField.setText(edit.getName());
+				m_overwriteField.setSelectedItem(edit.getEditOverwritePolicy());
 				m_dataTypeChooser.loadFromDataType(m_possibleOutputTypes, m_inputType == HdfDataType.FLOAT32);
 				m_compoundAsArrayField.setSelected(edit.isCompoundAsArrayUsed());
-				m_overwriteNo.setSelected(!edit.isOverwrite());
-				m_overwriteYes.setSelected(edit.isOverwrite());
 			}
 
 			@Override
 			protected void saveToEdit() {
 				AttributeNodeEdit edit = AttributeNodeEdit.this;
 				edit.setName(m_nameField.getText());
+				edit.setEditOverwritePolicy((EditOverwritePolicy) m_overwriteField.getSelectedItem());
 				m_dataTypeChooser.saveToDataType();
 				edit.setCompoundAsArrayUsed(m_compoundAsArrayField.isSelected());
-				edit.setOverwrite(m_overwriteYes.isSelected());
 				edit.setEditAction(EditAction.MODIFY);
 
 				edit.reloadTreeWithEditVisible();
