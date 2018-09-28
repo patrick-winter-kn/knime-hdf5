@@ -105,6 +105,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
+	protected int getProgressToDoInEdit() {
+		return getEditAction() != EditAction.NO_ACTION && getEditAction() != EditAction.MODIFY_CHILDREN_ONLY && getEditState() != EditState.SUCCESS ? 1 : 0;
+	}
+	
+	@Override
 	void setDeletion(boolean isDelete) {
 		if (isDelete) {
 			((DataSetNodeEdit) getParent()).disconsiderColumnNodeEdit(this);

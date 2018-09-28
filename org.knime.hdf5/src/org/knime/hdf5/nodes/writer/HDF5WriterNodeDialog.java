@@ -8,6 +8,7 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -54,12 +55,13 @@ import org.knime.core.node.util.FlowVariableListCellRenderer;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
+import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit;
 
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 	
 	private SettingsModelString m_filePathSettings;
 	
-	private SettingsModelBoolean m_structureMustMatch;
+	private SettingsModelBoolean m_forceCreationOfNewFile;
 	
 	private SettingsModelBoolean m_saveColumnProperties;
 
@@ -100,16 +102,15 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
         closeCurrentGroup();
         
         
-		// TODO see if structureMustMatch is still needed
-		m_structureMustMatch = SettingsFactory.createStructureMustMatchSettings();
-		DialogComponentBoolean structureMustMatch = new DialogComponentBoolean(m_structureMustMatch,
-				"Structure must match");
+		m_forceCreationOfNewFile = SettingsFactory.createforceCreationOfNewFileSettings();
+		DialogComponentBoolean forceCreationOfNewFile = new DialogComponentBoolean(m_forceCreationOfNewFile,
+				"Force creation of new file");
 		m_saveColumnProperties = SettingsFactory.createSaveColumnPropertiesSettings();
 		DialogComponentBoolean saveColumnProperties = new DialogComponentBoolean(m_saveColumnProperties,
 				"Save column properties");
 		
         createNewGroup("Advanced settings:");
-		addDialogComponent(structureMustMatch);
+		addDialogComponent(forceCreationOfNewFile);
 		addDialogComponent(saveColumnProperties);
         closeCurrentGroup();
 		
@@ -140,9 +141,8 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				String filePath = m_filePathSettings.getStringValue();
 				try {
-					m_editTreePanel.updateTreeWithFile(filePath, true, m_structureMustMatch.getBooleanValue());
+					m_editTreePanel.updateTreeWithFile(getFilePathFromSettings(), true);
 				} catch (IOException ioe) {
 		    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 				}
@@ -176,6 +176,36 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		
 		outputPanel.add(m_editTreePanel);
 	}
+    
+    private String getFilePathFromSettings() throws IOException {
+    	String filePath = m_filePathSettings.getStringValue();
+    	
+    	if (m_forceCreationOfNewFile.getBooleanValue()) {
+    		File directory = new File(Hdf5File.getDirectoryPath(filePath));
+    		if (directory.isDirectory()) {
+    			String fileName = filePath.substring(filePath.lastIndexOf(File.separator) + 1);
+    			String fileExtension = fileName.lastIndexOf(".") >= 0 ? fileName.substring(fileName.lastIndexOf(".")) : "";
+    			String fileNameWithoutExtension = fileName.substring(0, fileName.length() - fileExtension.length());
+    			
+    			List<String> usedNames = new ArrayList<>();
+    			for (File file : directory.listFiles()) {
+    				if (file.isFile()) {
+    					String name = file.getName();
+    	    			String extension = name.lastIndexOf(".") >= 0 ? name.substring(name.lastIndexOf(".")) : "";
+    	    			if (extension.equals(fileExtension)) {
+    	    				usedNames.add(name.substring(0, name.length() - extension.length()));
+    	    			}
+    				}
+    			}
+        		filePath = directory.getPath() + File.separator + TreeNodeEdit.getUniqueName(usedNames, fileNameWithoutExtension) + fileExtension;
+        		
+    		} else {
+    			throw new IOException("Directory \"" + directory.getPath() + "\" for new file does not exist");
+    		}
+    	}
+    	
+    	return filePath;
+    }
     
     private void addListToPanel(SpecInfo specInfo, JPanel panel) {
     	ListPanel listPanel = specInfo == SpecInfo.COLUMN_SPECS ? m_columnSpecPanel
@@ -297,7 +327,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     }
     
     /**
-     * Calls the update method of the underlying filter panel.
      * @param settings the node settings to read from
      * @param specs the input specs
      * @throws NotConfigurableException if no columns are available for
@@ -318,7 +347,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	
     	if (!m_filePathSettings.getStringValue().trim().isEmpty()) {
 			try {
-				m_editTreePanel.updateTreeWithConfig(m_filePathSettings.getStringValue());
+				m_editTreePanel.updateTreeWithResetConfig(getFilePathFromSettings());
 			} catch (IOException ioe) {
 	    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 			}

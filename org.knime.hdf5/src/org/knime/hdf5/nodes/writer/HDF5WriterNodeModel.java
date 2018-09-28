@@ -24,7 +24,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 
 	private SettingsModelString m_filePathSettings;
 	
-	private SettingsModelBoolean m_structureMustMatch;
+	private SettingsModelBoolean m_forceCreationOfNewFile;
 	
 	private SettingsModelBoolean m_saveColumnProperties;
 	
@@ -33,7 +33,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 	protected HDF5WriterNodeModel() {
 		super(new PortType[] { BufferedDataTable.TYPE_OPTIONAL }, new PortType[] {});
 		m_filePathSettings = SettingsFactory.createFilePathSettings();
-		m_structureMustMatch = SettingsFactory.createStructureMustMatchSettings();
+		m_forceCreationOfNewFile = SettingsFactory.createforceCreationOfNewFileSettings();
 		m_saveColumnProperties = SettingsFactory.createSaveColumnPropertiesSettings();
 		m_editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 	}
@@ -48,15 +48,19 @@ public class HDF5WriterNodeModel extends NodeModel {
 		checkForErrors(m_filePathSettings, m_editTreeConfig, inData[0]);
 
 		// TODO find a possibility to estimate exec.setProgress()
+		boolean success = false;
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
 		try {
-			fileEdit.doAction(inData[0], getAvailableFlowVariables(), m_saveColumnProperties.getBooleanValue());
+			success = fileEdit.doAction(inData[0], getAvailableFlowVariables(), m_saveColumnProperties.getBooleanValue(), exec);
 		} catch (Exception e) {
 			// just for testing if there are exceptions here
 			NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
 		} finally {
 			if (fileEdit.getHdfObject() != null) {
 				((Hdf5File) fileEdit.getHdfObject()).close();
+			}
+			if (!success) {
+				NodeLogger.getLogger(getClass()).info("Summary to find failed edits:\n" + fileEdit.getSummaryOfEditStates());
 			}
 		}
 		
@@ -114,7 +118,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 	@Override
 	protected void saveSettingsTo(NodeSettingsWO settings) {
 		m_filePathSettings.saveSettingsTo(settings);
-		m_structureMustMatch.saveSettingsTo(settings);
+		m_forceCreationOfNewFile.saveSettingsTo(settings);
 		m_saveColumnProperties.saveSettingsTo(settings);
 		m_editTreeConfig.saveConfiguration(settings);
 	}
@@ -134,7 +138,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 	@Override
 	protected void loadValidatedSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
 		m_filePathSettings.loadSettingsFrom(settings);
-		m_structureMustMatch.loadSettingsFrom(settings);
+		m_forceCreationOfNewFile.loadSettingsFrom(settings);
 		m_saveColumnProperties.loadSettingsFrom(settings);
 		
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();

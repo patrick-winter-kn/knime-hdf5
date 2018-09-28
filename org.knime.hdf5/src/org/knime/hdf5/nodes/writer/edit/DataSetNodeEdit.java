@@ -383,6 +383,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	public String getToolTipText() {
 		return "(" + m_editDataType.getOutputType().toString() + ") " + super.getToolTipText();
 	}
+	
+	@Override
+	protected int getProgressToDoInEdit() {
+		return getEditAction() != EditAction.NO_ACTION && getEditAction() != EditAction.MODIFY_CHILDREN_ONLY && getEditState() != EditState.SUCCESS ? 1 : 0;
+	}
 
 	@Override
 	protected TreeNodeEdit[] getAllChildren() {

@@ -209,6 +209,11 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
+	protected int getProgressToDoInEdit() {
+		return getEditAction() != EditAction.NO_ACTION && getEditAction() != EditAction.MODIFY_CHILDREN_ONLY && getEditState() != EditState.SUCCESS ? 1 : 0;
+	}
+	
+	@Override
 	protected TreeNodeEdit[] getAllChildren() {
 		return new TreeNodeEdit[0];
 	}
@@ -241,7 +246,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	        if (!getEditAction().isCreateOrCopyAction()) {
 	        	Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
 	        	if (parent != null) {
-		        	setHdfObject(parent.getAttribute(Hdf5Attribute.getPathAndName(getInputPathFromFileWithName())[1]));
+		        	setHdfObject(parent.getAttribute(Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1]));
 	        	}
 	        }
 		} catch (IOException ioe) {
@@ -326,7 +331,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			parent.open();
 		}
 		
-		boolean success = parent.deleteAttribute(Hdf5Attribute.getPathAndName(getInputPathFromFileWithName())[1]) >= 0;
+		boolean success = parent.deleteAttribute(Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1]) >= 0;
 		if (success) {
 			setHdfObject((Hdf5Attribute<?>) null);
 		}
@@ -342,7 +347,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		if (!parent.isFile()) {
 			parent.open();
 		}
-		String[] pathAndName = Hdf5Attribute.getPathAndName(getInputPathFromFileWithName());
+		String[] pathAndName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName());
 		String oldName = pathAndName[1];
 		
 		if (!havePropertiesChanged() && getOutputPathFromFile().equals(pathAndName[0])) {

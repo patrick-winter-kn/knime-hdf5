@@ -71,8 +71,8 @@ final class SettingsFactory {
 	 * 
 	 * @return Source <code>SettingsModel</code>
 	 */
-	static SettingsModelBoolean createStructureMustMatchSettings() {
-		return new SettingsModelBoolean("structureMustMatch" + OUTPUT_CONFIG_KEY, false);
+	static SettingsModelBoolean createforceCreationOfNewFileSettings() {
+		return new SettingsModelBoolean("forceCreationOfNewFile" + OUTPUT_CONFIG_KEY, false);
 	}
 	
     /**

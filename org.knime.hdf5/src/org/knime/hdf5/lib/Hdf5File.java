@@ -104,13 +104,17 @@ public class Hdf5File extends Hdf5Group {
 	}
 	
 	public synchronized static boolean isHdfFileCreatable(final String filePath) {
-		String a = filePath.substring(0, filePath.lastIndexOf(File.separator));
-		File b = new File(a);
-		return hasHdf5FileEnding(filePath) && b.isDirectory() && !new File(filePath).exists();
+		return hasHdf5FileEnding(filePath) && new File(getDirectoryPath(filePath)).isDirectory()
+				&& !new File(filePath).exists();
 	}
 	
 	public static boolean hasHdf5FileEnding(final String filePath) {
 		return filePath.endsWith(".h5") || filePath.endsWith(".hdf5");
+	}
+	
+	public static String getDirectoryPath(String filePath) {
+		int dirPathLength = filePath.lastIndexOf(File.separator);
+		return filePath.substring(0, dirPathLength >= 0 ? dirPathLength : 0);
 	}
 	
 	protected boolean isOpen() {

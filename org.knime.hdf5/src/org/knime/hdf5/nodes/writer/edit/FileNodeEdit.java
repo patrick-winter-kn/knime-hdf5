@@ -10,13 +10,15 @@ import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
 import org.knime.core.node.BufferedDataTable;
+import org.knime.core.node.CanceledExecutionException;
+import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
-import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.lib.Hdf5TreeElement;
 
 public class FileNodeEdit extends GroupNodeEdit {
 	
@@ -70,7 +72,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	AttributeNodeEdit getAttributeEditByPath(String inputPathFromFileWithName) {
 		AttributeNodeEdit attributeEdit = null;
 		
-		String[] pathAndName = Hdf5Attribute.getPathAndName(inputPathFromFileWithName);
+		String[] pathAndName = Hdf5TreeElement.getPathAndName(inputPathFromFileWithName);
 		GroupNodeEdit parentGroup = getGroupEditByPath(pathAndName[0]);
 		
 		if (parentGroup != null) {
@@ -108,6 +110,21 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 		
         return edit;
+	}
+
+	private int getTotalProgressToDo() {
+		int progressToDo = 0;
+		
+		for (TreeNodeEdit edit : getAllDecendants()) {
+			progressToDo += edit.getProgressToDoInEdit();
+		}
+		
+		return progressToDo;
+	}
+	
+	@Override
+	protected int getProgressToDoInEdit() {
+		return 1;
 	}
 	
 	public void integrate(FileNodeEdit copyEdit, BufferedDataTable inputTable, boolean lastValidationBeforeExecution) {
@@ -210,15 +227,15 @@ public class FileNodeEdit extends GroupNodeEdit {
 				&& edit.getName().equals(getName());
 	}
 	
-	@Override
-	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec) throws CanceledExecutionException {
 		try {
 			boolean success = true;
 			if (!getEditAction().isCreateOrCopyAction()) {
 				setHdfObject(Hdf5File.openFile(getFilePath(), Hdf5File.READ_WRITE_ACCESS));
 				success = getHdfObject() != null;
 			}
-			return success && super.doAction(inputTable, flowVariables, saveColumnProperties);
+			exec.setProgress(0.0);
+			return success && doAction(inputTable, flowVariables, saveColumnProperties, exec, getTotalProgressToDo());
 			
 		} catch (IOException ioe) {
 			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);

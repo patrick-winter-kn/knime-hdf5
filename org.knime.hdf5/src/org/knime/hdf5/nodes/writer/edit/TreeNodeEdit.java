@@ -35,6 +35,8 @@ import javax.swing.event.ChangeListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 
 import org.knime.core.node.BufferedDataTable;
+import org.knime.core.node.CanceledExecutionException;
+import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
@@ -143,6 +145,10 @@ public abstract class TreeNodeEdit {
 		}
 	}
 	
+	public static enum EditState {
+		TODO, SUCCESS, FAIL, POSTPONED;
+	}
+	
 	private String m_inputPathFromFileWithName;
 	
 	private String m_outputPathFromFile;
@@ -168,6 +174,8 @@ public abstract class TreeNodeEdit {
 	private TreeNodeEdit m_copyEdit;
 	
 	private Map<TreeNodeEdit, InvalidCause> m_invalidEdits = new HashMap<>();
+	
+	private EditState m_editState = EditState.TODO;
 
 	TreeNodeEdit(String inputPathFromFileWithName, String outputPathFromFile, String name, EditOverwritePolicy editOverwritePolicy, EditAction editAction) {
 		m_inputPathFromFileWithName = inputPathFromFileWithName;
@@ -177,15 +185,8 @@ public abstract class TreeNodeEdit {
 		setEditAction(editAction);
 	}
 	
-	@SuppressWarnings("unchecked")
-	public static String getUniqueName(DefaultMutableTreeNode parent, String name) {
-		List<String> usedNames = new ArrayList<>();
-		Enumeration<DefaultMutableTreeNode> children = parent.children();
-		while (children.hasMoreElements()) {
-			usedNames.add(((TreeNodeEdit) children.nextElement().getUserObject()).getName());
-		}
-		
-		return getUniqueName(usedNames, name);
+	public static String getUniqueName(TreeNodeEdit parent, Class<? extends TreeNodeEdit> editClass, String name) {
+		return getUniqueName(parent.getNamesOfChildrenWithNameConflictPossible(editClass), name);
 	}
 	
 	public static String getUniqueName(List<String> usedNames, String name) {
@@ -311,6 +312,14 @@ public abstract class TreeNodeEdit {
 	private void setCopyEdit(TreeNodeEdit copyEdit) {
 		m_copyEdit = copyEdit;
 	}
+
+	public EditState getEditState() {
+		return m_editState;
+	}
+	
+	private void setEditState(EditState editState) {
+		m_editState = editState;
+	}
 	
 	protected void copyPropertiesFrom(TreeNodeEdit copyEdit) {
 		copyCorePropertiesFrom(copyEdit);
@@ -331,6 +340,36 @@ public abstract class TreeNodeEdit {
 	
 	protected abstract void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit);
 
+	protected void addIncompleteCopy(TreeNodeEdit edit) {
+		if (edit.getCopyEdit() != null) {
+			edit.getCopyEdit().removeIncompleteCopy(edit);
+		}
+		m_incompleteCopies.add(edit);
+		edit.setCopyEdit(this);
+	}
+	
+	protected void removeIncompleteCopy(TreeNodeEdit edit) {
+		m_incompleteCopies.remove(edit);
+		edit.setCopyEdit(null);
+	}
+	
+	protected boolean areIncompleteCopiesLeft() {
+		return !m_incompleteCopies.isEmpty();
+	}
+	
+	protected void updateIncompleteCopies() {
+    	if (m_editAction == EditAction.COPY && m_copyEdit == null) {
+    		TreeNodeEdit copyEdit = findCopyEdit();
+			if (copyEdit != null) {
+				copyEdit.addIncompleteCopy(this);
+			}
+		}
+    	
+		for (TreeNodeEdit edit : getAllChildren()) {
+			edit.updateIncompleteCopies();
+		}
+	}
+	
 	public boolean isValid() {
 		return m_invalidEdits.isEmpty();
 	}
@@ -395,35 +434,24 @@ public abstract class TreeNodeEdit {
 				+ (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : " children") + ")");
 	}
 	
-	protected void addIncompleteCopy(TreeNodeEdit edit) {
-		if (edit.getCopyEdit() != null) {
-			edit.getCopyEdit().removeIncompleteCopy(edit);
-		}
-		m_incompleteCopies.add(edit);
-		edit.setCopyEdit(this);
-	}
-	
-	protected void removeIncompleteCopy(TreeNodeEdit edit) {
-		m_incompleteCopies.remove(edit);
-		edit.setCopyEdit(null);
-	}
-	
-	protected boolean areIncompleteCopiesLeft() {
-		return !m_incompleteCopies.isEmpty();
-	}
-	
-	protected void updateIncompleteCopies() {
-    	if (m_editAction == EditAction.COPY && m_copyEdit == null) {
-    		TreeNodeEdit copyEdit = findCopyEdit();
-			if (copyEdit != null) {
-				copyEdit.addIncompleteCopy(this);
+	public String getSummaryOfEditStates() {
+		StringBuilder summaryBuilder = new StringBuilder();
+		
+		List<TreeNodeEdit> descendants = getAllDecendants();
+		for (EditState state : EditState.values()) {
+			summaryBuilder.append("State " + state + ":\n");
+			for (TreeNodeEdit descendant : descendants.toArray(new TreeNodeEdit[descendants.size()])) {
+				if (state == descendant.getEditState()) {
+					summaryBuilder.append("- " + descendant.getOutputPathFromFileWithName() + "\n");
+					descendants.remove(descendant);
+				}
 			}
 		}
-    	
-		for (TreeNodeEdit edit : getAllChildren()) {
-			edit.updateIncompleteCopies();
-		}
+		
+		return summaryBuilder.toString();
 	}
+	
+	protected abstract int getProgressToDoInEdit();
 	
 	private TreeNodeEdit findCopyEdit() {
 		if (this instanceof GroupNodeEdit) {
@@ -529,6 +557,35 @@ public abstract class TreeNodeEdit {
 		return null;
 	}
 	
+	private List<String> getNamesOfChildrenWithNameConflictPossible(Class<? extends TreeNodeEdit> editClass) {
+		List<String> usedNames = new ArrayList<>();
+		
+		for (TreeNodeEdit child : getAllChildren()) {
+			if (child.isNameConflictPossible(editClass)) {
+				usedNames.add(child.getName());
+			}
+		}
+		
+		return usedNames;
+	}
+	
+	private boolean isNameConflictPossible(Class<? extends TreeNodeEdit> otherClass) {
+		Class<? extends TreeNodeEdit> thisClass = getClass();
+		return thisClass == otherClass || thisClass == DataSetNodeEdit.class && otherClass == GroupNodeEdit.class
+				|| thisClass == GroupNodeEdit.class && otherClass == DataSetNodeEdit.class;
+	}
+	
+	protected List<TreeNodeEdit> getAllDecendants() {
+		List<TreeNodeEdit> descendants = new ArrayList<>();
+		
+		descendants.add(this);
+		for (TreeNodeEdit child : getAllChildren()) {
+			descendants.addAll(child.getAllDecendants());
+		}
+		
+		return descendants;
+	}
+	
 	protected abstract TreeNodeEdit[] getAllChildren();
 	
 	protected abstract void removeFromParent();
@@ -583,8 +640,9 @@ public abstract class TreeNodeEdit {
 			case OVERWRITE:
 				break;
 			case RENAME:
-				// TODO the line below isn't correct so far; also consider the names of the edits which will be added later to this edit
-				newEdit.setName(TreeNodeEdit.getUniqueName(getTreeNode(), newEdit.getName()));
+				List<String> usedNames = getNamesOfChildrenWithNameConflictPossible(newEdit.getClass());
+				usedNames.addAll(newEdit.getParent().getNamesOfChildrenWithNameConflictPossible(newEdit.getClass()));
+				newEdit.setName(TreeNodeEdit.getUniqueName(usedNames, newEdit.getName()));
 				break;
 			case INTEGRATE:
 				// TODO test it
@@ -646,8 +704,11 @@ public abstract class TreeNodeEdit {
 	
 	protected abstract boolean isInConflict(TreeNodeEdit edit);
 	
-	protected boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+	protected boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, int totalProgressToDo) throws CanceledExecutionException {
 		boolean success = false;
+		boolean successOfOther = true;
+		
+		exec.checkCanceled();
 
 		switch (m_editAction) {
 		case CREATE:
@@ -659,7 +720,7 @@ public abstract class TreeNodeEdit {
 				TreeNodeEdit copyEdit = m_copyEdit;
 				m_copyEdit.removeIncompleteCopy(this);
 				if (!copyEdit.areIncompleteCopiesLeft() && copyEdit.getEditAction() == EditAction.DELETE) {
-					success &= copyEdit.doAction(null, null, false);
+					successOfOther &= copyEdit.doAction(null, null, false, exec, totalProgressToDo);
 				}
 			}
 			break;
@@ -668,7 +729,7 @@ public abstract class TreeNodeEdit {
 			break;
 		}
 		
-		doChildActionsInOrder(inputTable, flowVariables, saveColumnProperties);
+		successOfOther &= doChildActionsInOrder(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
 		
 		switch (m_editAction) {
 		case DELETE:
@@ -681,10 +742,17 @@ public abstract class TreeNodeEdit {
 			break;
 		}
 		
-		return success;
+		if (success) {
+			exec.setProgress((Math.round(exec.getProgressMonitor().getProgress() * totalProgressToDo) + getProgressToDoInEdit()) / totalProgressToDo);
+			setEditState(EditState.SUCCESS);
+		} else {
+			setEditState(EditState.FAIL);
+		}
+		
+		return success && successOfOther;
 	}
 
-	private boolean doChildActionsInOrder(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+	private boolean doChildActionsInOrder(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, int totalProgressToDo) throws CanceledExecutionException {
 		List<TreeNodeEdit> deleteEdits = new ArrayList<>();
 		List<TreeNodeEdit> modifyEdits = new ArrayList<>();
 		List<TreeNodeEdit> otherEdits = new ArrayList<>();
@@ -702,24 +770,27 @@ public abstract class TreeNodeEdit {
 		boolean success = true;
 		for (TreeNodeEdit edit : deleteEdits) {
 			if (!edit.areIncompleteCopiesLeft()) {
-				success &= edit.doAction(null, null, false);
+				success &= edit.doAction(null, null, false, exec, totalProgressToDo);
+			} else {
+				edit.setEditState(EditState.POSTPONED);
 			}
 		}
 		
 		List<TreeNodeEdit> secondModifyEdits = new ArrayList<>();
 		for (TreeNodeEdit edit : modifyEdits) {
-			if (!edit.doAction(inputTable, flowVariables, saveColumnProperties)) {
+			if (!edit.doAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo)) {
 				// TODO only add it to here if the action failed due to name duplicate (which is resolved through another modifyAction), not in other fails like "inappropriate type"
 				secondModifyEdits.add(edit);
+				edit.setEditState(EditState.POSTPONED);
 			}
 		}
 		
 		for (TreeNodeEdit edit : secondModifyEdits) {
-			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
+			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
 		}
 		
 		for (TreeNodeEdit edit : otherEdits) {
-			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties);
+			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
 		}
 		
 		return success;

@@ -66,6 +66,18 @@ abstract public class Hdf5TreeElement {
 		m_filePath = filePath;
 	}
 	
+	public static String[] getPathAndName(String pathWithName) {
+		int firstSlashInName = pathWithName.indexOf("\\/");
+		String pathWithFirstPartOfName = firstSlashInName == -1 ? pathWithName : pathWithName.substring(0, firstSlashInName);
+		int pathStringLength = pathWithFirstPartOfName.lastIndexOf("/");
+		
+		String name = pathWithName.substring(pathStringLength + 1);
+		name = name.replaceAll("\\\\/", "/");
+		String pathWithoutName = pathStringLength == -1 ? "" : pathWithName.substring(0, pathStringLength);
+		
+		return new String[] { pathWithoutName, name };
+	}
+	
 	public String getName() {
 		return m_name;
 	}
@@ -363,7 +375,7 @@ abstract public class Hdf5TreeElement {
 		Hdf5Attribute<?> attribute = null;
 		
 		if (path.matches(".*(?<!\\\\)/.*")) {
-			String[] pathAndName = Hdf5Attribute.getPathAndName(path);
+			String[] pathAndName = getPathAndName(path);
 			attribute = getAttributeByPath(pathAndName[0], pathAndName[1]);
 			
 		} else {

@@ -257,7 +257,7 @@ public class EditTreePanel extends JPanel {
                 
                 if (data.get(0) instanceof DataColumnSpec) {
                 	if (!(parentEdit instanceof DataSetNodeEdit)) {
-                		String newName = TreeNodeEdit.getUniqueName(parentEdit.getTreeNode(), "dataSet");
+                		String newName = TreeNodeEdit.getUniqueName(parentEdit, DataSetNodeEdit.class, "dataSet");
             			DataSetNodeEdit newEdit = new DataSetNodeEdit((GroupNodeEdit) parentEdit, newName);
                     	newEdit.addEditToParentNode();
                     	parentEdit = newEdit;
@@ -297,7 +297,7 @@ public class EditTreePanel extends JPanel {
     							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo(parentGroupEdit, false);
     							
     						} else if (copyEdit instanceof ColumnNodeEdit) {
-    							String newName = TreeNodeEdit.getUniqueName(parent, "dataSet");
+    							String newName = TreeNodeEdit.getUniqueName(parentEdit, DataSetNodeEdit.class, "dataSet");
     	            			DataSetNodeEdit newDataSetEdit = new DataSetNodeEdit(parentGroupEdit, newName);
     	            			newDataSetEdit.addEditToParentNode();
     							newEdit = ((ColumnNodeEdit) copyEdit).copyColumnEditTo((DataSetNodeEdit) newDataSetEdit, false);
@@ -427,18 +427,25 @@ public class EditTreePanel extends JPanel {
 	}
 
 	void updateTreeWithResetConfig() throws IOException {
-		updateTreeWithFile(m_editTreeConfig.getFileNodeEdit().getFilePath(), false, false);
+		updateTreeWithFile(m_editTreeConfig.getFileNodeEdit().getFilePath(), false);
 	}
 	
-	void updateTreeWithConfig(String filePath) throws IOException {
+	/**
+	 * Resets the config of the tree. If there have not been a config so far,
+	 * the file with the path {@code filePath} will be loaded.
+	 * 
+	 * @param filePath
+	 * @throws IOException
+	 */
+	void updateTreeWithResetConfig(String filePath) throws IOException {
 		if (m_editTreeConfig.getFileNodeEdit() != null) {
 			updateTreeWithResetConfig();
 		} else {
-			updateTreeWithFile(filePath, false, false);
+			updateTreeWithFile(filePath, false);
 		}
 	}
 	
-	void updateTreeWithFile(String filePath, boolean keepConfig, boolean structureMustMatch) throws IOException {
+	void updateTreeWithFile(String filePath, boolean keepConfig) throws IOException {
 		Hdf5File file = null;
 		
 		try {

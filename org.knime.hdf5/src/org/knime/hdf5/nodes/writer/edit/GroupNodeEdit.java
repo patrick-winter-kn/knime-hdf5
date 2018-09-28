@@ -237,6 +237,11 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
+	protected int getProgressToDoInEdit() {
+		return getEditAction() != EditAction.NO_ACTION && getEditAction() != EditAction.MODIFY_CHILDREN_ONLY && getEditState() != EditState.SUCCESS ? 1 : 0;
+	}
+	
+	@Override
 	protected TreeNodeEdit[] getAllChildren() {
 		List<TreeNodeEdit> children = new ArrayList<>();
 		
@@ -458,7 +463,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		@Override
 		protected void onCreateGroup() {
 			GroupNodeEdit edit = GroupNodeEdit.this;
-			String newName = getUniqueName(edit.getTreeNode(), "group");
+			String newName = getUniqueName(edit, GroupNodeEdit.class, "group");
 			GroupNodeEdit newEdit = new GroupNodeEdit(edit, newName);
             newEdit.addEditToParentNode();
             newEdit.reloadTreeWithEditVisible();

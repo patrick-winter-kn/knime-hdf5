@@ -123,18 +123,6 @@ public class Hdf5Attribute<Type> {
 		
 		return attribute;
 	}
-	
-	public static String[] getPathAndName(String pathWithName) {
-		int firstSlashInName = pathWithName.indexOf("\\/");
-		String pathWithFirstPartOfName = firstSlashInName == -1 ? pathWithName : pathWithName.substring(0, firstSlashInName);
-		int pathStringLength = pathWithFirstPartOfName.lastIndexOf("/");
-		
-		String name = pathWithName.substring(pathStringLength + 1);
-		name = name.replaceAll("\\\\/", "/");
-		String pathWithoutName = pathStringLength == -1 ? "" : pathWithName.substring(0, pathStringLength);
-		
-		return new String[] { pathWithoutName, name };
-	}
 
 	public static Object[] getFlowVariableValues(FlowVariable flowVariable) {
 		switch (flowVariable.getType()) {
