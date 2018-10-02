@@ -41,8 +41,7 @@ public class Hdf5Attribute<Type> {
 	
 	private String m_pathFromFile = "";
 	
-	private Hdf5Attribute(final Hdf5TreeElement parent, final String name,
-			final Hdf5DataType type) {
+	private Hdf5Attribute(final String name, final Hdf5DataType type) {
 		if (name == null) {
 			throw new IllegalArgumentException("name cannot be null");
 			
@@ -57,22 +56,22 @@ public class Hdf5Attribute<Type> {
 	private static Hdf5Attribute<?> getInstance(final Hdf5TreeElement parent, final String name,
 			final Hdf5DataType type) throws IllegalStateException {
 		if (parent == null) {
-			throw new IllegalArgumentException("Parent group of dataSet \"" + name + "\" cannot be null");
+			throw new IllegalArgumentException("Parent group of attribute \"" + name + "\" cannot be null");
 			
 		} else if (!parent.isOpen()) {
 			throw new IllegalStateException("Parent group \"" + parent.getPathFromFileWithName() + "\" is not open");
 		
 		} else if (type == null) {
-			throw new IllegalArgumentException("DataType for dataSet \"" + parent.getPathFromFileWithName() + name + "\" cannot be null");
+			throw new IllegalArgumentException("DataType for attribute \"" + parent.getPathFromFileWithName() + name + "\" cannot be null");
 		}
 		
 		switch (type.getKnimeType()) {
 		case INTEGER:
-			return new Hdf5Attribute<Integer>(parent, name, type);
+			return new Hdf5Attribute<Integer>(name, type);
 		case DOUBLE:
-			return new Hdf5Attribute<Double>(parent, name, type);
+			return new Hdf5Attribute<Double>(name, type);
 		case STRING:
-			return new Hdf5Attribute<String>(parent, name, type);
+			return new Hdf5Attribute<String>(name, type);
 		default:
 			NodeLogger.getLogger("HDF5 Files").warn("Attribute \"" + name + "\" in \""
 					+ parent.getPathFromFileWithName() + "\" has an unknown dataType");

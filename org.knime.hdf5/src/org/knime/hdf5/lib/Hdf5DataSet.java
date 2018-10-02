@@ -30,11 +30,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	private long m_chunkRowSize;
 	
-	private Hdf5DataType m_type;
+	private final Hdf5DataType m_type;
 	
-	private Hdf5DataSet(final Hdf5Group parent, final String name, final Hdf5DataType type) 
+	private Hdf5DataSet(final String name, final Hdf5DataType type) 
 			throws NullPointerException, IllegalArgumentException {
-		super(name, parent.getFilePath());
+		super(name);
 		
 		m_type = type;
 	}
@@ -52,13 +52,13 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		
 		switch (type.getKnimeType()) {
 		case INTEGER:
-			return new Hdf5DataSet<Integer>(parent, name, type);
+			return new Hdf5DataSet<Integer>(name, type);
 		case LONG:
-			return new Hdf5DataSet<Long>(parent, name, type);
+			return new Hdf5DataSet<Long>(name, type);
 		case DOUBLE:
-			return new Hdf5DataSet<Double>(parent, name, type);
+			return new Hdf5DataSet<Double>(name, type);
 		case STRING:
-			return new Hdf5DataSet<String>(parent, name, type);
+			return new Hdf5DataSet<String>(name, type);
 		default:
 			NodeLogger.getLogger("HDF5 Files").warn("DataSet \""
 					+ parent.getPathFromFileWithName() + name + "\" has an unknown dataType");

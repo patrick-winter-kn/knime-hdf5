@@ -32,8 +32,6 @@ abstract public class Hdf5TreeElement {
 
 	private final String m_name;
 	
-	private final String m_filePath;
-	
 	private final List<Hdf5Attribute<?>> m_attributes = new ArrayList<>();
 	
 	private long m_elementId = -1;
@@ -50,7 +48,7 @@ abstract public class Hdf5TreeElement {
 	 * 
 	 * @param name
 	 */
-	protected Hdf5TreeElement(final String name, final String filePath)
+	protected Hdf5TreeElement(final String name)
 			throws NullPointerException, IllegalArgumentException {
 		if (name == null) {
 			throw new NullPointerException("name cannot be null");
@@ -61,9 +59,8 @@ abstract public class Hdf5TreeElement {
 		} else if (name.contains("/")) {
 			throw new IllegalArgumentException("name \"" + name + "\" cannot contain '/'");
 		}
-		
+
 		m_name = name;
-		m_filePath = filePath;
 	}
 	
 	public static String[] getPathAndName(String pathWithName) {
@@ -80,10 +77,6 @@ abstract public class Hdf5TreeElement {
 	
 	public String getName() {
 		return m_name;
-	}
-
-	public String getFilePath() {
-		return m_filePath;
 	}
 
 	protected List<Hdf5Attribute<?>> getAttributes() {
@@ -622,18 +615,12 @@ abstract public class Hdf5TreeElement {
 					unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(typeId);
 				}
 				H5.H5Tclose(typeId);
-				
-				if (classId == HDF5Constants.H5T_VLEN) {
-					// TODO find correct real dataType
+
+				// unsupported attributes
+				if (classId == HDF5Constants.H5T_VLEN || classId == HDF5Constants.H5T_REFERENCE || classId == HDF5Constants.H5T_COMPOUND) {
 					H5.H5Aclose(attributeId);
-					throw new UnsupportedDataTypeException("DataType H5T_VLEN of attribute \"" + name + "\" in treeElement \""
-							+ getPathFromFile() + getName() + "\" is not supported");
-				}
-				
-				if (classId == HDF5Constants.H5T_REFERENCE) {
-					H5.H5Aclose(attributeId);
-					throw new UnsupportedDataTypeException("DataType H5T_REFERENCE of attribute \"" + name + "\" in treeElement \""
-							+ getPathFromFile() + getName() + "\" is not supported");
+					throw new UnsupportedDataTypeException("DataType " + H5.H5Tget_class_name(classId)
+							+ " of attribute \"" + name + "\" in treeElement \"" + getPathFromFileWithName() + "\" is not supported");
 				}
 				
 				dataType = Hdf5DataType.openDataType(attributeId, classId, size, endian, unsigned, vlen);

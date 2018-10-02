@@ -31,9 +31,9 @@ public class Hdf5Group extends Hdf5TreeElement {
 	
 	private final List<Hdf5DataSet<?>> m_dataSets = new ArrayList<>();
 
-	protected Hdf5Group(final String name, final String filePath)
+	protected Hdf5Group(final String name)
 			throws NullPointerException, IllegalArgumentException {
-		super(name, filePath);
+		super(name);
 	}
 	
 	private static Hdf5Group getInstance(final Hdf5Group parent, final String name) throws IllegalStateException {
@@ -44,7 +44,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 			throw new IllegalStateException("Parent group \"" + parent.getName() + "\" is not open!");
 		}
 		
-		return new Hdf5Group(name, parent.getFilePath());
+		return new Hdf5Group(name);
 	}
 	
 	private static Hdf5Group createGroup(final Hdf5Group parent, final String name) {
@@ -434,7 +434,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return names;
 	}
 	
-	private List<String> loadObjectNames() throws IllegalStateException {
+	public List<String> loadObjectNames() throws IllegalStateException {
 		return loadObjectNames(HDF5Constants.H5O_TYPE_UNKNOWN);
 	}
 	
@@ -586,17 +586,11 @@ public class Hdf5Group extends Hdf5TreeElement {
 				}
 				H5.H5Tclose(typeId);
 				
-				if (classId == HDF5Constants.H5T_VLEN) {
-					// TODO find correct real dataType
+				// unsupported dataSets
+				if (classId == HDF5Constants.H5T_VLEN || classId == HDF5Constants.H5T_REFERENCE || classId == HDF5Constants.H5T_COMPOUND) {
 					H5.H5Dclose(dataSetId);
-					throw new UnsupportedDataTypeException("DataType H5T_VLEN of dataSet \""
-							+ getPathFromFileWithName() + name + "\" is not supported");
-				}
-				
-				if (classId == HDF5Constants.H5T_REFERENCE) {
-					H5.H5Dclose(dataSetId);
-					throw new UnsupportedDataTypeException("DataType H5T_REFERENCE of dataSet \""
-							+ getPathFromFileWithName() + name + "\" is not supported");
+					throw new UnsupportedDataTypeException("DataType " + H5.H5Tget_class_name(classId) + " of dataSet \""
+							+ getPathFromFileWithName(true) + name + "\" is not supported");
 				}
 				
 				dataType = Hdf5DataType.openDataType(dataSetId, classId, size, endian, unsigned, vlen);

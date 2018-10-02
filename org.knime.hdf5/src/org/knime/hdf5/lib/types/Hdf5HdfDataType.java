@@ -119,7 +119,7 @@ public class Hdf5HdfDataType {
 			return this == UINT32 || this == INT64 || this == UINT64;
 		}
 		
-		int getSize() {
+		public int getSize() {
 			return 8 * (m_typeId / 100);
 		}
 		

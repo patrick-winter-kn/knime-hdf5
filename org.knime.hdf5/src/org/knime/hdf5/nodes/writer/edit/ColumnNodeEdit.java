@@ -10,6 +10,7 @@ import org.knime.core.data.DataRow;
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.data.container.CloseableRowIterator;
 import org.knime.core.node.BufferedDataTable;
+import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
@@ -105,8 +106,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	protected int getProgressToDoInEdit() {
-		return getEditAction() != EditAction.NO_ACTION && getEditAction() != EditAction.MODIFY_CHILDREN_ONLY && getEditState() != EditState.SUCCESS ? 1 : 0;
+	protected long getProgressToDoInEdit() {
+		return 0;
 	}
 	
 	@Override
@@ -215,12 +216,12 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) {
 		return false;
 	}
 	
 	@Override
-	protected boolean copyAction() {
+	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) {
 		return false;
 	}
 

@@ -121,7 +121,7 @@ public abstract class TreeNodeEdit {
 			return this == MODIFY || this == MODIFY_CHILDREN_ONLY;
 		}
 	}
-	
+
 	public static enum InvalidCause {
 		FILE_EXTENSION("file extension is not .h5 or .hdf5"),
 		FILE_ALREADY_EXISTS("file already exists"),
@@ -146,7 +146,7 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public static enum EditState {
-		TODO, SUCCESS, FAIL, POSTPONED;
+		TODO, IN_PROGRESS, SUCCESS, FAIL, POSTPONED;
 	}
 	
 	private String m_inputPathFromFileWithName;
@@ -174,6 +174,8 @@ public abstract class TreeNodeEdit {
 	private TreeNodeEdit m_copyEdit;
 	
 	private Map<TreeNodeEdit, InvalidCause> m_invalidEdits = new HashMap<>();
+	
+	private String m_unsupportedCause = null;
 	
 	private EditState m_editState = EditState.TODO;
 
@@ -255,7 +257,9 @@ public abstract class TreeNodeEdit {
 	
 	protected void setTreeNodeMenu(TreeNodeMenu treeNodeMenu) {
 		m_treeNodeMenu = treeNodeMenu;
-		m_treeNodeMenu.updateDeleteItemText();
+		if (m_treeNodeMenu != null) {
+			m_treeNodeMenu.updateDeleteItemText();
+		}
 	}
 	
 	public DefaultMutableTreeNode getTreeNode() {
@@ -311,6 +315,14 @@ public abstract class TreeNodeEdit {
 	
 	private void setCopyEdit(TreeNodeEdit copyEdit) {
 		m_copyEdit = copyEdit;
+	}
+
+	public boolean isSupported() {
+		return m_unsupportedCause == null;
+	}
+	
+	void setUnsupportedCause(String unsupportedCause) {
+		m_unsupportedCause = unsupportedCause;
 	}
 
 	public EditState getEditState() {
@@ -395,10 +407,22 @@ public abstract class TreeNodeEdit {
 		return edits.toArray(new TreeNodeEdit[edits.size()]);
 	}
 	
-	public String getInvalidCauseMessages() {
+	/**
+	 * Get the list of messages of all invalid descendants of this edit and {@code otherEdit}.
+	 * If an descendant has two messages (one of this edit and one of {@code otherEdit}),
+	 * the message of this edit will be used.
+	 * 
+	 * @param otherEdit
+	 * @return
+	 */
+	public String getInvalidCauseMessages(TreeNodeEdit otherEdit) {
+		Map<TreeNodeEdit, InvalidCause> invalidEditCauseMap = new HashMap<>();
+		invalidEditCauseMap.putAll(otherEdit.m_invalidEdits);
+		invalidEditCauseMap.putAll(m_invalidEdits);
+		
 		StringBuilder messageBuilder = new StringBuilder();
 		
-		TreeNodeEdit[] invalidEdits = m_invalidEdits.keySet().toArray(new TreeNodeEdit[0]);
+		TreeNodeEdit[] invalidEdits = invalidEditCauseMap.keySet().toArray(new TreeNodeEdit[0]);
 		Arrays.sort(invalidEdits, new TreeNodeEditComparator());
 		int maxMessageCountPerCause = 10;
 		for (InvalidCause invalidCause : InvalidCause.values()) {
@@ -406,7 +430,7 @@ public abstract class TreeNodeEdit {
 			int count = 0;
 			String curInvalidPath = null;
 			for (TreeNodeEdit invalidEdit : invalidEdits) {
-				if (invalidCause == m_invalidEdits.get(invalidEdit)) {
+				if (invalidCause == invalidEditCauseMap.get(invalidEdit)) {
 					if (!invalidEdit.getOutputPathFromFileWithName().equals(curInvalidPath)) {
 						found++;
 						curInvalidPath = invalidEdit.getOutputPathFromFileWithName();
@@ -430,8 +454,9 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public String getToolTipText() {
-		return getOutputPathFromFileWithName() + (isValid() ? "" : " (invalid"
-				+ (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : " children") + ")");
+		return getOutputPathFromFileWithName()
+				+ (isValid() ? "" : " (invalid" + (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : " children") + ")")
+				+ (isSupported() ? "" : " - NOT SUPPORTED (" + m_unsupportedCause + ")");
 	}
 	
 	public String getSummaryOfEditStates() {
@@ -451,7 +476,7 @@ public abstract class TreeNodeEdit {
 		return summaryBuilder.toString();
 	}
 	
-	protected abstract int getProgressToDoInEdit();
+	protected abstract long getProgressToDoInEdit();
 	
 	private TreeNodeEdit findCopyEdit() {
 		if (this instanceof GroupNodeEdit) {
@@ -571,8 +596,9 @@ public abstract class TreeNodeEdit {
 	
 	private boolean isNameConflictPossible(Class<? extends TreeNodeEdit> otherClass) {
 		Class<? extends TreeNodeEdit> thisClass = getClass();
-		return thisClass == otherClass || thisClass == DataSetNodeEdit.class && otherClass == GroupNodeEdit.class
-				|| thisClass == GroupNodeEdit.class && otherClass == DataSetNodeEdit.class;
+		return thisClass == otherClass
+				|| (thisClass == DataSetNodeEdit.class || thisClass == GroupNodeEdit.class || thisClass == UnsupportedObjectNodeEdit.class)
+						&& (otherClass == DataSetNodeEdit.class || otherClass == GroupNodeEdit.class || otherClass == UnsupportedObjectNodeEdit.class);
 	}
 	
 	protected List<TreeNodeEdit> getAllDecendants() {
@@ -688,7 +714,7 @@ public abstract class TreeNodeEdit {
 			}
 		}
 		
-		cause = cause == null && !(this instanceof ColumnNodeEdit) && !m_editAction.isCreateOrCopyAction() && m_hdfObject == null ? InvalidCause.NO_HDF_OBJECT : cause;
+		cause = cause == null && !(this instanceof ColumnNodeEdit) && isSupported() && !m_editAction.isCreateOrCopyAction() && m_hdfObject == null ? InvalidCause.NO_HDF_OBJECT : cause;
 		
 		// TODO find a way to check if there is a source to copy from, especially when using a file with a different structure than used to save the settings
 		// cause = cause == null && m_editAction == EditAction.COPY && m_copyEdit == null ? InvalidCause.NO_COPY_EDIT : cause;
@@ -704,18 +730,20 @@ public abstract class TreeNodeEdit {
 	
 	protected abstract boolean isInConflict(TreeNodeEdit edit);
 	
-	protected boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, int totalProgressToDo) throws CanceledExecutionException {
+	protected boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException {
+		exec.checkCanceled();
+		
+		setEditState(EditState.IN_PROGRESS);
+		
 		boolean success = false;
 		boolean successOfOther = true;
-		
-		exec.checkCanceled();
 
 		switch (m_editAction) {
 		case CREATE:
-			success = createAction(inputTable, flowVariables, saveColumnProperties);
+			success = createAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
 			break;
 		case COPY:
-			success = copyAction();
+			success = copyAction(exec, totalProgressToDo);
 			if (success && m_copyEdit != null) {
 				TreeNodeEdit copyEdit = m_copyEdit;
 				m_copyEdit.removeIncompleteCopy(this);
@@ -743,7 +771,9 @@ public abstract class TreeNodeEdit {
 		}
 		
 		if (success) {
-			exec.setProgress((Math.round(exec.getProgressMonitor().getProgress() * totalProgressToDo) + getProgressToDoInEdit()) / totalProgressToDo);
+			if (!(this instanceof DataSetNodeEdit && m_editAction == EditAction.CREATE)) {
+				exec.setProgress((Math.round(exec.getProgressMonitor().getProgress() * totalProgressToDo) + getProgressToDoInEdit()) / totalProgressToDo);
+			}
 			setEditState(EditState.SUCCESS);
 		} else {
 			setEditState(EditState.FAIL);
@@ -752,7 +782,7 @@ public abstract class TreeNodeEdit {
 		return success && successOfOther;
 	}
 
-	private boolean doChildActionsInOrder(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, int totalProgressToDo) throws CanceledExecutionException {
+	private boolean doChildActionsInOrder(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException {
 		List<TreeNodeEdit> deleteEdits = new ArrayList<>();
 		List<TreeNodeEdit> modifyEdits = new ArrayList<>();
 		List<TreeNodeEdit> otherEdits = new ArrayList<>();
@@ -796,8 +826,9 @@ public abstract class TreeNodeEdit {
 		return success;
 	}
 
-	protected abstract boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties);
-	protected abstract boolean copyAction();
+	protected abstract boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables,
+			boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException;
+	protected abstract boolean copyAction(ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException;
 	protected abstract boolean deleteAction();
 	protected abstract boolean modifyAction();
 	
@@ -834,7 +865,7 @@ public abstract class TreeNodeEdit {
 			return o.getClass() == GroupNodeEdit.class ? 0 : 
 				(o.getClass() == DataSetNodeEdit.class ? 1 :
 				(o.getClass() == ColumnNodeEdit.class ? 2 :
-				(o.getClass() == AttributeNodeEdit.class ? 3 : 4)));
+				(o.getClass() == AttributeNodeEdit.class ? 4 : 3)));
 		}
 	}
 	

@@ -62,9 +62,11 @@ public class EditTreePanel extends JPanel {
 
 			private final String[] itemNames = { "column", "attribute", "dataSet", "file", "group" };
 			
-			private final String[] stateNames = { "idle", "new", "delete" };
-			
+			private final String[] stateNames = { "idle", "new", "delete", "unsupported" };
+
 			private final Icon[][] icons = loadAllIcons();
+			
+			private final Icon unsupportedNodeEditIcon = loadIcon(EditTreePanel.class, "/icon/object_unsupported.png");
 			
 			private Icon[][] loadAllIcons() {
 				Icon[][] loadedIcons = new Icon[itemNames.length][stateNames.length];
@@ -72,7 +74,7 @@ public class EditTreePanel extends JPanel {
 				for (int i = 0; i < itemNames.length; i++) {
 					for (int j = 0; j < stateNames.length; j++) {
 						String iconName = itemNames[i] + "_" + stateNames[j];
-						if (!iconName.equals("file_delete")) {
+						if (!iconName.equals("file_delete") && (!stateNames[j].equals("unsupported") || itemNames[i].equals("attribute") || itemNames[i].equals("dataSet"))) {
 							loadedIcons[i][j] = loadIcon(EditTreePanel.class, "/icon/" + iconName + ".png");
 						}
 					}
@@ -102,6 +104,11 @@ public class EditTreePanel extends JPanel {
 		        return icon;
 		    }
 			
+			private Icon getEditIcon(TreeNodeEdit edit) {
+				int itemId = getItemId(edit);
+				return itemId >= 0 ? icons[itemId][getStateId(edit)] : unsupportedNodeEditIcon;
+			}
+			
 			private int getItemId(TreeNodeEdit edit) {
 				return edit instanceof ColumnNodeEdit ? 0 : 
 					edit instanceof AttributeNodeEdit ? 1 :
@@ -110,8 +117,10 @@ public class EditTreePanel extends JPanel {
 					edit instanceof GroupNodeEdit ? 4 : -1;
 			}
 			
-			private int getStateId(EditAction editAction) {
-				return editAction.isCreateOrCopyAction() ? 1 :
+			private int getStateId(TreeNodeEdit edit) {
+				EditAction editAction = edit.getEditAction();
+				return !edit.isSupported() ? 3 :
+					editAction.isCreateOrCopyAction() ? 1 :
 					editAction == TreeNodeEdit.EditAction.DELETE ? 2 : 0;
 			}
 			
@@ -130,7 +139,7 @@ public class EditTreePanel extends JPanel {
 						TreeNodeEdit edit = (TreeNodeEdit) userObject;
 						setText((edit.getEditAction().isModifyAction() ? "*" : "") + edit.getName());
 						tree.setToolTipText(edit.getToolTipText());
-						setIcon(icons[getItemId(edit)][getStateId(edit.getEditAction())]);
+						setIcon(getEditIcon(edit));
 						
 						Border border = null;
 						if (edit.isValid()) {
@@ -182,12 +191,31 @@ public class EditTreePanel extends JPanel {
                 TreePath path = dl.getPath();
                 
                 if (info.isDataFlavorSupported(DataFlavor.stringFlavor) && path != null) {
+            		DefaultMutableTreeNode parent = (DefaultMutableTreeNode) path.getLastPathComponent();
+                	TreeNodeEdit parentEdit = (TreeNodeEdit) parent.getUserObject();
+                	
+                	/* TODO either allow attributes for unsupported dataSets or at least make it more user-friendly
+                	   (that the line below does not matter if a group should be added to the tree)
+                	*/
+                	if (!parentEdit.isSupported() /*parentEdit instanceof UnsupportedObjectNodeEdit*/) {
+        				return false;
+                	}
+                	
+                	try {
+                		String specListKey = (String) info.getTransferable().getTransferData(DataFlavor.stringFlavor);
+						if (specListKey.equals(SpecInfo.COLUMN_SPECS.getSpecName()) && !canImportColumn(parentEdit)) {
+							return false;
+						}
+					} catch (UnsupportedFlavorException | IOException ufioe) {
+						return false;
+					}
+                	
                 	if (!m_copyEdits.isEmpty()) {
-                		DefaultMutableTreeNode parent = (DefaultMutableTreeNode) path.getLastPathComponent();
-                    	TreeNodeEdit parentEdit = (TreeNodeEdit) parent.getUserObject();
-                    	
                 		for (TreeNodeEdit copyEdit : m_copyEdits) {
-                			if (copyEdit instanceof GroupNodeEdit && copyEdit.isEditDescendant(parentEdit)) {
+                			if (!copyEdit.isSupported() || copyEdit instanceof GroupNodeEdit && copyEdit.isEditDescendant(parentEdit)) {
+                				return false;
+                			}
+                			if (copyEdit instanceof ColumnNodeEdit && !canImportColumn(parentEdit)) {
                 				return false;
                 			}
                 		}
@@ -195,8 +223,7 @@ public class EditTreePanel extends JPanel {
                 		Class editClass = m_copyEdits.get(0).getClass();
                 		boolean allEqual = true;
                 		for (int i = 1; i < m_copyEdits.size(); i++) {
-                			TreeNodeEdit copyEdit = m_copyEdits.get(i);
-                			allEqual &= editClass == copyEdit.getClass();
+                			allEqual &= editClass == m_copyEdits.get(i).getClass();
                 		}
                 		
                 		if (!allEqual) {
@@ -216,6 +243,18 @@ public class EditTreePanel extends JPanel {
                 }
                 
                 return false;
+			}
+			
+			private boolean canImportColumn(TreeNodeEdit parentEdit) {
+				if (parentEdit instanceof DataSetNodeEdit && !parentEdit.isSupported()) {
+					return false;
+				} else if (parentEdit instanceof AttributeNodeEdit) {
+					TreeNodeEdit grandParentEdit = parentEdit.getParent();
+					if (grandParentEdit instanceof DataSetNodeEdit && !grandParentEdit.isSupported()) {
+    					return false;
+					}
+				}
+				return true;
 			}
 			
 			public boolean importData(TransferHandler.TransferSupport info) {
@@ -413,7 +452,7 @@ public class EditTreePanel extends JPanel {
     				Object userObject = node.getUserObject();
     				if (userObject instanceof TreeNodeEdit) {
     					TreeNodeEdit.TreeNodeMenu menu = ((TreeNodeEdit) userObject).getTreeNodeMenu();
-    					if (!menu.isVisible()) {
+    					if (menu != null && !menu.isVisible()) {
         					menu.show(e.getComponent(), e.getX(), e.getY());
     					}
     				}

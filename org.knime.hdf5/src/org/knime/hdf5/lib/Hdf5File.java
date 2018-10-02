@@ -28,6 +28,8 @@ public class Hdf5File extends Hdf5Group {
 	
 	private static final List<Hdf5File> ALL_FILES = new ArrayList<>();
 	
+	private final String m_filePath;
+	
 	private final ReentrantReadWriteLock m_rwl = new ReentrantReadWriteLock(true);
 	
 	private final Lock m_r = m_rwl.readLock();
@@ -43,10 +45,10 @@ public class Hdf5File extends Hdf5Group {
 	 */
 	private Hdf5File(final String filePath) throws HDF5LibraryException, NullPointerException,
 			IllegalArgumentException {
-		super(filePath.substring(filePath.lastIndexOf(File.separator) + 1), filePath);
+		super(filePath.substring(filePath.lastIndexOf(File.separator) + 1));
+		m_filePath = filePath;
 		
 		ALL_FILES.add(this);
-        setPathFromFile("");
 	}
 	
 	/**
@@ -54,7 +56,7 @@ public class Hdf5File extends Hdf5Group {
 	 * If the File.separator is not '/', the part of the path after the last File.separator
 	 * may not contain '/'.
 	 * 
-	 * @param filePath The path to the file from the src directory.
+	 * @param filePath The whole path to the file including its name.
 	 */
 	public synchronized static Hdf5File createFile(final String filePath) throws IOException {
 		if (new File(filePath).exists()) {
@@ -115,6 +117,10 @@ public class Hdf5File extends Hdf5Group {
 	public static String getDirectoryPath(String filePath) {
 		int dirPathLength = filePath.lastIndexOf(File.separator);
 		return filePath.substring(0, dirPathLength >= 0 ? dirPathLength : 0);
+	}
+
+	public String getFilePath() {
+		return m_filePath;
 	}
 	
 	protected boolean isOpen() {

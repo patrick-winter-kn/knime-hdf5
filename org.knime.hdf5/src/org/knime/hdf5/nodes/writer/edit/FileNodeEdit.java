@@ -112,8 +112,8 @@ public class FileNodeEdit extends GroupNodeEdit {
         return edit;
 	}
 
-	private int getTotalProgressToDo() {
-		int progressToDo = 0;
+	private long getTotalProgressToDo() {
+		long progressToDo = 0;
 		
 		for (TreeNodeEdit edit : getAllDecendants()) {
 			progressToDo += edit.getProgressToDoInEdit();
@@ -123,8 +123,8 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	@Override
-	protected int getProgressToDoInEdit() {
-		return 1;
+	protected long getProgressToDoInEdit() {
+		return 195;
 	}
 	
 	public void integrate(FileNodeEdit copyEdit, BufferedDataTable inputTable, boolean lastValidationBeforeExecution) {
@@ -139,7 +139,6 @@ public class FileNodeEdit extends GroupNodeEdit {
 	public void saveSettingsTo(NodeSettingsWO settings) {
 		super.saveSettingsTo(settings);
 		
-		// TODO change this that this is not needed anymore
         settings.addString(SettingsKey.FILE_PATH.getKey(), m_filePath);
 	}
 	
@@ -244,7 +243,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 
 	@Override
-	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) {
 		try {
 			setHdfObject(Hdf5File.createFile(getFilePath()));
 			return getHdfObject() != null;
@@ -256,7 +255,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 
 	@Override
-	protected boolean copyAction() {
+	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) {
 		return false;
 	}
 

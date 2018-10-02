@@ -47,7 +47,6 @@ public class HDF5WriterNodeModel extends NodeModel {
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
 		checkForErrors(m_filePathSettings, m_editTreeConfig, inData[0]);
 
-		// TODO find a possibility to estimate exec.setProgress()
 		boolean success = false;
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
 		try {
@@ -88,7 +87,10 @@ public class HDF5WriterNodeModel extends NodeModel {
 				FileNodeEdit oldFileEdit = new FileNodeEdit(file);
 				oldFileEdit.loadChildrenOfHdfObject();
 				oldFileEdit.integrate(fileEdit, inputTable, true);
-				
+				if (!oldFileEdit.isValid() || !fileEdit.isValid()) {
+					throw new InvalidSettingsException("The settings for file \"" + oldFileEdit.getFilePath()
+							+ "\" are not valid:\n" + oldFileEdit.getInvalidCauseMessages(fileEdit));
+				}
 			} catch (IOException ioe) {
 				throw new InvalidSettingsException(ioe.getMessage(), ioe.getCause());
 				
@@ -99,11 +101,6 @@ public class HDF5WriterNodeModel extends NodeModel {
 			}
 		} else if (Hdf5File.existsHdfFile(filePath)) {
 			throw new InvalidSettingsException("The selected file \"" + filePath + "\" does already exist");
-		}
-		
-		if (!fileEdit.isValid()) {
-			throw new InvalidSettingsException("The settings for file \"" + fileEdit.getFilePath()
-					+ "\" are not valid:\n" + fileEdit.getInvalidCauseMessages());
 		}
 	}
 

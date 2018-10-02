@@ -12,6 +12,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
 import org.knime.core.node.BufferedDataTable;
+import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
@@ -55,6 +56,13 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		if (getEditAction() == EditAction.COPY) {
 			copyAttribute.addIncompleteCopy(this);
 		}
+	}
+	
+	AttributeNodeEdit(TreeNodeEdit parent, String name, String unsupportedCause) {
+		this(parent, null, name, EditOverwritePolicy.NONE, null, EditAction.NO_ACTION);
+		setUnsupportedCause(unsupportedCause != null ? unsupportedCause : "");
+		// remove menu to consider the edit is unsupported
+		setTreeNodeMenu(null);
 	}
 
 	public AttributeNodeEdit(TreeNodeEdit parent, Hdf5Attribute<?> attribute) {
@@ -205,12 +213,23 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	public String getToolTipText() {
-		return "(" + m_editDataType.getOutputType().toString() + ") " + super.getToolTipText();
+		return (isSupported() ? "(" + m_editDataType.getOutputType().toString() + ") " : "") + super.getToolTipText();
 	}
 	
 	@Override
-	protected int getProgressToDoInEdit() {
-		return getEditAction() != EditAction.NO_ACTION && getEditAction() != EditAction.MODIFY_CHILDREN_ONLY && getEditState() != EditState.SUCCESS ? 1 : 0;
+	protected long getProgressToDoInEdit() {
+		long totalToDo = 0;
+		
+		if (getEditAction() != EditAction.NO_ACTION && getEditAction() != EditAction.MODIFY_CHILDREN_ONLY && getEditState() != EditState.SUCCESS) {
+			totalToDo += 71;
+			if (getEditAction().isCreateOrCopyAction()) {
+				HdfDataType dataType = m_editDataType.getOutputType();
+				long dataTypeToDo = dataType.isNumber() ? dataType.getSize()/8 : m_editDataType.getStringLength();
+				totalToDo += m_totalStringLength / m_compoundItemStringLength * dataTypeToDo;
+			}
+		}
+		
+		return totalToDo;
 	}
 	
 	@Override
@@ -226,7 +245,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		} else if (parentEdit instanceof GroupNodeEdit) {
 			((GroupNodeEdit) parentEdit).removeAttributeNodeEdit(this);	
 		}
-		setParent(null);
 	}
 
 	@Override
@@ -274,7 +292,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties) {
+	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) {
 		Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
 		if (!parent.isFile()) {
 			parent.open();
@@ -293,7 +311,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean copyAction() {
+	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) {
 		try {
 			Hdf5Attribute<?> copyAttribute = ((Hdf5File) getRoot().getHdfObject()).getAttributeByPath(getInputPathFromFileWithName());
 			
@@ -393,7 +411,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		private static final long serialVersionUID = -6418394582185524L;
     	
 		private AttributeNodeMenu() {
-			super(true, false, true);
+			super(AttributeNodeEdit.this.isSupported(), false, true);
     	}
 		
 		@Override
