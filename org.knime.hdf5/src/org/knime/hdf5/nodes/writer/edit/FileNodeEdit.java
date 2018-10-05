@@ -87,10 +87,10 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	public static FileNodeEdit useFileSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		Hdf5File file = null;
+		//Hdf5File file = null;
 		FileNodeEdit edit = new FileNodeEdit(settings.getString(SettingsKey.FILE_PATH.getKey()),
 				EditAction.get(settings.getString(SettingsKey.EDIT_ACTION.getKey())));
-		try {
+		/*try {
 	        if (!edit.getEditAction().isCreateOrCopyAction()) {
 				try {
 					file = Hdf5File.openFile(edit.getFilePath(), Hdf5File.READ_ONLY_ACCESS);
@@ -98,16 +98,16 @@ public class FileNodeEdit extends GroupNodeEdit {
 					throw new InvalidSettingsException(ioe.getMessage(), ioe);
 				}
 			}
-			edit.setHdfObject(file);
+			edit.setHdfObject(file);*/
 	        edit.loadSettingsFrom(settings);
-	        edit.updateIncompleteCopies();
-	        edit.validate(null);
+	        /*edit.updateIncompleteCopies();
+	        edit.validate();
 	        
 		} finally {
 			if (file != null) {
 				file.close();
 			}
-		}
+		}*/
 		
         return edit;
 	}
@@ -124,15 +124,21 @@ public class FileNodeEdit extends GroupNodeEdit {
 	
 	@Override
 	protected long getProgressToDoInEdit() {
-		return 195;
+		return 1L + (getEditAction().isCreateOrCopyAction() ? 195L : 0L);
+	}
+
+	public boolean doLastValidationBeforeExecution(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
+		super.integrate(copyEdit, inputTable.size(), true);
+		updateIncompleteCopies();
+		doLastValidation(inputTable, copyEdit);
+		return isValid() && copyEdit.isValid();
 	}
 	
-	public void integrate(FileNodeEdit copyEdit, BufferedDataTable inputTable, boolean lastValidationBeforeExecution) {
-		super.integrate(copyEdit, inputTable != null ? inputTable.size() : ColumnNodeEdit.UNKNOWN_ROW_COUNT, lastValidationBeforeExecution);
-		validate(null);
-		if (lastValidationBeforeExecution) {
-			copyEdit.validate(inputTable);
-		}
+	public boolean integrate(FileNodeEdit copyEdit) {
+		super.integrate(copyEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT, false);
+		updateIncompleteCopies();
+		validate();
+		return isValid();
 	}
 
 	@Override
@@ -145,7 +151,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	@Override
 	public void loadChildrenOfHdfObject() throws IOException {
 		super.loadChildrenOfHdfObject();
-		validate(null);
+		validate();
 	}
 	
 	@Override
@@ -164,7 +170,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 
 	public void reloadTree() {
-		validate(null);
+		validate();
 		((DefaultTreeModel) (m_tree.getModel())).reload();
 	}
 	
@@ -185,16 +191,27 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 		reloadTree();
 	}
+
+	private void validate() {
+		validate(null, true, true);
+	}
+	
+	private void doLastValidation(BufferedDataTable inputTable, FileNodeEdit copyEdit) {
+		// external validation
+		validate(null, false, true);
+		// internal validation
+		copyEdit.validate(inputTable, true, false);
+	}
 	
 	@Override
-	protected void validate(BufferedDataTable inputTable) {
+	protected void validate(BufferedDataTable inputTable, boolean internalCheck, boolean externalCheck) {
 		Hdf5File file = null;
 		try {
 			file = (Hdf5File) getHdfObject();
 			if (file != null) {
 				file.open(Hdf5File.READ_ONLY_ACCESS);
 			}
-			super.validate(inputTable);
+			super.validate(inputTable, internalCheck, externalCheck);
 			
 		} catch (Exception e) {
 			NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
@@ -204,7 +221,6 @@ public class FileNodeEdit extends GroupNodeEdit {
 				file.close();
 			}
 		}
-		
 	}
 	
 	@Override
@@ -234,7 +250,10 @@ public class FileNodeEdit extends GroupNodeEdit {
 				success = getHdfObject() != null;
 			}
 			exec.setProgress(0.0);
-			return success && doAction(inputTable, flowVariables, saveColumnProperties, exec, getTotalProgressToDo());
+			// TODO delete after testing
+			long pTD = getTotalProgressToDo();
+			System.out.println("TotalProgressToDo: " + pTD);
+			return success && doAction(inputTable, flowVariables, saveColumnProperties, exec, pTD);
 			
 		} catch (IOException ioe) {
 			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
@@ -265,7 +284,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 
 	@Override
-	protected boolean modifyAction() {
+	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) {
 		return false;
 	}
 }

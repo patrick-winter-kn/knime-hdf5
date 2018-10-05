@@ -98,6 +98,10 @@ public class Hdf5File extends Hdf5Group {
 			NodeLogger.getLogger("HDF5 Files").error(hlnpiae.getMessage(), hlnpiae);
 		}
 		
+		if (!file.isOpen()) {
+			throw new IOException("The file \"" + filePath + "\" could not be opened");
+		}
+		
 		return file;
 	}
 
@@ -166,7 +170,7 @@ public class Hdf5File extends Hdf5Group {
 			// System.out.print(String.format("%,16d", // System.nanoTime() - START) + " " + Thread.currentThread() + " UNLOCK WRITE end of \"" + getFilePath() + "\" ... ");
             m_w.unlock();
 			// System.out.println("successful");
-            NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be created : " + hlnpe.getMessage(), hlnpe);
+            NodeLogger.getLogger("HDF5 Files").error("The file \"" + getFilePath() + "\" cannot be created : " + hlnpe.getMessage(), hlnpe);
         }
 	}
 	
@@ -212,7 +216,7 @@ public class Hdf5File extends Hdf5Group {
 				m_w.unlock();
 				// System.out.println("successful");
 			}
-            NodeLogger.getLogger("Hdf5 Files").error("The file \"" + getFilePath() + "\" cannot be opened: " + hlnpe.getMessage(), hlnpe);
+            NodeLogger.getLogger("HDF5 Files").error("The file \"" + getFilePath() + "\" cannot be opened: " + hlnpe.getMessage(), hlnpe);
         }
 	}
 	

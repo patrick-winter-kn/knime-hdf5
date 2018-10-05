@@ -158,7 +158,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return dataSet;
 	}
 	
-	public synchronized Hdf5TreeElement moveObject(final String oldName, Hdf5Group newParent, String newName) {
+	public synchronized Hdf5TreeElement moveObject(final String oldName, Hdf5Group newParent, String newName) throws IOException {
 		Hdf5TreeElement newObject = null;
 		
 		try {
@@ -174,7 +174,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				newObject = objectType == HDF5Constants.H5I_GROUP ? getGroup(newName) : getDataSet(newName);
 			}
 		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
-			NodeLogger.getLogger(getClass()).error("Object \"" + getPathFromFileWithName(true) + oldName
+			throw new IOException("Object \"" + getPathFromFileWithName(true) + oldName
 					+ "\" could not be moved to group \"" + newParent.getPathFromFileWithName(true) + "\" with new name \""
 					+ newName + "\": " + hlionpe.getMessage(), hlionpe);
 		}
@@ -182,7 +182,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return newObject;
 	}
 
-	public synchronized Hdf5TreeElement copyObject(final String oldName, Hdf5Group newParent, String newName) {
+	public synchronized Hdf5TreeElement copyObject(final String oldName, Hdf5Group newParent, String newName) throws IOException {
 		Hdf5TreeElement newObject = null;
 		
 		try {
@@ -192,7 +192,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 				newObject = objectType == HDF5Constants.H5I_GROUP ? getGroup(newName) : getDataSet(newName);
 			}
 		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
-			NodeLogger.getLogger(getClass()).error("Object \"" + getPathFromFileWithName(true) + oldName
+			throw new IOException("Object \"" + getPathFromFileWithName(true) + oldName
 					+ "\" could not be copied to group \"" + newParent.getPathFromFileWithName(true) + "\" with new name \""
 					+ newName + "\": " + hlionpe.getMessage(), hlionpe);
 		}
@@ -359,13 +359,17 @@ public class Hdf5Group extends Hdf5TreeElement {
 					H5.H5Ldelete(getElementId(), name, HDF5Constants.H5P_DEFAULT);
 				}
 				
-				if (getObjectTypeByName(name) == OBJECT_NOT_EXISTS) {
+				int objectTypeAfterDeletion = getObjectTypeByName(name);
+				if (objectTypeAfterDeletion == OBJECT_NOT_EXISTS) {
 					if (object instanceof Hdf5Group) {
 						success = removeGroup((Hdf5Group) object) ? 1 : 0;
 					} else {
 						success = removeDataSet((Hdf5DataSet<?>) object) ? 1 : 0;
 					}
 				}
+			} else if (objectType == OBJECT_NOT_EXISTS){
+				throw new IOException("Cannot delete object which does not exist");
+				
 			} else {
 				throw new IOException("Cannot delete object which is no group or dataSet");
 			}

@@ -78,7 +78,8 @@ public class Hdf5HdfDataType {
 		}
 
 		public static List<HdfDataType> getConvertibleTypes(Hdf5Attribute<?> attribute) {
-			return getConvertibleTypes(attribute.getType().getHdfType().getType(), attribute.read());
+			Object[] values = attribute.getValue() == null ? attribute.read() : attribute.getValue();
+			return getConvertibleTypes(attribute.getType().getHdfType().getType(), values);
 		}
 		
 		public static List<HdfDataType> getConvertibleTypes(HdfDataType inputType, Object[] values) {

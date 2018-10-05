@@ -71,7 +71,7 @@ final class SettingsFactory {
 	 * 
 	 * @return Source <code>SettingsModel</code>
 	 */
-	static SettingsModelBoolean createforceCreationOfNewFileSettings() {
+	static SettingsModelBoolean createForceCreationOfNewFileSettings() {
 		return new SettingsModelBoolean("forceCreationOfNewFile" + OUTPUT_CONFIG_KEY, false);
 	}
 	

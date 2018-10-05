@@ -240,7 +240,7 @@ abstract public class Hdf5TreeElement {
 		Hdf5Attribute<Object> attribute = (Hdf5Attribute<Object>) createAttributeFromEdit(edit, values.length);
 		if (attribute != null) {
 			Rounding rounding = edit.getEditDataType().getRounding();
-			if (!edit.isCompoundAsArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
+			if (!edit.isFlowVariableArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
 				success = attribute.write(new String[] { flowVariable.getStringValue() }, rounding);
 			} else {
 				success = attribute.write(values, rounding);
@@ -434,10 +434,11 @@ abstract public class Hdf5TreeElement {
 	 * @return 	-1 if deletion from disk was unsuccessful <br>
 	 * 			0 if deletion from disk was successful, but unsuccessful deletion from runtime data <br>
 	 * 			1 if fully successful
+	 * @throws IOException 
 	 * @throws HDF5LibraryException
 	 * @throws NullPointerException
 	 */
-	public synchronized int deleteAttribute(final String name) {
+	public synchronized int deleteAttribute(final String name) throws IOException {
 		int success = -1;
 		
 		try {
@@ -447,7 +448,7 @@ abstract public class Hdf5TreeElement {
 			success = success >= 0 ? (removeAttribute(attribute) ? 1 : 0) : success;
 			
 		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
-			NodeLogger.getLogger(getClass()).error("Attribute \"" + getPathFromFileWithName(true) + name
+			throw new IOException("Attribute \"" + getPathFromFileWithName(true) + name
 					+ "\" could not be deleted from disk: " + hlionpe.getMessage(), hlionpe);
 		}
 		

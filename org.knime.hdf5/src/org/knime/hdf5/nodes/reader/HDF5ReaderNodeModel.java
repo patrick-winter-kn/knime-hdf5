@@ -206,7 +206,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		try {
 			file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
 		} catch (IOException ioe) {
-			throw new InvalidSettingsException(ioe.getMessage(), ioe);
+			throw new InvalidSettingsException("Could not check configuration: " + ioe.getMessage(), ioe);
 		}
 		
 		try {
@@ -218,7 +218,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 					try {
 						dataSet = file.getDataSetByPath(dataSetPath);
 					} catch (IOException ioe) {
-						throw new InvalidSettingsException(ioe.getMessage(), ioe);
+						throw new InvalidSettingsException("Could not check configuration: " + ioe.getMessage(), ioe);
 					}
 					
 					long rowCount = dataSet.numberOfRows();

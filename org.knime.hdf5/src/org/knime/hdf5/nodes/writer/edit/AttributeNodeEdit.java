@@ -1,6 +1,7 @@
 package org.knime.hdf5.nodes.writer.edit;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -36,12 +37,12 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	private EditDataType m_editDataType = new EditDataType();
 	
 	private int m_totalStringLength;
+	
+	private int m_itemStringLength;
 
-	private boolean m_compoundAsArrayPossible;
+	private boolean m_flowVariableArrayPossible;
 	
-	private boolean m_compoundAsArrayUsed;
-	
-	private int m_compoundItemStringLength;
+	private boolean m_flowVariableArrayUsed;
 	
 	public AttributeNodeEdit(TreeNodeEdit parent, FlowVariable var) {
 		this(parent, var.getName(), var.getName().replaceAll("\\\\/", "/"), EditOverwritePolicy.NONE,
@@ -70,15 +71,16 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				attribute.getType().getHdfType().getType(), EditAction.NO_ACTION);
 		
 		if (attribute.getType().isHdfType(HdfDataType.STRING)) {
-			m_totalStringLength = (int) attribute.getType().getHdfType().getStringLength();
+			m_itemStringLength = (int) attribute.getType().getHdfType().getStringLength();
 		} else {
 			Object[] values = attribute.getValue() == null ? attribute.read() : attribute.getValue();
 			for (Object value : values) {
 				int newStringLength = value.toString().length();
-				m_totalStringLength = newStringLength > m_totalStringLength ? newStringLength : m_totalStringLength;
+				m_itemStringLength = newStringLength > m_itemStringLength ? newStringLength : m_itemStringLength;
 			}
 		}
-		m_editDataType.setValues(m_inputType, attribute.getType().getHdfType().getEndian(), Rounding.DOWN, false, m_totalStringLength);
+		m_editDataType.setValues(m_inputType, attribute.getType().getHdfType().getEndian(), Rounding.DOWN, false, m_itemStringLength);
+		m_totalStringLength = (int) Math.max(attribute.getDimension(), 1) * m_itemStringLength;
 		m_possibleOutputTypes = HdfDataType.getConvertibleTypes(attribute);
 		
 		setHdfObject(attribute);
@@ -104,7 +106,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		super(inputPathFromFileWithName, !(parent instanceof FileNodeEdit) ? parent.getOutputPathFromFileWithName() : "", name, editOverwritePolicy, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
-		m_possibleOutputTypes = m_inputType.getPossiblyConvertibleHdfTypes();
 		parent.addAttributeNodeEdit(this);
 	}
 	
@@ -112,7 +113,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editOverwritePolicy, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
-		m_possibleOutputTypes = m_inputType.getPossiblyConvertibleHdfTypes();
 		parent.addAttributeNodeEdit(this);
 	}
 	
@@ -131,12 +131,12 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		
 		for (Object value : values) {
 			int newStringLength = value.toString().length();
-			m_compoundItemStringLength = newStringLength > m_compoundItemStringLength ? newStringLength : m_compoundItemStringLength;
+			m_itemStringLength = newStringLength > m_itemStringLength ? newStringLength : m_itemStringLength;
 		}
-		m_compoundAsArrayPossible = m_compoundItemStringLength != m_totalStringLength;
-		m_compoundAsArrayUsed = m_compoundAsArrayPossible;
+		m_flowVariableArrayPossible = m_itemStringLength != m_totalStringLength;
+		m_flowVariableArrayUsed = m_flowVariableArrayPossible;
 		
-		m_editDataType.setValues(m_inputType, Endian.LITTLE_ENDIAN, Rounding.DOWN, false, m_compoundItemStringLength);
+		m_editDataType.setValues(m_inputType, Endian.LITTLE_ENDIAN, Rounding.DOWN, false, m_itemStringLength);
 	}
 	
 	public HdfDataType getInputType() {
@@ -154,29 +154,29 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	private int getTotalStringLength() {
 		return m_totalStringLength;
 	}
-	
-	private boolean isCompoundAsArrayPossible() {
-		return m_compoundAsArrayPossible;
-	}
-	
-	private void setCompoundAsArrayPossible(boolean compoundAsArrayPossible) {
-		m_compoundAsArrayPossible = compoundAsArrayPossible;
+
+	public int getItemStringLength() {
+		return m_itemStringLength;
 	}
 
-	public boolean isCompoundAsArrayUsed() {
-		return m_compoundAsArrayUsed;
+	private void setItemStringLength(int itemStringLength) {
+		m_itemStringLength = itemStringLength;
 	}
 	
-	private void setCompoundAsArrayUsed(boolean compoundAsArrayUsed) {
-		m_compoundAsArrayUsed = compoundAsArrayUsed;
+	private boolean isFlowVariableArrayPossible() {
+		return m_flowVariableArrayPossible;
+	}
+	
+	private void setFlowVariableArrayPossible(boolean flowVariableArrayPossible) {
+		m_flowVariableArrayPossible = flowVariableArrayPossible;
 	}
 
-	public int getCompoundItemStringLength() {
-		return m_compoundItemStringLength;
+	public boolean isFlowVariableArrayUsed() {
+		return m_flowVariableArrayUsed;
 	}
-
-	private void setCompoundItemStringLength(int compoundItemStringLength) {
-		m_compoundItemStringLength = compoundItemStringLength;
+	
+	private void setFlowVariableArrayUsed(boolean flowVariableArrayUsed) {
+		m_flowVariableArrayUsed = flowVariableArrayUsed;
 	}
 
 	private boolean havePropertiesChanged() {
@@ -188,7 +188,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				
 				propertiesChanged = m_inputType != m_editDataType.getOutputType()
 						|| copyAttribute.getType().getHdfType().getEndian() != m_editDataType.getEndian()
-						|| m_totalStringLength != m_editDataType.getStringLength();
+						|| m_itemStringLength != m_editDataType.getStringLength();
 				
 			} catch (IOException ioe) {
 				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
@@ -202,12 +202,12 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	protected void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit) {
 		if (copyEdit instanceof AttributeNodeEdit) {
 			AttributeNodeEdit copyAttributeEdit = (AttributeNodeEdit) copyEdit;
+			m_possibleOutputTypes = Arrays.asList(copyAttributeEdit.getPossibleOutputTypes());
 			m_editDataType.setValues(copyAttributeEdit.getEditDataType());
 			m_totalStringLength = copyAttributeEdit.getTotalStringLength();
-			m_possibleOutputTypes = Arrays.asList(copyAttributeEdit.getPossibleOutputTypes());
-			m_compoundAsArrayPossible = copyAttributeEdit.isCompoundAsArrayPossible();
-			m_compoundAsArrayUsed = copyAttributeEdit.isCompoundAsArrayUsed();
-			m_compoundItemStringLength = copyAttributeEdit.getCompoundItemStringLength();
+			m_itemStringLength = copyAttributeEdit.getItemStringLength();
+			m_flowVariableArrayPossible = copyAttributeEdit.isFlowVariableArrayPossible();
+			m_flowVariableArrayUsed = copyAttributeEdit.isFlowVariableArrayUsed();
 		}
 	}
 	
@@ -218,14 +218,14 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected long getProgressToDoInEdit() {
-		long totalToDo = 0;
+		long totalToDo = 0L;
 		
-		if (getEditAction() != EditAction.NO_ACTION && getEditAction() != EditAction.MODIFY_CHILDREN_ONLY && getEditState() != EditState.SUCCESS) {
-			totalToDo += 71;
-			if (getEditAction().isCreateOrCopyAction()) {
+		if (getEditAction() != EditAction.NO_ACTION && getEditState() != EditState.SUCCESS) {
+			totalToDo += 71L;
+			if (havePropertiesChanged()) {
 				HdfDataType dataType = m_editDataType.getOutputType();
 				long dataTypeToDo = dataType.isNumber() ? dataType.getSize()/8 : m_editDataType.getStringLength();
-				totalToDo += m_totalStringLength / m_compoundItemStringLength * dataTypeToDo;
+				totalToDo += m_totalStringLength / m_itemStringLength * dataTypeToDo;
 			}
 		}
 		
@@ -252,15 +252,23 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		super.saveSettingsTo(settings);
 
 		settings.addInt(SettingsKey.INPUT_TYPE.getKey(), m_inputType.getTypeId());
+		
+		int[] typeIds = new int[m_possibleOutputTypes.size()];
+		for (int i = 0; i < typeIds.length; i++) {
+			typeIds[i] = m_possibleOutputTypes.get(i).getTypeId();
+		}
+		settings.addIntArray(SettingsKey.POSSIBLE_OUTPUT_TYPES.getKey(), typeIds);
+		
 		m_editDataType.saveSettingsTo(settings);
-		settings.addBoolean(SettingsKey.COMPOUND_AS_ARRAY_POSSIBLE.getKey(), m_compoundAsArrayPossible);
-		settings.addBoolean(SettingsKey.COMPOUND_AS_ARRAY_USED.getKey(), m_compoundAsArrayUsed);
-		settings.addInt(SettingsKey.COMPOUND_ITEM_STRING_LENGTH.getKey(), m_compoundItemStringLength);
+		settings.addInt(SettingsKey.TOTAL_STRING_LENGTH.getKey(), m_totalStringLength);
+		settings.addInt(SettingsKey.ITEM_STRING_LENGTH.getKey(), m_itemStringLength);
+		settings.addBoolean(SettingsKey.FLOW_VARIABLE_ARRAY_POSSIBLE.getKey(), m_flowVariableArrayPossible);
+		settings.addBoolean(SettingsKey.FLOW_VARIABLE_ARRAY_USED.getKey(), m_flowVariableArrayUsed);
 	}
 
 	@Override
 	protected void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException {
-		try {
+		/*try {
 	        if (!getEditAction().isCreateOrCopyAction()) {
 	        	Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
 	        	if (parent != null) {
@@ -268,14 +276,23 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	        	}
 	        }
 		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 			// nothing to do here: edit will be invalid anyway
-		}
+		}*/
 
 		setEditOverwritePolicy(EditOverwritePolicy.values()[settings.getInt(SettingsKey.EDIT_OVERWRITE_POLICY.getKey())]);
+		
+		m_possibleOutputTypes = new ArrayList<>();
+		int[] typeIds = settings.getIntArray(SettingsKey.POSSIBLE_OUTPUT_TYPES.getKey());
+		for (int typeId : typeIds) {
+			m_possibleOutputTypes.add(HdfDataType.get(typeId));
+		}
+		
 		m_editDataType.loadSettingsFrom(settings);
-		setCompoundAsArrayPossible(settings.getBoolean(SettingsKey.COMPOUND_AS_ARRAY_POSSIBLE.getKey()));
-		setCompoundAsArrayUsed(settings.getBoolean(SettingsKey.COMPOUND_AS_ARRAY_USED.getKey()));
-		setCompoundItemStringLength(settings.getInt(SettingsKey.COMPOUND_ITEM_STRING_LENGTH.getKey()));
+		m_totalStringLength = settings.getInt(SettingsKey.TOTAL_STRING_LENGTH.getKey());
+		setItemStringLength(settings.getInt(SettingsKey.ITEM_STRING_LENGTH.getKey()));
+		setFlowVariableArrayPossible(settings.getBoolean(SettingsKey.FLOW_VARIABLE_ARRAY_POSSIBLE.getKey()));
+		setFlowVariableArrayUsed(settings.getBoolean(SettingsKey.FLOW_VARIABLE_ARRAY_USED.getKey()));
 	}
 	
 	@Override
@@ -293,82 +310,64 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 
 	@Override
 	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) {
-		Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
-		if (!parent.isFile()) {
-			parent.open();
-		}
-		
 		Hdf5Attribute<?> newAttribute = null;
+		
 		FlowVariable var = flowVariables.get(getInputPathFromFileWithName());
 		try {
-			newAttribute = parent.createAndWriteAttribute(this, var);
+			newAttribute = getOpenedHdfObjectOfParent().createAndWriteAttribute(this, var);
 		} catch (IOException ioe) {
 			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 		}
-		setHdfObject(newAttribute);
 		
+		setHdfObject(newAttribute);
 		return newAttribute != null;
 	}
 
 	@Override
 	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) {
+		Hdf5Attribute<?> newAttribute = null;
+
+		// TODO maybe find a way to use this: Hdf5Attribute<?> copyAttribute = (Hdf5Attribute<?>) getCopyEdit().getHdfObject();
 		try {
 			Hdf5Attribute<?> copyAttribute = ((Hdf5File) getRoot().getHdfObject()).getAttributeByPath(getInputPathFromFileWithName());
-			
-			Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
-			if (!parent.isFile()) {
-				parent.open();
+			if (havePropertiesChanged()) {
+				newAttribute = getOpenedHdfObjectOfParent().createAndWriteAttribute(this, copyAttribute);
+			} else {
+				newAttribute = getOpenedHdfObjectOfParent().copyAttribute(getName(), copyAttribute);
 			}
-			
-			Hdf5Attribute<?> newAttribute = null;
-			try {
-				if (!havePropertiesChanged()) {
-					newAttribute = parent.copyAttribute(getName(), copyAttribute);
-					
-				} else {
-					newAttribute = parent.createAndWriteAttribute(this, copyAttribute);
-				}
-			} catch (IOException ioe) {
-				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-			}
-			setHdfObject(newAttribute);
-			
-			return newAttribute != null;
-			
 		} catch (IOException ioe) {
 			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 		}
-
-		return false;
+		
+		setHdfObject(newAttribute);
+		return newAttribute != null;
 	}
 
 	@Override
 	protected boolean deleteAction() {
-		Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
-		if (!parent.isFile()) {
-			parent.open();
+		boolean success = false;
+
+		String name = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
+		try {
+			success = getOpenedHdfObjectOfParent().deleteAttribute(name) >= 0;
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 		}
 		
-		boolean success = parent.deleteAttribute(Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1]) >= 0;
 		if (success) {
 			setHdfObject((Hdf5Attribute<?>) null);
 		}
-		
 		return success;
 	}
 
 	@Override
-	protected boolean modifyAction() {
+	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) {
 		boolean success = true;
 		
-		Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
-		if (!parent.isFile()) {
-			parent.open();
-		}
-		String[] pathAndName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName());
-		String oldName = pathAndName[1];
+		Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
+		String oldName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
 		
-		if (!havePropertiesChanged() && getOutputPathFromFile().equals(pathAndName[0])) {
+		if (!havePropertiesChanged()/* && getOutputPathFromFile().equals(pathAndName[0])*/) {
 			if (!oldName.equals(getName())) {
 				success = parent.renameAttribute(oldName, getName());
 			}
@@ -380,7 +379,11 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 			}
 			success = tempAttribute != null;
-			success &= parent.deleteAttribute(oldName) >= 0;
+			try {
+				success &= parent.deleteAttribute(oldName) >= 0;
+			} catch (IOException ioe) {
+				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+			}
 			
 			try {
 				Hdf5Attribute<?> newAttribute = parent.createAndWriteAttribute(this, tempAttribute);
@@ -399,8 +402,12 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 					NodeLogger.getLogger(getClass()).error(ioe2.getMessage(), ioe2);
 				}
 			}
-
-			success &= parent.deleteAttribute(tempAttribute.getName()) >= 0;
+			
+			try {
+				success &= parent.deleteAttribute(tempAttribute.getName()) >= 0;
+			} catch (IOException ioe) {
+				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+			}
 		}
 		
 		return success;
@@ -434,7 +441,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			private JTextField m_nameField = new JTextField(15);
 			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getValuesWithoutIntegrate());
 			private DataTypeChooser m_dataTypeChooser = m_editDataType.new DataTypeChooser(false);
-			private JCheckBox m_compoundAsArrayField = new JCheckBox();
+			private JCheckBox m_flowVariableArrayField = new JCheckBox();
 			
 			private AttributePropertiesDialog() {
 				super(AttributeNodeMenu.this, "Attribute properties");
@@ -443,20 +450,20 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				addProperty("Overwrite: ", m_overwriteField);
 				m_dataTypeChooser.addToPropertiesDialog(this);
 				
-				if (m_compoundAsArrayPossible) {
-					m_compoundAsArrayField.addChangeListener(new ChangeListener() {
+				if (m_flowVariableArrayPossible) {
+					m_flowVariableArrayField.addChangeListener(new ChangeListener() {
 						
 						@Override
 						public void stateChanged(ChangeEvent e) {
-							boolean selected = m_compoundAsArrayField.isSelected();
+							boolean selected = m_flowVariableArrayField.isSelected();
 							m_dataTypeChooser.setOnlyStringSelectable(!selected,
-									selected ? m_compoundItemStringLength : m_totalStringLength);
+									selected ? m_itemStringLength : m_totalStringLength);
 						}
 					});
 				} else {
-					m_compoundAsArrayField.setEnabled(false);
+					m_flowVariableArrayField.setEnabled(false);
 				}
-				addProperty("Use values from flowVariable array: ", m_compoundAsArrayField);
+				addProperty("Use values from flowVariable array: ", m_flowVariableArrayField);
 				
 				pack();
 			}
@@ -467,7 +474,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				m_nameField.setText(edit.getName());
 				m_overwriteField.setSelectedItem(edit.getEditOverwritePolicy());
 				m_dataTypeChooser.loadFromDataType(m_possibleOutputTypes, m_inputType == HdfDataType.FLOAT32);
-				m_compoundAsArrayField.setSelected(edit.isCompoundAsArrayUsed());
+				m_flowVariableArrayField.setSelected(edit.isFlowVariableArrayUsed());
 			}
 
 			@Override
@@ -476,7 +483,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				edit.setName(m_nameField.getText());
 				edit.setEditOverwritePolicy((EditOverwritePolicy) m_overwriteField.getSelectedItem());
 				m_dataTypeChooser.saveToDataType();
-				edit.setCompoundAsArrayUsed(m_compoundAsArrayField.isSelected());
+				edit.setFlowVariableArrayUsed(m_flowVariableArrayField.isSelected());
 				edit.setEditAction(EditAction.MODIFY);
 
 				edit.reloadTreeWithEditVisible();

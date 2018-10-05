@@ -63,7 +63,7 @@ public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException {
+	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) {
 		return false;
 	}
 
@@ -73,7 +73,7 @@ public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean modifyAction() {
+	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) {
 		return false;
 	}
 }

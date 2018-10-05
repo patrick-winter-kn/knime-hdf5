@@ -1,6 +1,5 @@
 package org.knime.hdf5.nodes.writer.edit;
 
-import java.io.IOException;
 import java.util.Map;
 
 import javax.activation.UnsupportedDataTypeException;
@@ -17,7 +16,7 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5DataSet;
-import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
@@ -41,7 +40,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 				: (copyColumn.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY));
 		copyAdditionalPropertiesFrom(copyColumn);
 		if (getEditAction() == EditAction.COPY) {
-			copyColumn.getParent().addIncompleteCopy(parent);
+			copyColumn.getParent().addIncompleteCopy(this);
 		}
 	}
 
@@ -55,6 +54,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	ColumnNodeEdit(DataSetNodeEdit parent, int inputColumnIndex, String name, HdfDataType inputType, long inputRowCount) {
 		this(parent, parent.getInputPathFromFileWithName(), inputColumnIndex, name, inputType, inputRowCount, EditAction.NO_ACTION);
+		setHdfObject((Hdf5TreeElement) parent.getHdfObject());
 	}
 	
 	ColumnNodeEdit(DataSetNodeEdit parent, String inputPathFromFileWithName, int inputColumnIndex, String name, HdfDataType inputType,
@@ -107,7 +107,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected long getProgressToDoInEdit() {
-		return 0;
+		return 0L;
 	}
 	
 	@Override
@@ -186,12 +186,13 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 					}
 				} else {
 					try {
-						Hdf5DataSet<?> dataSet = ((Hdf5File) getRoot().getHdfObject()).getDataSetByPath(getInputPathFromFileWithName());
+						Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) (getEditAction() == EditAction.COPY ? getCopyEdit() : this).getHdfObject();
+						dataSet.open();
 						// only supported for dataSets with max. 2 dimensions
 						values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
 						
-					} catch (IOException | HDF5DataspaceInterfaceException ioe) {
-						cause = cause == null ? InvalidCause.NO_HDF_OBJECT : cause;
+					} catch (HDF5DataspaceInterfaceException ioe) {
+						cause = cause == null ? InvalidCause.COLUMN_INDEX : cause;
 					}
 				}
 				
@@ -231,7 +232,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean modifyAction() {
+	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) {
 		return false;
 	}
 	

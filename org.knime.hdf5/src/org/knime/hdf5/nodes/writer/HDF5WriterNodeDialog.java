@@ -102,7 +102,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
         closeCurrentGroup();
         
         
-		m_forceCreationOfNewFile = SettingsFactory.createforceCreationOfNewFileSettings();
+		m_forceCreationOfNewFile = SettingsFactory.createForceCreationOfNewFileSettings();
 		DialogComponentBoolean forceCreationOfNewFile = new DialogComponentBoolean(m_forceCreationOfNewFile,
 				"Force creation of new file");
 		m_saveColumnProperties = SettingsFactory.createSaveColumnPropertiesSettings();
@@ -164,12 +164,12 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		});
 		buttonPanel.add(resetConfigButton);
 		
-		JButton removeInvalidsButton = new JButton("Remove invalids \"no hdf object\"");
+		JButton removeInvalidsButton = new JButton("Remove edits without source");
 		removeInvalidsButton.addActionListener(new ActionListener() {
 			
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				m_editTreePanel.removeEditsWithoutHdfObject();
+				m_editTreePanel.removeEditsWithoutSource();
 			}
 		});
 		buttonPanel.add(removeInvalidsButton);
