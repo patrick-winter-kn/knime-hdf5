@@ -184,10 +184,10 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		m_chunkRowSize = chunkRowSize;
 	}
 
-	private boolean havePropertiesChanged() {
+	protected boolean havePropertiesChanged() {
 		boolean propertiesChanged = true;
 		
-		if (getInputPathFromFileWithName() != null) {
+		if (!getEditAction().isCreateOrCopyAction()) {
 			try {
 				Hdf5DataSet<?> copyDataSet = ((Hdf5File) getRoot().getHdfObject()).getDataSetByPath(getInputPathFromFileWithName());
 				
@@ -670,7 +670,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	@Override
 	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException {
 		if (havePropertiesChanged()) {
-			setEditAction(EditAction.CREATE);
+			//setEditAction(EditAction.CREATE);
 			return createAction(null, null, false, exec, totalProgressToDo);
 			
 		} else {
@@ -710,7 +710,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	@Override
 	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException {
 		if (havePropertiesChanged()) {
-			setEditAction(EditAction.CREATE);
+			deleteAction();
+			//setEditAction(EditAction.CREATE);
 			return createAction(null, null, false, exec, totalProgressToDo);
 			
 		} else {

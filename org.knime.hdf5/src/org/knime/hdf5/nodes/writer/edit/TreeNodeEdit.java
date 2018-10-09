@@ -9,6 +9,7 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -38,10 +39,12 @@ import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.CanceledExecutionException;
 import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
+import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
+import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 
 public abstract class TreeNodeEdit {
@@ -168,8 +171,10 @@ public abstract class TreeNodeEdit {
 	protected DefaultMutableTreeNode m_treeNode;
 	
 	private TreeNodeEdit m_parent;
-	
+
 	private Object m_hdfObject;
+	
+	private Object m_hdfBackup;
 	
 	private EditAction m_editAction = EditAction.NO_ACTION;
 	
@@ -192,28 +197,7 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public static String getUniqueName(TreeNodeEdit parent, Class<? extends TreeNodeEdit> editClass, String name) {
-		return getUniqueName(parent.getNamesOfChildrenWithNameConflictPossible(editClass), name);
-	}
-	
-	public static String getUniqueName(List<String> usedNames, String name) {
-		String newName = name;
-		
-		if (usedNames.contains(newName)) {
-			String oldName = name;
-			int i = 1;
-			
-			if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
-				i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
-				oldName = oldName.substring(0, oldName.lastIndexOf("("));
-			}
-			
-			while (usedNames.contains(newName)) {
-				newName = oldName + "(" + i + ")";
-				i++;
-			}
-		}
-		
-		return newName;
+		return Hdf5TreeElement.getUniqueName(parent.getNamesOfChildrenWithNameConflictPossible(editClass), name);
 	}
 	
 	public String getInputPathFromFileWithName() {
@@ -250,11 +234,11 @@ public abstract class TreeNodeEdit {
 	public boolean isOverwrite() {
 		return m_overwrite;
 	}
-	
+	/*
 	private void setOverwrite(boolean overwrite) {
 		m_overwrite = overwrite;
 	}
-
+	*/
 	public TreeNodeMenu getTreeNodeMenu() {
 		return m_treeNodeMenu;
 	}
@@ -286,17 +270,39 @@ public abstract class TreeNodeEdit {
 			}
 		}
 	}
-	
+
 	public Object getHdfObject() {
 		return m_hdfObject;
 	}
 
 	public void setHdfObject(Hdf5TreeElement hdfObject) {
 		m_hdfObject = hdfObject;
+		if (m_hdfObject != null && m_hdfObject == m_hdfBackup) {
+			m_hdfBackup = null;
+		}
 	}
 	
 	protected void setHdfObject(Hdf5Attribute<?> hdfObject) {
 		m_hdfObject = hdfObject;
+		if (m_hdfObject != null && m_hdfObject == m_hdfBackup) {
+			m_hdfBackup = null;
+		}
+	}
+	
+	protected Object getHdfBackup() {
+		return m_hdfBackup;
+	}
+
+	private void setHdfBackup(Hdf5TreeElement hdfBackup) {
+		if (m_hdfObject == null || m_hdfObject != m_hdfBackup) {
+			m_hdfBackup = hdfBackup;
+		}
+	}
+	
+	private void setHdfBackup(Hdf5Attribute<?> hdfBackup) {
+		if (m_hdfObject == null || m_hdfObject != m_hdfBackup) {
+			m_hdfBackup = hdfBackup;
+		}
 	}
 
 	public EditAction getEditAction() {
@@ -337,6 +343,8 @@ public abstract class TreeNodeEdit {
 		m_editState = editState;
 	}
 	
+	protected abstract boolean havePropertiesChanged();
+	
 	protected void copyPropertiesFrom(TreeNodeEdit copyEdit) {
 		copyCorePropertiesFrom(copyEdit);
 		copyAdditionalPropertiesFrom(copyEdit);
@@ -349,7 +357,7 @@ public abstract class TreeNodeEdit {
 		m_editOverwritePolicy = copyEdit.getEditOverwritePolicy();
 		setEditAction(copyEdit.getEditAction());
 		m_treeNodeMenu.updateDeleteItemText();
-		if (getEditAction() == EditAction.COPY) {
+		if (m_editAction == EditAction.COPY) {
 			m_parent.addIncompleteCopy(this);
 		}
 	}
@@ -364,6 +372,68 @@ public abstract class TreeNodeEdit {
 		}
 		
 		return parent;
+	}
+	
+	Object getHdfSource() {
+		return m_hdfObject != null ? m_hdfObject : m_hdfBackup;
+	}
+	
+	Object findCopySource() {
+		FileNodeEdit fileEdit = getRoot();
+		if (this instanceof GroupNodeEdit) {
+			try {
+				return ((Hdf5File) fileEdit.getHdfObject()).getGroupByPath(m_inputPathFromFileWithName);
+			} catch (IOException ioe) {
+				return fileEdit.getGroupEditByPath(m_inputPathFromFileWithName).getHdfBackup();
+			}
+		} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
+			try {
+				return ((Hdf5File) fileEdit.getHdfObject()).getDataSetByPath(m_inputPathFromFileWithName);
+			} catch (IOException ioe) {
+				return fileEdit.getDataSetEditByPath(m_inputPathFromFileWithName).getHdfBackup();
+			}
+		} else if (this instanceof AttributeNodeEdit) {
+			try {
+				return ((Hdf5File) fileEdit.getHdfObject()).getAttributeByPath(m_inputPathFromFileWithName);
+			} catch (IOException ioe) {
+				return fileEdit.getAttributeEditByPath(m_inputPathFromFileWithName).getHdfBackup();
+			}
+		}
+		
+		return null;
+	}
+	
+	boolean createBackup() {
+		try {
+			if (this instanceof AttributeNodeEdit) {
+				setHdfBackup(((Hdf5Attribute<?>) m_hdfObject).createBackup("temp_"));
+			} else {
+				setHdfBackup(((Hdf5TreeElement) m_hdfObject).createBackup("temp_"));
+			}
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).warn("Backup could not be created: " + ioe.getMessage(), ioe);
+		}
+		
+		return m_hdfBackup != null;
+	}
+	
+	boolean deleteBackup() {
+		boolean success = true;
+		
+		try {
+			if (m_hdfBackup != null) {
+				if (m_hdfBackup instanceof Hdf5TreeElement) {
+					success = ((Hdf5TreeElement) m_hdfBackup).getParent().deleteObject(((Hdf5TreeElement) m_hdfBackup).getName()) >= 0;
+				} else if (m_hdfBackup instanceof Hdf5Attribute<?>) {
+					success = ((Hdf5Attribute<?>) m_hdfBackup).getParent().deleteAttribute(((Hdf5Attribute<?>) m_hdfBackup).getName()) >= 0;
+				}
+			}
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).warn("Backup could not be deleted: " + ioe.getMessage(), ioe);
+			success = false;
+		}
+		
+		return success;
 	}
 	
 	protected void addIncompleteCopy(TreeNodeEdit edit) {
@@ -493,7 +563,7 @@ public abstract class TreeNodeEdit {
 			for (TreeNodeEdit descendant : descendants.toArray(new TreeNodeEdit[descendants.size()])) {
 				if (state == descendant.getEditState()) {
 					if (!(descendant instanceof ColumnNodeEdit)) {
-						summaryBuilder.append("- " + descendant.getOutputPathFromFileWithName() + "\n");
+						summaryBuilder.append("- " + descendant.getOutputPathFromFileWithName() + " (" + descendant.getEditAction() + ")\n");
 					}
 					descendants.remove(descendant);
 				}
@@ -507,19 +577,35 @@ public abstract class TreeNodeEdit {
 	
 	private TreeNodeEdit findCopyEdit() {
 		if (this instanceof GroupNodeEdit) {
-			return getRoot().getGroupEditByPath(getInputPathFromFileWithName());
+			return getRoot().getGroupEditByPath(m_inputPathFromFileWithName);
 		} else if (this instanceof DataSetNodeEdit) {
-			return getRoot().getDataSetEditByPath(getInputPathFromFileWithName());
+			return getRoot().getDataSetEditByPath(m_inputPathFromFileWithName);
 		} else if (this instanceof ColumnNodeEdit) {
-			return getRoot().getColumnEditByPath(getInputPathFromFileWithName(), ((ColumnNodeEdit) this).getInputColumnIndex());
+			return getRoot().getColumnEditByPath(m_inputPathFromFileWithName, ((ColumnNodeEdit) this).getInputColumnIndex());
 		} else if (this instanceof AttributeNodeEdit) {
-			return getRoot().getAttributeEditByPath(getInputPathFromFileWithName());
-		} 
+			return getRoot().getAttributeEditByPath(m_inputPathFromFileWithName);
+		}
 		return null;
 	}
 	
+	protected void loadHdfObject() throws IOException {
+		if (!m_editAction.isCreateOrCopyAction()) {
+			if (this instanceof GroupNodeEdit) {
+				setHdfObject(((Hdf5File) getRoot().getHdfObject()).getGroupByPath(m_inputPathFromFileWithName));
+			} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
+				setHdfObject(((Hdf5File) getRoot().getHdfObject()).getDataSetByPath(m_inputPathFromFileWithName));
+			} else if (this instanceof AttributeNodeEdit) {
+				setHdfObject(((Hdf5File) getRoot().getHdfObject()).getAttributeByPath(m_inputPathFromFileWithName));
+			}
+		}
+	}
+
 	public String getOutputPathFromFileWithName() {
-		return (!m_outputPathFromFile.isEmpty() ? m_outputPathFromFile + "/" : "") + m_name;
+		return getOutputPathFromFileWithName(false);
+	}
+	
+	String getOutputPathFromFileWithName(boolean checkSlashesInName) {
+		return (!m_outputPathFromFile.isEmpty() ? m_outputPathFromFile + "/" : "") + (checkSlashesInName ? m_name.replaceAll("/", "\\\\/") : m_name);
 	}
 
 	public void reloadTreeWithEditVisible() {
@@ -682,36 +768,46 @@ public abstract class TreeNodeEdit {
 	 * @return			true if {@code newEdit} was removed from its parent (because it is not needed anymore)
 	 */
 	protected boolean useOverwritePolicy(TreeNodeEdit newEdit, long inputRowCount) {
-		TreeNodeEdit editForFutureUsage = newEdit;
+		TreeNodeEdit parentOfNewEdit = newEdit.getParent();
 		TreeNodeEdit oldEdit = getChildOfClass(newEdit.getClass(), newEdit.getName());
 		if (oldEdit != null) {
 			switch(newEdit.getEditOverwritePolicy()) {
 			case ABORT:
 				newEdit.removeFromParent();
-				editForFutureUsage = oldEdit;
 				break;
 			case OVERWRITE:
+				if (oldEdit instanceof GroupNodeEdit) {
+					((GroupNodeEdit) parentOfNewEdit).addGroupNodeEdit((GroupNodeEdit) oldEdit);
+				} else if (oldEdit instanceof DataSetNodeEdit) {
+					((GroupNodeEdit) parentOfNewEdit).addDataSetNodeEdit((DataSetNodeEdit) oldEdit);
+				} else if (oldEdit instanceof AttributeNodeEdit) {
+					if (parentOfNewEdit instanceof GroupNodeEdit) {
+						((GroupNodeEdit) parentOfNewEdit).addAttributeNodeEdit((AttributeNodeEdit) oldEdit);
+					} else if (parentOfNewEdit instanceof DataSetNodeEdit) {
+						((DataSetNodeEdit) parentOfNewEdit).addAttributeNodeEdit((AttributeNodeEdit) oldEdit);
+					}
+				}
+				oldEdit.setEditAction(EditAction.DELETE);
+				//newEdit.setOverwrite(true);
 				break;
 			case RENAME:
 				List<String> usedNames = getNamesOfChildrenWithNameConflictPossible(newEdit.getClass());
-				usedNames.addAll(newEdit.getParent().getNamesOfChildrenWithNameConflictPossible(newEdit.getClass()));
-				newEdit.setName(TreeNodeEdit.getUniqueName(usedNames, newEdit.getName()));
+				usedNames.addAll(parentOfNewEdit.getNamesOfChildrenWithNameConflictPossible(newEdit.getClass()));
+				newEdit.setName(Hdf5TreeElement.getUniqueName(usedNames, newEdit.getName()));
 				break;
 			case INTEGRATE:
 				// TODO test it
+				newEdit.removeFromParent();
 				if (oldEdit instanceof GroupNodeEdit) {
+					((GroupNodeEdit) parentOfNewEdit).addGroupNodeEdit((GroupNodeEdit) oldEdit);
 					((GroupNodeEdit) oldEdit).integrate((GroupNodeEdit) newEdit, inputRowCount, true);
-					newEdit.removeFromParent();
-					((GroupNodeEdit) this).addGroupNodeEdit((GroupNodeEdit) oldEdit);
 					oldEdit.setEditAction(EditAction.MODIFY_CHILDREN_ONLY);
-					editForFutureUsage = oldEdit;
 					
 				} else if (oldEdit instanceof DataSetNodeEdit) {
+					((GroupNodeEdit) parentOfNewEdit).addDataSetNodeEdit((DataSetNodeEdit) oldEdit);
 					((DataSetNodeEdit) oldEdit).integrate((DataSetNodeEdit) newEdit, inputRowCount, true);
-					newEdit.removeFromParent();
-					((GroupNodeEdit) this).addDataSetNodeEdit((DataSetNodeEdit) oldEdit);
 					oldEdit.setEditAction(newEdit.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY);
-					editForFutureUsage = oldEdit;
+					//oldEdit.setOverwrite(true);
 				}
 				break;
 			default:
@@ -719,10 +815,7 @@ public abstract class TreeNodeEdit {
 			}
 		}
 		
-		editForFutureUsage.setOverwrite(newEdit.getEditOverwritePolicy() == EditOverwritePolicy.OVERWRITE
-				|| oldEdit instanceof DataSetNodeEdit && newEdit.getEditOverwritePolicy() == EditOverwritePolicy.INTEGRATE);
-		
-		return editForFutureUsage != newEdit;
+		return newEdit.getParent() == null;
 	}
 	
 	protected void validate(BufferedDataTable inputTable, boolean internalCheck, boolean externalCheck) {
@@ -765,7 +858,7 @@ public abstract class TreeNodeEdit {
 	
 	protected abstract boolean isInConflict(TreeNodeEdit edit);
 	
-	protected boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException {
+	protected boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException, IOException {
 		exec.checkCanceled();
 		
 		setEditState(EditState.IN_PROGRESS);
@@ -773,37 +866,47 @@ public abstract class TreeNodeEdit {
 		boolean success = false;
 		boolean successOfOther = true;
 
-		switch (m_editAction) {
-		case CREATE:
-			success = createAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
-			break;
-		case COPY:
-			success = copyAction(exec, totalProgressToDo);
-			if (success && m_copyEdit != null) {
-				TreeNodeEdit copyEdit = m_copyEdit;
-				m_copyEdit.removeIncompleteCopy(this);
-				if (!copyEdit.areIncompleteCopiesLeft() && copyEdit.getEditAction() == EditAction.DELETE) {
-					successOfOther &= copyEdit.doAction(null, null, false, exec, totalProgressToDo);
-				}
+		try {
+			switch (m_editAction) {
+			case CREATE:
+				success = createAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
+				break;
+			case COPY:
+				success = copyAction(exec, totalProgressToDo);
+				/*if (success && m_copyEdit != null) {
+					TreeNodeEdit copyEdit = m_copyEdit;
+					m_copyEdit.removeIncompleteCopy(this);
+					if (!copyEdit.areIncompleteCopiesLeft() && copyEdit.getEditAction() == EditAction.DELETE) {
+						successOfOther &= copyEdit.doAction(null, null, false, exec, totalProgressToDo);
+					}
+				}*/
+				break;
+			case NO_ACTION:
+			case MODIFY_CHILDREN_ONLY:
+				success = true;
+				break;
+			default:
+				break;
 			}
-			break;
-		default:
-			success = true;
-			break;
+			
+			successOfOther &= doChildActionsInOrder(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
+			
+			switch (m_editAction) {
+			case DELETE:
+				success = deleteAction();
+				break;
+			case MODIFY:
+				success = modifyAction(exec, totalProgressToDo);
+				break;
+			default:
+				break;
+			}
+		} finally {
+			if (!success) {
+				setEditState(EditState.FAIL);
+			}
 		}
 		
-		successOfOther &= doChildActionsInOrder(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
-		
-		switch (m_editAction) {
-		case DELETE:
-			success &= deleteAction();
-			break;
-		case MODIFY:
-			success &= modifyAction(exec, totalProgressToDo);
-			break;
-		default:
-			break;
-		}
 		
 		if (success) {
 			if (!(this instanceof DataSetNodeEdit && m_editAction == EditAction.CREATE)) {
@@ -813,41 +916,45 @@ public abstract class TreeNodeEdit {
 				System.out.println("Progress done (Edit " + getOutputPathFromFileWithName() + "): " + progressDone);
 			}
 			setEditState(EditState.SUCCESS);
-		} else {
-			setEditState(EditState.FAIL);
 		}
 		
 		return success && successOfOther;
 	}
 
-	private boolean doChildActionsInOrder(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException {
+	private boolean doChildActionsInOrder(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException, IOException {
 		List<TreeNodeEdit> deleteEdits = new ArrayList<>();
-		List<TreeNodeEdit> modifyEdits = new ArrayList<>();
 		List<TreeNodeEdit> otherEdits = new ArrayList<>();
+		List<String> objectNames = new ArrayList<>();
+		List<String> attributeNames = new ArrayList<>();
 		
-		for (TreeNodeEdit edit : getAllChildren()) {
+		TreeNodeEdit[] children = getAllChildren();
+		for (TreeNodeEdit edit : children) {
 			if (!(edit instanceof ColumnNodeEdit)) {
 				if (edit.getEditAction() == EditAction.DELETE) {
 					deleteEdits.add(edit);
-				} else if (edit.getEditAction() == EditAction.MODIFY) {
-					modifyEdits.add(edit);
 				} else {
 					otherEdits.add(edit);
+					(edit instanceof AttributeNodeEdit ? attributeNames : objectNames).add(edit.getName());
 				}
 			}
 		}
 		
-		boolean success = true;
-		for (TreeNodeEdit edit : deleteEdits) {
-			if (!edit.areIncompleteCopiesLeft()) {
-				success &= edit.doAction(null, null, false, exec, totalProgressToDo);
-			} else {
-				edit.setEditState(EditState.POSTPONED);
+		for (TreeNodeEdit edit : children) {
+			if (edit.isBackupNeeded(objectNames, attributeNames)) {
+				edit.createBackup();
+				if (!deleteEdits.contains(edit)) {
+					deleteEdits.add(edit);
+				}
 			}
 		}
+
+		boolean success = true;
+		for (TreeNodeEdit edit : deleteEdits) {
+			success &= edit.deleteAction();
+		}
 		
-		List<TreeNodeEdit> secondModifyEdits = new ArrayList<>();
-		for (TreeNodeEdit edit : modifyEdits) {
+		/*List<TreeNodeEdit> secondModifyEdits = new ArrayList<>();
+		for (TreeNodeEdit edit : backupEdits) {
 			if (!edit.doAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo)) {
 				// TODO only add it to here if the action failed due to name duplicate (which is resolved through another modifyAction), not in other fails like "inappropriate type"
 				secondModifyEdits.add(edit);
@@ -857,7 +964,7 @@ public abstract class TreeNodeEdit {
 		
 		for (TreeNodeEdit edit : secondModifyEdits) {
 			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
-		}
+		}*/
 		
 		for (TreeNodeEdit edit : otherEdits) {
 			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
@@ -865,12 +972,68 @@ public abstract class TreeNodeEdit {
 		
 		return success;
 	}
+	
+	private boolean isBackupNeeded(List<String> objectNames, List<String> attributeNames) {
+		boolean backupNeeded = false;
+		
+		if (m_editAction == EditAction.DELETE) {
+			backupNeeded =  m_parent.getEditAction() != EditAction.DELETE;
+			
+		} else if (m_editAction == EditAction.MODIFY) {
+			backupNeeded = havePropertiesChanged();
+			if (!backupNeeded) {
+				String[] pathAndName = Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName);
+				backupNeeded = getOutputPathFromFile().equals(pathAndName[0])
+						&& (this instanceof AttributeNodeEdit ? attributeNames : objectNames).contains(pathAndName[1]);
+			}
+		}
+		
+		return backupNeeded;
+	}
 
 	protected abstract boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables,
-			boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException;
-	protected abstract boolean copyAction(ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException;
-	protected abstract boolean deleteAction();
-	protected abstract boolean modifyAction(ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException;
+			boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException;
+	protected abstract boolean copyAction(ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException;
+	protected abstract boolean deleteAction() throws IOException;
+	protected abstract boolean modifyAction(ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException;
+	
+	protected boolean rollbackAction() throws IOException {
+		boolean success = true;
+		
+		switch (m_editAction) {
+		case CREATE:
+		case COPY:
+			success &= deleteAction();
+			break;
+		case MODIFY:
+		case DELETE:
+			String newName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
+			try {
+				if (this instanceof AttributeNodeEdit) {
+					Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfSource();
+					success &= attribute.getParent().renameAttribute(attribute.getName(), newName) != null;
+				} else {
+					Hdf5TreeElement treeElement = (Hdf5TreeElement) getHdfSource();
+					success &= treeElement.getParent().moveObject(treeElement.getName(), treeElement.getParent(), newName) != null;
+				}
+			} catch (IOException ioe) {
+				NodeLogger.getLogger(getClass()).warn(ioe.getMessage(), ioe);
+				success = false;
+			}
+			break;
+		default:
+			break;
+		}
+		
+		if (success) {
+			deleteBackup();
+		} else {
+			NodeLogger.getLogger(getClass()).warn("Rollback of "
+					+ getOutputPathFromFileWithName() + " could not be executed. Backup is still available.");
+		}
+		
+		return success;
+	}
 	
 	private static class TreeNodeEditComparator implements Comparator<TreeNodeEdit> {
 		

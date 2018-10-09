@@ -20,6 +20,11 @@ public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 		parent.addUnsupportedObjectNodeEdit(this);
 		setUnsupportedCause("Unsupported type of object");
 	}
+	
+	@Override
+	protected boolean havePropertiesChanged() {
+		return false;
+	}
 
 	@Override
 	protected void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit) {

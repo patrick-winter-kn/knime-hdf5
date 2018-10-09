@@ -96,6 +96,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
+	protected boolean havePropertiesChanged() {
+		return false;
+	}
+	
+	@Override
 	protected void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit) {
 		// nothing to do here
 	}
@@ -184,9 +189,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 								+ getOutputPathFromFileWithName() +  "\" could not be checked: " + udte.getMessage(), udte);
 						values = null;
 					}
-				} else {
+				} else if (inputTable == null) {
 					try {
-						Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) (getEditAction() == EditAction.COPY ? getCopyEdit() : this).getHdfObject();
+						// TODO maybe check this when the columns loaded for the first time
+						TreeNodeEdit copyEdit = getEditAction() == EditAction.COPY ? getCopyEdit() : this;
+						Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) copyEdit.getHdfObject();
 						dataSet.open();
 						// only supported for dataSets with max. 2 dimensions
 						values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);

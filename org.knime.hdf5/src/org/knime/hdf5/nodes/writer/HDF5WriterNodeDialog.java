@@ -54,8 +54,8 @@ import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.FlowVariableListCellRenderer;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
-import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit;
 
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 	
@@ -164,7 +164,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		});
 		buttonPanel.add(resetConfigButton);
 		
-		JButton removeInvalidsButton = new JButton("Remove edits without source");
+		JButton removeInvalidsButton = new JButton("Remove invalids without source");
 		removeInvalidsButton.addActionListener(new ActionListener() {
 			
 			@Override
@@ -197,7 +197,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	    			}
     				}
     			}
-        		filePath = directory.getPath() + File.separator + TreeNodeEdit.getUniqueName(usedNames, fileNameWithoutExtension) + fileExtension;
+        		filePath = directory.getPath() + File.separator + Hdf5TreeElement.getUniqueName(usedNames, fileNameWithoutExtension) + fileExtension;
         		
     		} else {
     			throw new IOException("Directory \"" + directory.getPath() + "\" for new file does not exist");

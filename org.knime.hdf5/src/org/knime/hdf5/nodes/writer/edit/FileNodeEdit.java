@@ -2,6 +2,8 @@ package org.knime.hdf5.nodes.writer.edit;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import javax.swing.JTree;
@@ -154,6 +156,14 @@ public class FileNodeEdit extends GroupNodeEdit {
 		validate();
 	}
 	
+	private void loadAllHdfObjectsOfFile() throws IOException {
+		List<TreeNodeEdit> descendants = getAllDecendants();
+		descendants.remove(this);
+		for (TreeNodeEdit edit : descendants) {
+			edit.loadHdfObject();
+		}
+	}
+	
 	@Override
 	public void addEditToParentNode() {
 		// not needed here; instead use setEditAsRootOfTree[JTree]
@@ -242,23 +252,20 @@ public class FileNodeEdit extends GroupNodeEdit {
 				&& edit.getName().equals(getName());
 	}
 	
-	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec) throws CanceledExecutionException {
-		try {
-			boolean success = true;
-			if (!getEditAction().isCreateOrCopyAction()) {
-				setHdfObject(Hdf5File.openFile(getFilePath(), Hdf5File.READ_WRITE_ACCESS));
-				success = getHdfObject() != null;
+	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec) throws IOException, CanceledExecutionException {
+		boolean success = true;
+		if (!getEditAction().isCreateOrCopyAction()) {
+			setHdfObject(Hdf5File.openFile(getFilePath(), Hdf5File.READ_WRITE_ACCESS));
+			success = getHdfObject() != null;
+			if (success) {
+				loadAllHdfObjectsOfFile();
 			}
-			exec.setProgress(0.0);
-			// TODO delete after testing
-			long pTD = getTotalProgressToDo();
-			System.out.println("TotalProgressToDo: " + pTD);
-			return success && doAction(inputTable, flowVariables, saveColumnProperties, exec, pTD);
-			
-		} catch (IOException ioe) {
-			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 		}
-		return false;
+		exec.setProgress(0.0);
+		// TODO change after testing
+		long pTD = getTotalProgressToDo();
+		System.out.println("TotalProgressToDo: " + pTD);
+		return success && doAction(inputTable, flowVariables, saveColumnProperties, exec, pTD);
 	}
 
 	@Override
@@ -286,5 +293,50 @@ public class FileNodeEdit extends GroupNodeEdit {
 	@Override
 	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) {
 		return false;
+	}
+	
+	public boolean deleteAllBackups() {
+		boolean success = true;
+		
+		for (TreeNodeEdit edit : getAllDecendants()) {
+			success &= edit.deleteBackup();
+		}
+		
+		return success;
+	}
+	
+	public boolean doRollbackAction() {
+		boolean success = true;
+		
+		List<TreeNodeEdit> rollbackEdits = getAllDecendants();
+		List<String> inputPaths = new ArrayList<>();
+		for (TreeNodeEdit edit : rollbackEdits.toArray(new TreeNodeEdit[rollbackEdits.size()])) {
+			if (edit.getEditState() == EditState.SUCCESS && edit.getEditAction() == EditAction.MODIFY) {
+				inputPaths.add(edit.getInputPathFromFileWithName());
+			} else {
+				rollbackEdits.remove(edit);
+			}
+		}
+		
+		for (TreeNodeEdit edit : rollbackEdits) {
+			if (edit.getHdfBackup() == null && inputPaths.contains(edit.getOutputPathFromFileWithName(true))) {
+				success &= edit.createBackup();
+				try {
+					success &= edit.deleteAction();
+				} catch (IOException ioe) {
+					NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+				}
+			}
+		}
+		
+		for (TreeNodeEdit edit : rollbackEdits) {
+			try {
+				success &= edit.rollbackAction();
+			} catch (IOException ioe) {
+				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+			}
+		}
+		
+		return success;
 	}
 }

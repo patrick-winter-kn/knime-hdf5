@@ -1,5 +1,6 @@
 package org.knime.hdf5.lib;
 
+import java.io.IOException;
 import java.util.Arrays;
 
 import javax.activation.UnsupportedDataTypeException;
@@ -257,6 +258,10 @@ public class Hdf5Attribute<Type> {
 	public String getPathFromFileWithName() {
 		return getPathFromFile() + getName();
 	}
+
+	public Hdf5Attribute<?> createBackup(String prefix) throws IOException {
+		return m_parent.copyAttribute(Hdf5TreeElement.getUniqueName(m_parent.loadAttributeNames(), prefix + m_name), this);
+	}
 	
 	/**
 	 * Writes {@code value} in this attribute in Hdf5 and saves it as the new value of this
@@ -315,6 +320,7 @@ public class Hdf5Attribute<Type> {
 	
 	public boolean copyValuesTo(Hdf5Attribute<?> attribute) {
 		try {
+			open();
 			return H5.H5Acopy(getAttributeId(), attribute.getAttributeId()) >= 0;
 			
 		} catch (HDF5LibraryException hle) {

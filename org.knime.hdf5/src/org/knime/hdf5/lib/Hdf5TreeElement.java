@@ -75,6 +75,27 @@ abstract public class Hdf5TreeElement {
 		return new String[] { pathWithoutName, name };
 	}
 	
+	public static String getUniqueName(List<String> usedNames, String name) {
+		String newName = name;
+		
+		if (usedNames.contains(newName)) {
+			String oldName = name;
+			int i = 1;
+			
+			if (oldName.matches(".*\\([1-9][0-9]*\\)")) {
+				i = Integer.parseInt(oldName.substring(oldName.lastIndexOf("(") + 1, oldName.lastIndexOf(")")));
+				oldName = oldName.substring(0, oldName.lastIndexOf("("));
+			}
+			
+			while (usedNames.contains(newName)) {
+				newName = oldName + "(" + i + ")";
+				i++;
+			}
+		}
+		
+		return newName;
+	}
+	
 	public String getName() {
 		return m_name;
 	}
@@ -149,6 +170,17 @@ abstract public class Hdf5TreeElement {
 	
 	public String getPathFromFileWithName() {
 		return getPathFromFileWithName(false);
+	}
+	
+	public Hdf5TreeElement createBackup(String prefix) throws IOException, IllegalStateException, IllegalArgumentException {
+		if (isFile()) {
+			throw new IllegalStateException("Cannot create a backup for a file");
+		}
+		if (prefix.contains("/")) {
+			throw new IllegalArgumentException("Prefix for backup file cannot contain '/'");
+		}
+		
+		return m_parent.copyObject(m_name, m_parent, getUniqueName(m_parent.loadObjectNames(), prefix + m_name));
 	}
 	
 	public synchronized Hdf5Attribute<?> createAttribute(final String name, final long dimension, final Hdf5DataType type) throws IOException {
@@ -411,21 +443,22 @@ abstract public class Hdf5TreeElement {
 		return H5.H5Aexists(getElementId(), name);
 	}
 	
-	public synchronized boolean renameAttribute(String oldName, String newName) {
+	public synchronized Hdf5Attribute<?> renameAttribute(String oldName, String newName) throws IOException {
 		boolean success = false;
 		
 		try {
 			Hdf5Attribute<?> attribute = getAttribute(oldName);
+			attribute.close();
 			success = H5.H5Arename(getElementId(), oldName, newName) >= 0;
 			if (success) {
 				removeAttribute(attribute);
 			}
 		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
-			NodeLogger.getLogger(getClass()).error("Attribute in \"" + getPathFromFileWithName(true)
+			throw new IOException("Attribute in \"" + getPathFromFileWithName(true)
 					+ "\" could not be renamed from \"" + oldName + "\" to \"" + newName + "\": " + hlionpe.getMessage(), hlionpe);
 		}
 		
-		return success;
+		return success ? getAttribute(newName) : null;
 	}
 	
 	/**

@@ -253,6 +253,11 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
+	protected boolean havePropertiesChanged() {
+		return false;
+	}
+	
+	@Override
 	protected void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit) {
 		// nothing to do here
 	}

@@ -164,6 +164,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		try {
 			int objectType = getObjectTypeByName(oldName);
 			Hdf5TreeElement oldObject = objectType == HDF5Constants.H5I_GROUP ? getGroup(oldName) : getDataSet(oldName);
+			oldObject.close(); // TODO test if necessary
 			H5.H5Lmove(getElementId(), oldName, newParent.getElementId(), newName, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
 			if (getObjectTypeByName(oldName) == OBJECT_NOT_EXISTS && newParent.getObjectTypeByName(newName) == objectType) {
 				if (oldObject instanceof Hdf5Group) {
@@ -318,7 +319,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return getDataSet(name);
 	}
 	
-	private int getObjectTypeByName(final String name) throws HDF5LibraryException, NullPointerException {
+	public int getObjectTypeByName(final String name) throws HDF5LibraryException, NullPointerException {
 		try {
 			if (H5.H5Lexists(getElementId(), name, HDF5Constants.H5P_DEFAULT)
 					&& H5.H5Oexists_by_name(getElementId(), name, HDF5Constants.H5P_DEFAULT)) {

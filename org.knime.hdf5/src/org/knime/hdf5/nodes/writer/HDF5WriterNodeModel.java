@@ -51,17 +51,30 @@ public class HDF5WriterNodeModel extends NodeModel {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
 		try {
 			success = fileEdit.doAction(inData[0], getAvailableFlowVariables(), m_saveColumnProperties.getBooleanValue(), exec);
+			
 		} catch (Exception e) {
-			// just for testing if there are exceptions here
 			NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
+			
 		} finally {
-			if (fileEdit.getHdfObject() != null) {
-				((Hdf5File) fileEdit.getHdfObject()).close();
+			try {
+				if (success) {
+					fileEdit.deleteAllBackups();
+				} else {
+					boolean rollbackSuccess = fileEdit.doRollbackAction();
+					NodeLogger.getLogger(getClass()).warn("Success of rollback: " + rollbackSuccess);
+				}
+			} catch (Exception e) {
+				// just for testing if there are exceptions here
+				NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
+			} finally {
+				if (fileEdit.getHdfObject() != null) {
+					((Hdf5File) fileEdit.getHdfObject()).close();
+				}
 			}
 			//if (!success) {
 			// TODO change after testing
 			NodeLogger.getLogger(getClass()).warn("Success: " + success);
-			NodeLogger.getLogger(getClass()).warn("Some edits did not succeed. Current states of all edits (that are not aborted):\n" + fileEdit.getSummaryOfEditStates());
+			NodeLogger.getLogger(getClass()).warn("States of all edits during fail (that are not aborted):\n" + fileEdit.getSummaryOfEditStates());
 			//}
 		}
 		
