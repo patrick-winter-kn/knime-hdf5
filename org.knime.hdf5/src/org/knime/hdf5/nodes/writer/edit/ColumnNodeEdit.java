@@ -1,5 +1,6 @@
 package org.knime.hdf5.nodes.writer.edit;
 
+import java.io.IOException;
 import java.util.Map;
 
 import javax.activation.UnsupportedDataTypeException;
@@ -197,6 +198,10 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 						dataSet.open();
 						// only supported for dataSets with max. 2 dimensions
 						values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
+						
+					} catch (IOException ioe) {
+						NodeLogger.getLogger(getClass()).error("Validation of dataType of new column \""
+								+ getOutputPathFromFileWithName() +  "\" could not be checked: " + ioe.getMessage(), ioe);
 						
 					} catch (HDF5DataspaceInterfaceException ioe) {
 						cause = cause == null ? InvalidCause.COLUMN_INDEX : cause;

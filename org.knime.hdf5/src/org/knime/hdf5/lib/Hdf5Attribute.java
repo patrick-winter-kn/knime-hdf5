@@ -14,6 +14,7 @@ import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
+import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
 import hdf.hdf5lib.exceptions.HDF5Exception;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
@@ -104,7 +105,7 @@ public class Hdf5Attribute<Type> {
 		return attribute;
 	}
 	
-	static Hdf5Attribute<?> openAttribute(final Hdf5TreeElement parent, final String name) throws UnsupportedDataTypeException {
+	static Hdf5Attribute<?> openAttribute(final Hdf5TreeElement parent, final String name) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
 		try {
@@ -258,6 +259,10 @@ public class Hdf5Attribute<Type> {
 	public String getPathFromFileWithName() {
 		return getPathFromFile() + getName();
 	}
+	
+	public boolean isValid() {
+		return m_attributeId != -1;
+	}
 
 	public Hdf5Attribute<?> createBackup(String prefix) throws IOException {
 		return m_parent.copyAttribute(Hdf5TreeElement.getUniqueName(m_parent.loadAttributeNames(), prefix + m_name), this);
@@ -270,9 +275,10 @@ public class Hdf5Attribute<Type> {
 	 * @param value the new data array which should be written
 	 * @return {@code true} if writing was successful,
 	 * 			{@code false} otherwise
+	 * @throws IOException 
 	 */
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public boolean write(final Type[] value, Rounding rounding) {
+	public boolean write(final Type[] value, Rounding rounding) throws IOException {
         try {
 			int dim = (int) m_dimension;
         	if (dim > 0) {
@@ -311,37 +317,43 @@ public class Hdf5Attribute<Type> {
 			return true;
 			
 		} catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException hudtnpe) {
-            NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + getPathFromFileWithName()
+            throw new IOException("Attribute \"" + getPathFromFileWithName()
             		+ "\" could not be written: " + hudtnpe.getMessage(), hudtnpe);
 		}
-        
-        return false;
 	}
 	
-	public boolean copyValuesTo(Hdf5Attribute<?> attribute) {
-		try {
-			open();
-			return H5.H5Acopy(getAttributeId(), attribute.getAttributeId()) >= 0;
-			
-		} catch (HDF5LibraryException hle) {
-			NodeLogger.getLogger(getClass()).error(hle.getMessage(), hle);
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	public boolean copyValuesTo(Hdf5Attribute<Object> attribute, Rounding rounding) throws HDF5LibraryException, IOException {
+		if (!m_open || !attribute.isOpen()) {
+			throw new IOException("Attribute \"" + (!m_open ? this : attribute).getPathFromFileWithName() + "\" is not open");
 		}
 		
-		return false;
+		if (m_dimension != attribute.getDimension()) {
+			throw new HDF5DataspaceInterfaceException("Attributes \"" + getPathFromFileWithName() + "\" and \""
+					+ attribute.getPathFromFileWithName() + "\" do not have the same length");
+		}
+		
+		if (m_type.isSimilarTo(attribute.getType())) {
+			return H5.H5Acopy(getAttributeId(), attribute.getAttributeId()) >= 0;
+		}
+		
+		Type[] copyData = read();
+		Object[] dataIn = attribute.getType().getKnimeType().createArray((int) m_dimension);
+		Class copyClass = m_type.getKnimeClass();
+		Class inputClass = attribute.getType().getKnimeClass();
+		for (int i = 0; i < dataIn.length; i++) {
+			// TODO maybe use hdfToHdf here
+			dataIn[i] = m_type.knimeToKnime(copyClass,
+					copyClass.cast(copyData[i]), inputClass, attribute.getType(), rounding);
+		}
+		return attribute.write(dataIn, rounding);
 	}
 	
 	@SuppressWarnings("unchecked")
-	public boolean clearData() {
-		try {
-			Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) m_dimension);
-			Arrays.fill(dataIn, (Type) m_type.getKnimeType().getMissingValue());
-			return write(dataIn, Rounding.DOWN);
-			
-		} catch (UnsupportedDataTypeException udte) {
-			NodeLogger.getLogger(getClass()).error(udte.getMessage(), udte);
-		}
-		
-		return false;
+	public boolean clearData() throws IOException {
+		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) m_dimension);
+		Arrays.fill(dataIn, (Type) m_type.getKnimeType().getMissingValue());
+		return write(dataIn, Rounding.DOWN);
 	}
 	
 	/**

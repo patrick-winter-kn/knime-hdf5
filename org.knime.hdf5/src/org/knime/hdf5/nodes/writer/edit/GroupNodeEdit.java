@@ -13,14 +13,12 @@ import javax.swing.JTextField;
 import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
-import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5Group;
-import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 public class GroupNodeEdit extends TreeNodeEdit {
@@ -195,9 +193,6 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	void integrate(GroupNodeEdit copyEdit, long inputRowCount, boolean lastValidationBeforeExecution) {
 		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
 			if (copyGroupEdit.getEditAction() != EditAction.NO_ACTION) {
-				if (lastValidationBeforeExecution && useOverwritePolicy(copyGroupEdit, inputRowCount)) {
-					continue;
-				}
 				GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
 				boolean isCreateOrCopyAction = copyGroupEdit.getEditAction().isCreateOrCopyAction();
 				if (groupEdit != null && !isCreateOrCopyAction) {
@@ -214,9 +209,6 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		
 		for (DataSetNodeEdit copyDataSetEdit : copyEdit.getDataSetNodeEdits()) {
 			if (copyDataSetEdit.getEditAction() != EditAction.NO_ACTION) {
-				if (lastValidationBeforeExecution && useOverwritePolicy(copyDataSetEdit, inputRowCount)) {
-					continue;
-				}
 				DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
 				boolean isCreateOrCopyAction = copyDataSetEdit.getEditAction().isCreateOrCopyAction();
 				if (dataSetEdit != null && !isCreateOrCopyAction) {
@@ -238,9 +230,6 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		
 		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
 			if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
-				if (lastValidationBeforeExecution && useOverwritePolicy(copyAttributeEdit, inputRowCount)) {
-					continue;
-				}
 				AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
 				boolean isCreateOrCopyAction = copyAttributeEdit.getEditAction().isCreateOrCopyAction();
 				if (attributeEdit != null && !isCreateOrCopyAction) {
@@ -423,73 +412,54 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
-		return getName().contains("/") ? InvalidCause.NAME_CHARS : null;
+		return getName().contains("/") ? InvalidCause.NAME_CHARS :
+			getName().startsWith(BACKUP_PREFIX) && !getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName())
+					? InvalidCause.NAME_BACKUP_PREFIX : null;
 	}
 
 	@Override
 	protected boolean isInConflict(TreeNodeEdit edit) {
-		return !(edit instanceof ColumnNodeEdit) && !(edit instanceof AttributeNodeEdit) && this != edit && getName().equals(edit.getName())
-				&& getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE
-				&& (!(edit instanceof GroupNodeEdit) || getEditOverwritePolicy() == EditOverwritePolicy.NONE && edit.getEditOverwritePolicy() == EditOverwritePolicy.NONE
-						|| getEditOverwritePolicy() == EditOverwritePolicy.OVERWRITE && edit.getEditOverwritePolicy() == EditOverwritePolicy.OVERWRITE);
+		boolean conflictPossible = !(edit instanceof ColumnNodeEdit) && !(edit instanceof AttributeNodeEdit) && this != edit;
+		boolean inConflict = conflictPossible && getName().equals(edit.getName()) && getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
+
+		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willModifyActionBeAbortedOnEdit(edit);
 	}
 
 	@Override
-	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) {
-		Hdf5Group group = null;
+	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables,
+			boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException {
+		setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).createGroupFromEdit(this));
 		
-		try {
-			group = ((Hdf5Group) getOpenedHdfObjectOfParent()).createGroupFromEdit(this);
-		} catch (IOException ioe) {
-			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-		}
-		
-		setHdfObject(group);
-		return group != null;
+		return getHdfObject() != null;
 	}
 	
 	@Override
-	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) {
+	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
 		return createAction(null, null, false, exec, totalProgressToDo);
 	}
 
 	@Override
-	protected boolean deleteAction() {
-		boolean success = false;
-		
-		String name = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
-		try {
-			success = ((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(name) >= 0;
-		} catch (IOException ioe) {
-			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-		}
-		
-		if (success) {
+	protected boolean deleteAction() throws IOException {
+		Hdf5Group group = (Hdf5Group) getHdfObject();
+		if (((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(group.getName()) >= 0) {
 			setHdfObject((Hdf5Group) null);
 		}
-		return success;
+		
+		return getHdfObject() == null;
 	}
 
 	@Override
-	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) {
-		String oldName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
-		
-		boolean success = oldName.equals(getName());
-		if (!success) {
-			Hdf5Group newGroup = null;
-			
-			Hdf5Group parent = (Hdf5Group) getOpenedHdfObjectOfParent();
-			try {
-				newGroup = (Hdf5Group) parent.moveObject(oldName, parent, getName());
-			} catch (IOException ioe) {
-				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
+		Hdf5Group oldGroup = (Hdf5Group) getHdfSource();
+		if (!oldGroup.getName().equals(getName())) {
+			if (oldGroup == getHdfBackup()) {
+				oldGroup.getParent().copyObject(oldGroup.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName());
+			} else {
+				oldGroup.getParent().moveObject(oldGroup.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName());
 			}
-			
-			setHdfObject(newGroup);
-			success = newGroup != null;
 		}
 		
-		return success;
+		return getHdfObject() != null;
 	}
 	
 	public class GroupNodeMenu extends TreeNodeMenu {

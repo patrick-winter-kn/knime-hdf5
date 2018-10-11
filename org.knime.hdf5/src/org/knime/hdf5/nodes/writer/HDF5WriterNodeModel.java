@@ -52,17 +52,16 @@ public class HDF5WriterNodeModel extends NodeModel {
 		try {
 			success = fileEdit.doAction(inData[0], getAvailableFlowVariables(), m_saveColumnProperties.getBooleanValue(), exec);
 			
-		} catch (Exception e) {
+		} /*catch (Exception e) {
 			NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
 			
-		} finally {
+		} */finally {
 			try {
-				if (success) {
-					fileEdit.deleteAllBackups();
-				} else {
+				if (!success) {
 					boolean rollbackSuccess = fileEdit.doRollbackAction();
 					NodeLogger.getLogger(getClass()).warn("Success of rollback: " + rollbackSuccess);
 				}
+				fileEdit.deleteAllBackups();
 			} catch (Exception e) {
 				// just for testing if there are exceptions here
 				NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
@@ -108,7 +107,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
 				FileNodeEdit oldFileEdit = new FileNodeEdit(file);
 				oldFileEdit.loadChildrenOfHdfObject();
-				boolean valid = inputTable != null ? oldFileEdit.doLastValidationBeforeExecution(fileEdit, inputTable) : oldFileEdit.integrate(fileEdit);
+				boolean valid = inputTable == null ? oldFileEdit.integrate(fileEdit) : oldFileEdit.doLastValidationBeforeExecution(fileEdit, inputTable);
 				if (!valid) {
 					// TODO change after testing
 					System.out.println(inputTable == null ? "1." : "2.");

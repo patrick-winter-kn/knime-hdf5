@@ -130,10 +130,17 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 
 	public boolean doLastValidationBeforeExecution(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
+		useOverwritePolicyForFile(copyEdit);
 		super.integrate(copyEdit, inputTable.size(), true);
 		updateIncompleteCopies();
-		doLastValidation(inputTable, copyEdit);
+		doLastValidation(copyEdit, inputTable);
 		return isValid() && copyEdit.isValid();
+	}
+	
+	private void useOverwritePolicyForFile(FileNodeEdit fileEdit) {
+		for (TreeNodeEdit edit : fileEdit.getAllChildren()) {
+			useOverwritePolicy(edit);
+		}
 	}
 	
 	public boolean integrate(FileNodeEdit copyEdit) {
@@ -160,7 +167,19 @@ public class FileNodeEdit extends GroupNodeEdit {
 		List<TreeNodeEdit> descendants = getAllDecendants();
 		descendants.remove(this);
 		for (TreeNodeEdit edit : descendants) {
-			edit.loadHdfObject();
+			loadHdfObjectOf(edit);
+		}
+	}
+	
+	private void loadHdfObjectOf(TreeNodeEdit edit) throws IOException {
+		if (edit.getInputPathFromFileWithName() != null) {
+			if (edit instanceof GroupNodeEdit) {
+				edit.setHdfObject(((Hdf5File) getHdfObject()).getGroupByPath(edit.getInputPathFromFileWithName()));
+			} else if (edit instanceof DataSetNodeEdit || edit instanceof ColumnNodeEdit) {
+				edit.setHdfObject(((Hdf5File) getHdfObject()).getDataSetByPath(edit.getInputPathFromFileWithName()));
+			} else if (edit instanceof AttributeNodeEdit) {
+				edit.setHdfObject(((Hdf5File) getRoot().getHdfObject()).getAttributeByPath(edit.getInputPathFromFileWithName()));
+			}
 		}
 	}
 	
@@ -206,7 +225,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 		validate(null, true, true);
 	}
 	
-	private void doLastValidation(BufferedDataTable inputTable, FileNodeEdit copyEdit) {
+	private void doLastValidation(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
 		// external validation
 		validate(null, false, true);
 		// internal validation
@@ -309,18 +328,22 @@ public class FileNodeEdit extends GroupNodeEdit {
 		boolean success = true;
 		
 		List<TreeNodeEdit> rollbackEdits = getAllDecendants();
-		List<String> inputPaths = new ArrayList<>();
+		List<String> attributePaths = new ArrayList<>();
+		List<String> objectPaths = new ArrayList<>();
 		for (TreeNodeEdit edit : rollbackEdits.toArray(new TreeNodeEdit[rollbackEdits.size()])) {
-			if (edit.getEditState() == EditState.SUCCESS && edit.getEditAction() == EditAction.MODIFY) {
-				inputPaths.add(edit.getInputPathFromFileWithName());
-			} else {
+			if (edit.getEditAction() == EditAction.MODIFY || edit.getEditAction() == EditAction.DELETE) {
+				(edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).add(edit.getInputPathFromFileWithName());
+			} else if (edit.getEditState() != EditState.SUCCESS) {
 				rollbackEdits.remove(edit);
 			}
 		}
 		
 		for (TreeNodeEdit edit : rollbackEdits) {
-			if (edit.getHdfBackup() == null && inputPaths.contains(edit.getOutputPathFromFileWithName(true))) {
+			if (edit.getHdfBackup() == null && !edit.getEditAction().isCreateOrCopyAction()
+					&& (edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).contains(edit.getOutputPathFromFileWithName(true))) {
 				success &= edit.createBackup();
+			}
+			if (edit.getHdfBackup() != null && edit.getHdfObject() != null) {
 				try {
 					success &= edit.deleteAction();
 				} catch (IOException ioe) {

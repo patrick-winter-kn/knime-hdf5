@@ -180,7 +180,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		boolean propertiesChanged = true;
 		
 		if (!getEditAction().isCreateOrCopyAction()) {
-			//Hdf5Attribute<?> copyAttribute = ((Hdf5File) getRoot().getHdfObject()).getAttributeByPath(getInputPathFromFileWithName());
 			Hdf5Attribute<?> copyAttribute = (Hdf5Attribute<?>) getHdfSource();
 			
 			propertiesChanged = m_inputType != m_editDataType.getOutputType()
@@ -290,15 +289,17 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
-		return null;
+		return getName().startsWith(BACKUP_PREFIX) && !getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName())
+				? InvalidCause.NAME_BACKUP_PREFIX : null;
 	}
 
 	@Override
 	protected boolean isInConflict(TreeNodeEdit edit) {
-		return edit instanceof AttributeNodeEdit && this != edit && getName().equals(edit.getName())
-				&& getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE
-				&& (getEditOverwritePolicy() == EditOverwritePolicy.NONE && edit.getEditOverwritePolicy() == EditOverwritePolicy.NONE
-						|| getEditOverwritePolicy() == EditOverwritePolicy.OVERWRITE && edit.getEditOverwritePolicy() == EditOverwritePolicy.OVERWRITE);
+		boolean conflictPossible = edit instanceof AttributeNodeEdit && this != edit;
+		boolean inConflict = conflictPossible && getName().equals(edit.getName())
+				&& getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
+		
+		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willModifyActionBeAbortedOnEdit(edit);
 	}
 
 	@Override
@@ -333,12 +334,13 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 
 	@Override
 	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
+		Hdf5Attribute<?> oldAttribute = (Hdf5Attribute<?>) getHdfSource();
 		if (havePropertiesChanged()) {
-			deleteAction();
-			return copyAction(exec, totalProgressToDo);
-			
+			setHdfObject(getOpenedHdfObjectOfParent().createAndWriteAttribute(this, oldAttribute));
+			if (oldAttribute != getHdfBackup()) {
+				getOpenedHdfObjectOfParent().deleteAttribute(oldAttribute.getName());
+			}
 		} else {
-			Hdf5Attribute<?> oldAttribute = (Hdf5Attribute<?>) getHdfSource();
 			if (!oldAttribute.getName().equals(getName())) {
 				if (oldAttribute == getHdfBackup()) {
 					setHdfObject(getOpenedHdfObjectOfParent().copyAttribute(getName(), oldAttribute));
@@ -346,59 +348,9 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 					setHdfObject(getOpenedHdfObjectOfParent().renameAttribute(oldAttribute.getName(), getName()));
 				}
 			}
-			
-			return getHdfObject() != null;
 		}
 		
-		/*boolean success = true;
-		
-		Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
-		String oldName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
-		
-		if (!havePropertiesChanged()// && getOutputPathFromFile().equals(pathAndName[0])) {
-			if (!oldName.equals(getName())) {
-				success = parent.renameAttribute(oldName, getName());
-			}
-		} else {
-			Hdf5Attribute<?> tempAttribute = null;
-			try {
-				tempAttribute = parent.copyAttribute(Hdf5TreeElement.getUniqueName(parent.loadAttributeNames(), getName() + "(1)"), parent.getAttribute(oldName));
-			} catch (IOException ioe) {
-				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-			}
-			success = tempAttribute != null;
-			try {
-				success &= parent.deleteAttribute(oldName) >= 0;
-			} catch (IOException ioe) {
-				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-			}
-			
-			try {
-				Hdf5Attribute<?> newAttribute = parent.createAndWriteAttribute(this, tempAttribute);
-				setHdfObject(newAttribute);
-				setInputPathFromFileWithName(newAttribute.getPathFromFileWithName());
-				success &= newAttribute != null;
-				
-			} catch (IOException ioe) {
-				success = false;
-				try {
-					Hdf5Attribute<?> changedNameAttribute = parent.copyAttribute(Hdf5TreeElement.getUniqueName(parent.loadAttributeNames(), getName()), tempAttribute);
-					setHdfObject(changedNameAttribute);
-					setInputPathFromFileWithName(changedNameAttribute.getPathFromFileWithName());
-					
-				} catch (IOException ioe2) {
-					NodeLogger.getLogger(getClass()).error(ioe2.getMessage(), ioe2);
-				}
-			}
-			
-			try {
-				success &= parent.deleteAttribute(tempAttribute.getName()) >= 0;
-			} catch (IOException ioe) {
-				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-			}
-		}
-		
-		return success;*/
+		return getHdfObject() != null;
 	}
 	
 	public class AttributeNodeMenu extends TreeNodeMenu {
@@ -435,6 +387,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				super(AttributeNodeMenu.this, "Attribute properties");
 
 				addProperty("Name: ", m_nameField);
+				// TODO avoid that the user changes the overwritePolicy without changing the name (for NO_ACTION and MODIFY)
 				addProperty("Overwrite: ", m_overwriteField);
 				m_dataTypeChooser.addToPropertiesDialog(this);
 				

@@ -47,9 +47,9 @@ public class Hdf5DataType {
 	 * @param fromDS true if the dataType is from a dataSet
 	 * @throws HDF5LibraryException 
 	 */
-	private Hdf5DataType(long elementId, long classId, int size, Endian endian, boolean unsigned, boolean vlen) throws HDF5LibraryException {
+	private Hdf5DataType(boolean fromDS, long classId, int size, Endian endian, boolean unsigned, boolean vlen) throws HDF5LibraryException {
 		m_vlen = vlen;
-		m_fromDS = H5.H5Iget_type(elementId) == HDF5Constants.H5I_DATASET;
+		m_fromDS = fromDS;
 		
 		// see Hdf5HdfDataType for the structure of the typeId
 		// if typeId cannot be defined differently, it will stay a STRING
@@ -64,25 +64,6 @@ public class Hdf5DataType {
 		
 		m_hdfType = Hdf5HdfDataType.getInstance(HdfDataType.get(typeId), endian);
 		m_knimeType = Hdf5KnimeDataType.getKnimeDataType(m_hdfType.getType(), m_fromDS);
-	}
-	
-	private static Hdf5DataType getInstance(long elementId, long classId, int size, Endian endian, boolean unsigned, boolean vlen) {
-		Hdf5DataType dataType = null;
-		
-		try {
-			int elementTypeId = H5.H5Iget_type(elementId);
-			if (elementTypeId != HDF5Constants.H5I_DATASET && elementTypeId != HDF5Constants.H5I_ATTR) {
-				throw new IllegalStateException("DataType can only be for a DataSet or Attribute");
-			}
-			
-			dataType = new Hdf5DataType(elementId, classId, size, endian, unsigned, vlen);
-		
-		} catch (HDF5LibraryException hle) {
-            NodeLogger.getLogger("HDF5 Files").error("Invalid elementId", hle);
-			/* dataType stays null */            
-		} 
-		
-		return dataType;
 	}
 	
 	public static Hdf5DataType createDataType(Hdf5HdfDataType hdfType, Hdf5KnimeDataType knimeType, 
@@ -106,18 +87,31 @@ public class Hdf5DataType {
 				copyDataType.getKnimeType(), copyDataType.isVlen(), copyDataType.isFromDS(), copyDataType.getHdfType().getStringLength());
 	}
 	
-	public static Hdf5DataType openDataType(long elementId, long classId, int size, Endian endian, boolean unsigned, boolean vlen) {
-		Hdf5DataType dataType = null;
+	public static Hdf5DataType openDataType(long elementId) throws HDF5LibraryException, UnsupportedDataTypeException, IllegalArgumentException {
+		int elementTypeId = H5.H5Iget_type(elementId);
+		if (elementTypeId != HDF5Constants.H5I_DATASET && elementTypeId != HDF5Constants.H5I_ATTR) {
+			throw new IllegalArgumentException("DataType can only be for a DataSet or Attribute");
+		}
 		
-		try {
-			dataType = getInstance(elementId, classId, size, endian, unsigned, vlen);
-			dataType.getHdfType().openHdfDataTypeString(elementId);
+		boolean fromDS = elementTypeId == HDF5Constants.H5I_DATASET;
+		long typeId = fromDS ? H5.H5Dget_type(elementId) : H5.H5Aget_type(elementId);
+		long classId = H5.H5Tget_class(typeId);
+		int size = (int) H5.H5Tget_size(typeId);
+		Endian endian = H5.H5Tget_order(typeId) == HDF5Constants.H5T_ORDER_LE ? Endian.LITTLE_ENDIAN : Endian.BIG_ENDIAN;
+		boolean vlen = classId == HDF5Constants.H5T_VLEN || H5.H5Tis_variable_str(typeId);
+		boolean unsigned = false;
+		if (classId == HDF5Constants.H5T_INTEGER) {
+			unsigned = HDF5Constants.H5T_SGN_NONE == H5.H5Tget_sign(typeId);
+		}
+		H5.H5Tclose(typeId);
+
+		if (classId == HDF5Constants.H5T_VLEN || classId == HDF5Constants.H5T_REFERENCE || classId == HDF5Constants.H5T_COMPOUND) {
+			throw new UnsupportedDataTypeException("DataType " + H5.H5Tget_class_name(classId) + " is not supported");
+		}
+		
+		Hdf5DataType dataType = new Hdf5DataType(fromDS, classId, size, endian, unsigned, vlen);
+		dataType.getHdfType().openHdfDataTypeString(elementId);
 			
-		} catch (NullPointerException | IllegalArgumentException npiae) {
-            NodeLogger.getLogger("HDF5 Files").error("DataType could not be created: " + npiae.getMessage(), npiae);
-			/* dataType stays null */
-        }
-		
 		return dataType;
 	}
 	
@@ -207,6 +201,67 @@ public class Hdf5DataType {
 		default:
 			throw new UnsupportedDataTypeException("Unknown knimeDataType");
 		}
+	}
+
+	public <T, S> S knimeToKnime(Class<T> inputClass, T inputValue, Class<S> outputClass, Hdf5DataType outputType, Rounding rounding) throws UnsupportedDataTypeException {
+		if (inputClass == inputValue.getClass() && inputClass == getKnimeClass() && outputClass == outputType.getKnimeClass()) {
+			if (inputClass == outputClass) {
+				return outputClass.cast(inputValue);
+			}
+			
+			if (outputType.isKnimeType(Hdf5KnimeDataType.STRING)) {
+				return outputClass.cast(inputValue.toString());
+			}
+			
+			switch (getKnimeType()) {
+			case INTEGER:
+				int inputValueInt = (int) inputValue;
+				switch (outputType.getKnimeType()) {
+				case LONG:
+					return outputClass.cast((long) inputValueInt);
+				case DOUBLE:
+					return outputClass.cast((double) inputValueInt);
+				default:
+					break;
+				}
+			case LONG:
+				long inputValueLong = (long) inputValue;
+				switch (outputType.getKnimeType()) {
+				case INTEGER:
+					return outputClass.cast((int) inputValueLong);
+				case DOUBLE:
+					return outputClass.cast((double) inputValueLong);
+				default:
+					break;
+				}
+			case DOUBLE:
+				double inputValueDouble = (double) inputValue;
+				switch (outputType.getKnimeType()) {
+				case INTEGER:
+					return outputClass.cast((int) inputValueDouble);
+				case LONG:
+					return outputClass.cast((long) inputValueDouble);
+				default:
+					break;
+				}
+			case STRING:
+				String inputValueString = (String) inputValue;
+				switch (outputType.getKnimeType()) {
+				case INTEGER:
+					return outputClass.cast(Integer.parseInt(inputValueString));
+				case LONG:
+					return outputClass.cast(Long.parseLong(inputValueString));
+				case DOUBLE:
+					return outputClass.cast(Double.parseDouble(inputValueString));
+				default:
+					break;
+				}
+			default:
+				break;
+			}
+		}
+		
+		throw new UnsupportedDataTypeException("Incorrect combination of input classes");
 	}
 
 	public <T, S> S knimeToHdf(Class<T> knimeClass, T knimeValue, Class<S> hdfClass, Rounding rounding) throws UnsupportedDataTypeException {
