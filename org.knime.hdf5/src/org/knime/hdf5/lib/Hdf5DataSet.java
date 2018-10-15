@@ -68,7 +68,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	static Hdf5DataSet<?> createDataSet(final Hdf5Group parent, final String name,
-			long[] dimensions, int compressionLevel, long chunkRowSize, Hdf5DataType type) {
+			long[] dimensions, int compressionLevel, long chunkRowSize, Hdf5DataType type) throws IOException {
 		Hdf5DataSet<?> dataSet = null;
 		
 		try {
@@ -86,8 +86,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
     		dataSet.setOpen(true);
     		
 		} catch (HDF5Exception | NullPointerException | IllegalArgumentException | IllegalStateException hnpiaise) {
-            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be created: " + hnpiaise.getMessage(), hnpiaise);
-			/* dataSet stays null */
+            throw new IOException("DataSet could not be created: " + hnpiaise.getMessage(), hnpiaise);
         }
 		
 		return dataSet;
@@ -104,8 +103,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	    	dataSet.open();
         	
         } catch (NullPointerException | IllegalArgumentException | IllegalStateException npiaise) {
-            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened: " + npiaise.getMessage(), npiaise);
-			/* dataSet stays null */
+        	throw new IOException("DataSet could not be opened: " + npiaise.getMessage(), npiaise);
         }
 		
 		return dataSet;
@@ -496,7 +494,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	@Override
-	public boolean open() {
+	public boolean open() throws IOException {
 		try {
 			if (!isOpen()) {
 				if (!getParent().isOpen()) {
@@ -513,13 +511,13 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				return true;
 			}
 		} catch (HDF5LibraryException | NullPointerException | IllegalStateException hlnpise) {
-            NodeLogger.getLogger("HDF5 Files").error("DataSet could not be opened", hlnpise);
+			throw new IOException("DataSet could not be opened", hlnpise);
         }
 		
 		return false;
 	}
 	
-	private void createDimensions(long[] dimensions) {
+	private void createDimensions(long[] dimensions) throws IOException {
 		m_dimensions = dimensions;
 		
 		// Create the dataSpace for the dataSet.
@@ -528,7 +526,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         			: H5.H5Screate_simple(m_dimensions.length, m_dimensions, null);
             
         } catch (HDF5Exception | NullPointerException hnpe) {
-            NodeLogger.getLogger("HDF5 Files").error("DataSpace could not be created", hnpe);
+            throw new IOException("DataSpace could not be created", hnpe);
         }
 	}
 	
@@ -569,8 +567,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	/**
 	 * Updates the dimensions array after opening a dataSet to ensure that the
 	 * dimensions array is correct.
+	 * @throws  
 	 */
-	private void loadDimensions() throws IllegalStateException {
+	private void loadDimensions() throws IOException, IllegalStateException {
 		// Get dataSpace and allocate memory for read buffer.
 		try {
 			if (isOpen()) {
@@ -586,7 +585,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				throw new IllegalStateException("DataSet is not open");
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
-            NodeLogger.getLogger("HDF5 Files").error("Dimensions could not be loaded", hlnpe);
+            throw new IOException("Dimensions could not be loaded", hlnpe);
         }
 	}
 	

@@ -35,6 +35,7 @@ public class EditTreeConfiguration {
 		if (settings.containsKey(m_configRootName + "_File")) {
 	        NodeSettingsRO fileSettings = settings.getNodeSettings(m_configRootName + "_File");
 	        setFileNodeEdit(FileNodeEdit.useFileSettings(fileSettings));
+	        // TODO check here if all needed columnSpecs and flowVariables exist
 		}
     }
 }

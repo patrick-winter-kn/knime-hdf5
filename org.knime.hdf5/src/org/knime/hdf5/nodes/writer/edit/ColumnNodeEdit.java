@@ -31,25 +31,29 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 
 	private final int m_inputColumnIndex;
 	
+	private int m_outputColumnIndex;
+	
 	private final HdfDataType m_inputType;
 	
 	private long m_inputRowCount;
 	
-	private ColumnNodeEdit(DataSetNodeEdit parent, ColumnNodeEdit copyColumn, boolean noAction) {
+	private ColumnNodeEdit(DataSetNodeEdit parent, ColumnNodeEdit copyColumn, boolean needsCopySource) {
 		this(parent, copyColumn.getInputPathFromFileWithName(), copyColumn.getInputColumnIndex(),
-				copyColumn.getName(), copyColumn.getInputType(), copyColumn.getInputRowCount(), noAction ? copyColumn.getEditAction()
-				: (copyColumn.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY));
+				copyColumn.getName(), copyColumn.getInputType(), copyColumn.getInputRowCount(),
+				needsCopySource ? (copyColumn.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY) : copyColumn.getEditAction());
 		copyAdditionalPropertiesFrom(copyColumn);
-		if (getEditAction() == EditAction.COPY) {
-			copyColumn.getParent().addIncompleteCopy(this);
+		if (needsCopySource && getEditAction() == EditAction.COPY) {
+			setCopyEdit(copyColumn.getParent());
 		}
 	}
 
 	public ColumnNodeEdit(DataSetNodeEdit parent, DataColumnSpec columnSpec) {
 		this(parent, columnSpec.getName(), NO_COLUMN_INDEX, columnSpec.getName(), HdfDataType.getHdfDataType(columnSpec.getType()),
 				UNKNOWN_ROW_COUNT, EditAction.CREATE);
-		if (parent.getEditAction() == EditAction.COPY) {
+		if (parent.getEditAction().isCreateOrCopyAction()) {
 			parent.setEditAction(EditAction.CREATE);
+		} else if (parent.getEditAction() != EditAction.DELETE) {
+			parent.setEditAction(EditAction.MODIFY);
 		}
 	}
 	
@@ -67,16 +71,24 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		m_inputRowCount = inputRowCount;
 		parent.addColumnNodeEdit(this);
 	}
+
+	public ColumnNodeEdit copyColumnEditTo(DataSetNodeEdit parent) {
+		return copyColumnEditTo(parent, true);
+	}
 	
-	public ColumnNodeEdit copyColumnEditTo(DataSetNodeEdit parent, boolean copyWithoutChildren) {
-		ColumnNodeEdit newColumnEdit = new ColumnNodeEdit(parent, this, copyWithoutChildren);
+	ColumnNodeEdit copyColumnEditTo(DataSetNodeEdit parent, boolean needsCopySource) {
+		ColumnNodeEdit newColumnEdit = new ColumnNodeEdit(parent, this, needsCopySource);
 		newColumnEdit.addEditToParentNode();
 		
 		return newColumnEdit;
 	}
-	
+
 	int getInputColumnIndex() {
 		return m_inputColumnIndex;
+	}
+
+	int getOutputColumnIndex() {
+		return m_outputColumnIndex;
 	}
 
 	public HdfDataType getInputType() {
@@ -97,7 +109,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	protected boolean havePropertiesChanged() {
+	protected boolean havePropertiesChanged(Object hdfSource) {
 		return false;
 	}
 	
@@ -145,11 +157,12 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		settings.addInt(SettingsKey.INPUT_TYPE.getKey(), m_inputType.getTypeId());
 		settings.addLong(SettingsKey.INPUT_ROW_COUNT.getKey(), m_inputRowCount);
 		settings.addInt(SettingsKey.INPUT_COLUMN_INDEX.getKey(), m_inputColumnIndex);
+		settings.addInt(SettingsKey.OUTPUT_COLUMN_INDEX.getKey(), ((DataSetNodeEdit) getParent()).getIndexOfColumnEdit(this));
 	}
 	
 	@Override
 	protected void loadSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
-		// nothing to do here
+		m_outputColumnIndex = settings.getInt(SettingsKey.OUTPUT_COLUMN_INDEX.getKey());
 	}
 	
 	@Override
@@ -244,7 +257,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) {
+	protected boolean modifyAction(BufferedDataTable inputTable, boolean saveColumnProperties,
+			ExecutionContext exec, long totalProgressToDo) {
 		return false;
 	}
 	

@@ -352,16 +352,16 @@ public class EditTreePanel extends JPanel {
             			
             			if (parentEdit != null) {
             				if (copyEdit instanceof GroupNodeEdit) {
-    							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo((GroupNodeEdit) parentEdit, false);
+    							newEdit = ((GroupNodeEdit) copyEdit).copyGroupEditTo((GroupNodeEdit) parentEdit);
     							
     						} else if (copyEdit instanceof DataSetNodeEdit) {
-    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo((GroupNodeEdit) parentEdit, false);
+    							newEdit = ((DataSetNodeEdit) copyEdit).copyDataSetEditTo((GroupNodeEdit) parentEdit);
     							
     						} else if (copyEdit instanceof ColumnNodeEdit) {
-    							newEdit = ((ColumnNodeEdit) copyEdit).copyColumnEditTo((DataSetNodeEdit) parentEdit, false);
+    							newEdit = ((ColumnNodeEdit) copyEdit).copyColumnEditTo((DataSetNodeEdit) parentEdit);
     							
     						} else if (copyEdit instanceof AttributeNodeEdit) {
-    							newEdit = ((AttributeNodeEdit) copyEdit).copyAttributeEditTo(parentEdit, false);
+    							newEdit = ((AttributeNodeEdit) copyEdit).copyAttributeEditTo(parentEdit);
     						}
         					parent = newEdit.getParent().getTreeNode();
             			}

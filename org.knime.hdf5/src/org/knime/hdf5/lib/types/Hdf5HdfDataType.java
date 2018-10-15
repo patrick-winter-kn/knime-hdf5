@@ -13,7 +13,6 @@ import org.knime.core.data.def.IntCell;
 import org.knime.core.data.def.LongCell;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.workflow.FlowVariable.Type;
-import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.nodes.writer.edit.EditDataType;
 
 import hdf.hdf5lib.H5;
@@ -75,11 +74,6 @@ public class Hdf5HdfDataType {
 			default:
 				return STRING;
 			}
-		}
-
-		public static List<HdfDataType> getConvertibleTypes(Hdf5Attribute<?> attribute) {
-			Object[] values = attribute.getValue() == null ? attribute.read() : attribute.getValue();
-			return getConvertibleTypes(attribute.getType().getHdfType().getType(), values);
 		}
 		
 		public static List<HdfDataType> getConvertibleTypes(HdfDataType inputType, Object[] values) {
@@ -221,6 +215,10 @@ public class Hdf5HdfDataType {
 		
 		public boolean areValuesConvertible(Object[] values, HdfDataType inputType, EditDataType editDataType) {
 			if (isNumber()) {
+				if (!inputType.isNumber()) {
+					return false;
+				}
+				
 				double min = getMin();
 				double max = getMax();
 				for (Object value : values) {

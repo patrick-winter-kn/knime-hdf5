@@ -256,16 +256,10 @@ abstract public class Hdf5TreeElement {
 		if (attribute != null) {
 			Rounding rounding = edit.getEditDataType().getRounding();
 			
-			try {
-				if (!edit.isFlowVariableArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
-					success = attribute.write(new String[] { flowVariable.getStringValue() }, rounding);
-				} else {
-					success = attribute.write(values, rounding);
-				}
-			} finally {
-				if (!success) {
-					deleteAttribute(attribute.getName());
-				}
+			if (!edit.isFlowVariableArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
+				success = attribute.write(new String[] { flowVariable.getStringValue() }, rounding);
+			} else {
+				success = attribute.write(values, rounding);
 			}
 		}
 	
@@ -281,13 +275,8 @@ abstract public class Hdf5TreeElement {
 			newAttribute = (Hdf5Attribute<Object>) createAttributeFromEdit(edit, copyAttribute.getDimension());
 			
 			if (newAttribute != null) {
-				try {
-					copyAttribute.open();
-					success = copyAttribute.copyValuesTo(newAttribute, edit.getEditDataType().getRounding());
-				} catch (HDF5LibraryException hle) {
-					deleteAttribute(newAttribute.getName());
-					throw hle;
-				}
+				copyAttribute.open();
+				success = copyAttribute.copyValuesTo(newAttribute, edit.getEditDataType().getRounding());
 			}
 		} catch (HDF5LibraryException | IOException hlioe) {
 			throw new IOException("Attribute \"" + copyAttribute.getPathFromFileWithName()
@@ -298,21 +287,16 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public Hdf5Attribute<?> copyAttribute(String newName, Hdf5Attribute<?> copyAttribute) throws IOException {
+	public Hdf5Attribute<?> copyAttribute(Hdf5Attribute<?> copyAttribute, Hdf5TreeElement newParent, String newName) throws IOException {
 		boolean success = false;
 		Hdf5Attribute<Object> newAttribute = null;
 		
 		try {
-			newAttribute = (Hdf5Attribute<Object>) createAttribute(newName, copyAttribute.getDimension(), Hdf5DataType.createCopyFrom(copyAttribute.getType()));
+			newAttribute = (Hdf5Attribute<Object>) newParent.createAttribute(newName, copyAttribute.getDimension(), Hdf5DataType.createCopyFrom(copyAttribute.getType()));
 			
 			if (newAttribute != null) {
-				try {
-					copyAttribute.open();
-					success = copyAttribute.copyValuesTo(newAttribute, Rounding.DOWN);
-				} catch (HDF5LibraryException hle) {
-					deleteAttribute(newAttribute.getName());
-					throw hle;
-				}
+				copyAttribute.open();
+				success = copyAttribute.copyValuesTo(newAttribute, Rounding.DOWN);
 			}
 		} catch (HDF5LibraryException | IOException hlioe) {
 			throw new IOException("Attribute \"" + copyAttribute.getPathFromFileWithName()
@@ -320,20 +304,6 @@ abstract public class Hdf5TreeElement {
 		}
 		
 		return success ? newAttribute : null;
-	}
-	
-	public Hdf5Attribute<?> copyAttributeFromEdit(AttributeNodeEdit edit, Hdf5Attribute<?> copyAttribute) throws IOException {
-		Hdf5Attribute<?> attribute = null;
-		
-		String name = edit.getName();
-		if (!existsAttribute(name)) {
-			attribute = copyAttribute(name, copyAttribute);
-		} else {
-			throw new IOException("Attribute with the same name \""
-					+ name + "\" already exists in treeElement \"" + getPathFromFileWithName() + "\"");
-		}
-		
-		return attribute;
 	}
 	
 	public synchronized Hdf5Attribute<?> getAttribute(final String name) throws IOException {
@@ -633,7 +603,7 @@ abstract public class Hdf5TreeElement {
 		}
 	}
 	
-	public abstract boolean open();
+	public abstract boolean open() throws IOException;
 	
 	public abstract boolean close();
 }

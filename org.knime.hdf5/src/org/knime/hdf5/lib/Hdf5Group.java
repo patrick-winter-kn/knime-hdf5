@@ -16,7 +16,6 @@ import org.knime.hdf5.lib.types.Hdf5HdfDataType;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.nodes.writer.edit.DataSetNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.EditDataType;
-import org.knime.hdf5.nodes.writer.edit.GroupNodeEdit;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -35,7 +34,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		super(name);
 	}
 	
-	private static Hdf5Group getInstance(final Hdf5Group parent, final String name) throws IllegalStateException {
+	private static Hdf5Group getInstance(final Hdf5Group parent, final String name) throws IllegalArgumentException, IllegalStateException {
 		if (parent == null) {
 			throw new IllegalArgumentException("Parent of group \"" + name + "\" cannot be null");
 			
@@ -46,7 +45,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return new Hdf5Group(name);
 	}
 	
-	private static Hdf5Group createGroup(final Hdf5Group parent, final String name) {
+	private static Hdf5Group createGroup(final Hdf5Group parent, final String name) throws IOException {
 		Hdf5Group group = null;
 		
 		try {
@@ -59,14 +58,13 @@ public class Hdf5Group extends Hdf5TreeElement {
 			group.setOpen(true);
     		
 		} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException | IllegalStateException hlnpiaise) {
-            NodeLogger.getLogger("HDF5 Files").error("Group could not be created: " + hlnpiaise.getMessage(), hlnpiaise);
-			/* group stays null */
+			throw new IOException("Group could not be created: " + hlnpiaise.getMessage(), hlnpiaise);
         }
 		
 		return group;
 	}
 
-	private static Hdf5Group openGroup(final Hdf5Group parent, final String name) {
+	private static Hdf5Group openGroup(final Hdf5Group parent, final String name) throws IOException {
 		Hdf5Group group = null;
 		
 		try {
@@ -76,8 +74,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 			group.open();
         	
         } catch (NullPointerException | IllegalArgumentException | IllegalStateException npiaise) {
-            NodeLogger.getLogger("HDF5 Files").error("Group could not be opened: " + npiaise.getMessage(), npiaise);
-			/* group stays null */
+        	throw new IOException("Group could not be opened: " + npiaise.getMessage(), npiaise);
         }
 		
 		return group;
@@ -452,15 +449,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 		
 		return paths;
 	}
-
-	public Hdf5Group createGroupFromEdit(GroupNodeEdit edit) throws IOException {
-		if (getObjectTypeByName(edit.getName()) == OBJECT_NOT_EXISTS) {
-			return createGroup(edit.getName());
-		} else {
-			throw new IOException("Object with the same name \""
-					+ edit.getName() + "\" already exists in group \"" + getPathFromFileWithName() + "\"");
-		}
-	}
 	
 	public Hdf5DataSet<?> createDataSetFromEdit(DataSetNodeEdit edit) throws IOException {
 		EditDataType editDataType = edit.getEditDataType();
@@ -520,7 +508,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	}
 
 	@Override
-	public boolean open() {
+	public boolean open() throws IOException, IllegalStateException {
 		if (isFile()) {
 			throw new IllegalStateException("Wrong method used for Hdf5File");
 		}
@@ -537,7 +525,7 @@ public class Hdf5Group extends Hdf5TreeElement {
                 return true;
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
-            NodeLogger.getLogger("HDF5 Files").error("Group could not be opened", hlnpe);
+			throw new IOException("Group could not be opened", hlnpe);
         }
 
         return false;

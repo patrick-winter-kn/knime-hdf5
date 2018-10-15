@@ -22,7 +22,7 @@ public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	protected boolean havePropertiesChanged() {
+	protected boolean havePropertiesChanged(Object hdfSource) {
 		return false;
 	}
 
@@ -78,7 +78,8 @@ public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) {
+	protected boolean modifyAction(BufferedDataTable inputTable, boolean saveColumnProperties,
+			ExecutionContext exec, long totalProgressToDo) {
 		return false;
 	}
 }

@@ -89,29 +89,11 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	public static FileNodeEdit useFileSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		//Hdf5File file = null;
 		FileNodeEdit edit = new FileNodeEdit(settings.getString(SettingsKey.FILE_PATH.getKey()),
 				EditAction.get(settings.getString(SettingsKey.EDIT_ACTION.getKey())));
-		/*try {
-	        if (!edit.getEditAction().isCreateOrCopyAction()) {
-				try {
-					file = Hdf5File.openFile(edit.getFilePath(), Hdf5File.READ_ONLY_ACCESS);
-				} catch (IOException ioe) {
-					throw new InvalidSettingsException(ioe.getMessage(), ioe);
-				}
-			}
-			edit.setHdfObject(file);*/
-	        edit.loadSettingsFrom(settings);
-	        /*edit.updateIncompleteCopies();
-	        edit.validate();
-	        
-		} finally {
-			if (file != null) {
-				file.close();
-			}
-		}*/
-		
-        return edit;
+	    
+		edit.loadSettingsFrom(settings);
+		return edit;
 	}
 
 	private long getTotalProgressToDo() {
@@ -131,8 +113,8 @@ public class FileNodeEdit extends GroupNodeEdit {
 
 	public boolean doLastValidationBeforeExecution(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
 		useOverwritePolicyForFile(copyEdit);
-		super.integrate(copyEdit, inputTable.size(), true);
-		updateIncompleteCopies();
+		super.integrate(copyEdit, inputTable.size());
+		updateCopySources();
 		doLastValidation(copyEdit, inputTable);
 		return isValid() && copyEdit.isValid();
 	}
@@ -141,11 +123,17 @@ public class FileNodeEdit extends GroupNodeEdit {
 		for (TreeNodeEdit edit : fileEdit.getAllChildren()) {
 			useOverwritePolicy(edit);
 		}
+		
+		for (TreeNodeEdit edit : fileEdit.getAllDecendants()) {
+			if (edit.getEditAction() == EditAction.NO_ACTION) {
+				edit.removeFromParent();
+			}
+		}
 	}
 	
 	public boolean integrate(FileNodeEdit copyEdit) {
-		super.integrate(copyEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT, false);
-		updateIncompleteCopies();
+		super.integrate(copyEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+		updateCopySources();
 		validate();
 		return isValid();
 	}
@@ -172,7 +160,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	private void loadHdfObjectOf(TreeNodeEdit edit) throws IOException {
-		if (edit.getInputPathFromFileWithName() != null) {
+		if (edit.getEditAction() != EditAction.CREATE && edit.getInputPathFromFileWithName() != null) {
 			if (edit instanceof GroupNodeEdit) {
 				edit.setHdfObject(((Hdf5File) getHdfObject()).getGroupByPath(edit.getInputPathFromFileWithName()));
 			} else if (edit instanceof DataSetNodeEdit || edit instanceof ColumnNodeEdit) {
@@ -310,7 +298,8 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 
 	@Override
-	protected boolean modifyAction(ExecutionContext exec, long totalProgressToDo) {
+	protected boolean modifyAction(BufferedDataTable inputTable, boolean saveColumnProperties,
+			ExecutionContext exec, long totalProgressToDo) {
 		return false;
 	}
 	
@@ -331,10 +320,10 @@ public class FileNodeEdit extends GroupNodeEdit {
 		List<String> attributePaths = new ArrayList<>();
 		List<String> objectPaths = new ArrayList<>();
 		for (TreeNodeEdit edit : rollbackEdits.toArray(new TreeNodeEdit[rollbackEdits.size()])) {
-			if (edit.getEditAction() == EditAction.MODIFY || edit.getEditAction() == EditAction.DELETE) {
-				(edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).add(edit.getInputPathFromFileWithName());
-			} else if (edit.getEditState() != EditState.SUCCESS) {
+			if (!edit.getEditState().isExecutedState()) {
 				rollbackEdits.remove(edit);
+			} else if (edit.getEditAction() == EditAction.MODIFY || edit.getEditAction() == EditAction.DELETE) {
+				(edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).add(edit.getInputPathFromFileWithName());
 			}
 		}
 		
@@ -355,8 +344,8 @@ public class FileNodeEdit extends GroupNodeEdit {
 		for (TreeNodeEdit edit : rollbackEdits) {
 			try {
 				success &= edit.rollbackAction();
-			} catch (IOException ioe) {
-				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+			} catch (Exception e) {
+				NodeLogger.getLogger(getClass()).error("Fail in rollback of \"" + edit.getOutputPathFromFileWithName() + "\": " + e.getMessage(), e);
 			}
 		}
 		

@@ -52,29 +52,36 @@ public class HDF5WriterNodeModel extends NodeModel {
 		try {
 			success = fileEdit.doAction(inData[0], getAvailableFlowVariables(), m_saveColumnProperties.getBooleanValue(), exec);
 			
-		} /*catch (Exception e) {
-			NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
-			
-		} */finally {
-			try {
-				if (!success) {
-					boolean rollbackSuccess = fileEdit.doRollbackAction();
-					NodeLogger.getLogger(getClass()).warn("Success of rollback: " + rollbackSuccess);
-				}
-				fileEdit.deleteAllBackups();
-			} catch (Exception e) {
-				// just for testing if there are exceptions here
-				NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
-			} finally {
-				if (fileEdit.getHdfObject() != null) {
-					((Hdf5File) fileEdit.getHdfObject()).close();
-				}
-			}
-			//if (!success) {
+		} finally {
 			// TODO change after testing
 			NodeLogger.getLogger(getClass()).warn("Success: " + success);
-			NodeLogger.getLogger(getClass()).warn("States of all edits during fail (that are not aborted):\n" + fileEdit.getSummaryOfEditStates());
-			//}
+			NodeLogger.getLogger(getClass()).warn("States of all edits during fail:\n" + fileEdit.getSummaryOfEditStates(false));
+			
+			if (success) {
+				try {
+					fileEdit.deleteAllBackups();
+					
+				} catch (Exception e) {
+					NodeLogger.getLogger(getClass()).error("Deletion of backups failed: " + e.getMessage(), e);
+				}
+			} else {
+				boolean rollbackSuccess = false;
+				try {
+					if (!success) {
+						rollbackSuccess = fileEdit.doRollbackAction();
+					}
+				} catch (Exception e) {
+					NodeLogger.getLogger(getClass()).error("Rollback failed: " + e.getMessage(), e);
+				
+				} finally {
+					NodeLogger.getLogger(getClass()).warn("Success of rollback: " + rollbackSuccess);
+					NodeLogger.getLogger(getClass()).warn("States of all edits after rollback:\n" + fileEdit.getSummaryOfEditStates(true));
+				}
+			}
+			
+			if (fileEdit.getHdfObject() != null) {
+				((Hdf5File) fileEdit.getHdfObject()).close();
+			}
 		}
 		
 		return null;

@@ -45,6 +45,7 @@ import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 
 public abstract class TreeNodeEdit {
@@ -72,6 +73,7 @@ public abstract class TreeNodeEdit {
 		CHUNK_ROW_SIZE("chunkRowSize"),
 		INPUT_ROW_COUNT("inputRowCount"),
 		INPUT_COLUMN_INDEX("inputColumnIndex"),
+		OUTPUT_COLUMN_INDEX("outputColumnIndex"),
 		GROUPS("groups"),
 		DATA_SETS("dataSets"),
 		ATTRIBUTES("attributes"),
@@ -153,8 +155,16 @@ public abstract class TreeNodeEdit {
 		}
 	}
 	
-	public static enum EditState {
-		TODO, IN_PROGRESS, SUCCESS, FAIL;
+	static enum EditState {
+		TODO, IN_PROGRESS, SUCCESS, FAIL, ROLLBACK_SUCCESS, ROLLBACK_FAIL;
+		
+		boolean isRollbackState() {
+			return this == ROLLBACK_SUCCESS || this == ROLLBACK_FAIL;
+		}
+		
+		boolean isExecutedState() {
+			return this == SUCCESS || this == FAIL || isRollbackState();
+		}
 	}
 	
 	static final String BACKUP_PREFIX = "temp_";
@@ -166,8 +176,6 @@ public abstract class TreeNodeEdit {
 	private String m_name;
 	
 	private EditOverwritePolicy m_editOverwritePolicy;
-	
-	private boolean m_overwrite;
 
 	private TreeNodeMenu m_treeNodeMenu;
 	
@@ -180,8 +188,6 @@ public abstract class TreeNodeEdit {
 	private Object m_hdfBackup;
 	
 	private EditAction m_editAction = EditAction.NO_ACTION;
-	
-	private List<TreeNodeEdit> m_incompleteCopies = new ArrayList<>();
 	
 	private TreeNodeEdit m_copyEdit;
 	
@@ -207,23 +213,30 @@ public abstract class TreeNodeEdit {
 		return m_inputPathFromFileWithName;
 	}
 	
-	void setInputPathFromFileWithName(String inputPathFromFileWithName) {
-		m_inputPathFromFileWithName = inputPathFromFileWithName;
-		for (TreeNodeEdit copyEdit : m_incompleteCopies) {
-			copyEdit.setInputPathFromFileWithName(inputPathFromFileWithName);
-		}
-	}
-	
 	public String getOutputPathFromFile() {
 		return m_outputPathFromFile;
 	}
 
+	private void setOutputPathFromFile(String outputPathFromFile) {
+		if (!m_outputPathFromFile.equals(outputPathFromFile)) {
+			m_outputPathFromFile = outputPathFromFile;
+			for (TreeNodeEdit edit : getAllChildren()) {
+				edit.setOutputPathFromFile(getOutputPathFromFileWithName());
+			}
+		}
+	}
+	
 	public String getName() {
 		return m_name;
 	}
 	
 	void setName(String name) {
-		m_name = name;
+		if (!m_name.equals(name)) {
+			m_name = name;
+			for (TreeNodeEdit edit : getAllChildren()) {
+				edit.setOutputPathFromFile(getOutputPathFromFileWithName());
+			}
+		}
 	}
 	
 	EditOverwritePolicy getEditOverwritePolicy() {
@@ -233,15 +246,7 @@ public abstract class TreeNodeEdit {
 	protected void setEditOverwritePolicy(EditOverwritePolicy editOverwritePolicy) {
 		m_editOverwritePolicy = editOverwritePolicy;
 	}
-
-	public boolean isOverwrite() {
-		return m_overwrite;
-	}
-	/*
-	private void setOverwrite(boolean overwrite) {
-		m_overwrite = overwrite;
-	}
-	*/
+	
 	public TreeNodeMenu getTreeNodeMenu() {
 		return m_treeNodeMenu;
 	}
@@ -326,8 +331,15 @@ public abstract class TreeNodeEdit {
 		return m_copyEdit;
 	}
 	
-	private void setCopyEdit(TreeNodeEdit copyEdit) {
-		m_copyEdit = copyEdit;
+	protected void setCopyEdit(TreeNodeEdit copyEdit) throws IllegalArgumentException {
+		if (getRoot() != copyEdit.getRoot()) {
+			throw new IllegalArgumentException("Copy source must have the same root as this edit");
+			
+		} else if (this == copyEdit) {
+			throw new IllegalArgumentException("Copy source may not be this edit ifself");
+		}
+		
+		m_copyEdit = copyEdit.getCopyEdit() != null ? copyEdit.getCopyEdit() : copyEdit;
 	}
 
 	public boolean isSupported() {
@@ -342,11 +354,11 @@ public abstract class TreeNodeEdit {
 		return m_editState;
 	}
 	
-	private void setEditState(EditState editState) {
+	protected void setEditState(EditState editState) {
 		m_editState = editState;
 	}
 	
-	protected abstract boolean havePropertiesChanged();
+	protected abstract boolean havePropertiesChanged(Object hdfSource);
 	
 	protected void copyPropertiesFrom(TreeNodeEdit copyEdit) {
 		copyCorePropertiesFrom(copyEdit);
@@ -361,7 +373,7 @@ public abstract class TreeNodeEdit {
 		setEditAction(copyEdit.getEditAction());
 		m_treeNodeMenu.updateDeleteItemText();
 		if (m_editAction == EditAction.COPY) {
-			m_parent.addIncompleteCopy(this);
+			setCopyEdit(copyEdit.getCopyEdit());
 		}
 	}
 	
@@ -381,6 +393,8 @@ public abstract class TreeNodeEdit {
 							}
 						}
 					}
+					return true;
+					
 				} else {
 					return policy != EditOverwritePolicy.NONE;
 				}
@@ -418,18 +432,18 @@ public abstract class TreeNodeEdit {
 		return null;
 	}
 	
-	protected Hdf5TreeElement getOpenedHdfObjectOfParent() {
-		Hdf5TreeElement parent = (Hdf5TreeElement) getParent().getHdfObject();
+	protected Hdf5TreeElement getOpenedHdfObjectOfParent() throws IOException, NullPointerException {
+		Hdf5TreeElement parentObject = (Hdf5TreeElement) m_parent.getHdfObject();
 		
-		if (parent != null && !parent.isFile()) {
-			parent.open();
+		if (parentObject != null && !parentObject.isFile()) {
+			parentObject.open();
 		}
 		
-		return parent;
+		return parentObject;
 	}
 	
 	Object getHdfSource() {
-		return m_hdfObject != null ? m_hdfObject : m_hdfBackup;
+		return m_hdfBackup != null ? m_hdfBackup : m_hdfObject;
 	}
 	
 	Object findCopySource() {
@@ -459,10 +473,21 @@ public abstract class TreeNodeEdit {
 	
 	boolean createBackup() {
 		try {
-			if (this instanceof AttributeNodeEdit) {
-				setHdfBackup(((Hdf5Attribute<?>) m_hdfObject).createBackup(BACKUP_PREFIX));
+			Object parentBackup = m_parent.getHdfBackup();
+			if (parentBackup != null) {
+				if (this instanceof GroupNodeEdit) {
+					setHdfBackup(((Hdf5Group) parentBackup).getGroup(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
+				} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
+					setHdfBackup(((Hdf5Group) parentBackup).getDataSet(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
+				} else if (this instanceof AttributeNodeEdit) {
+					setHdfBackup(((Hdf5TreeElement) parentBackup).getAttribute(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
+				}
 			} else {
-				setHdfBackup(((Hdf5TreeElement) m_hdfObject).createBackup(BACKUP_PREFIX));
+				if (this instanceof AttributeNodeEdit) {
+					setHdfBackup(((Hdf5Attribute<?>) m_hdfObject).createBackup(BACKUP_PREFIX));
+				} else {
+					setHdfBackup(((Hdf5TreeElement) m_hdfObject).createBackup(BACKUP_PREFIX));
+				}
 			}
 		} catch (IOException ioe) {
 			NodeLogger.getLogger(getClass()).warn("Backup could not be created: " + ioe.getMessage(), ioe);
@@ -492,45 +517,13 @@ public abstract class TreeNodeEdit {
 		return success;
 	}
 	
-	protected void addIncompleteCopy(TreeNodeEdit edit) {
-		if (getRoot() == edit.getRoot()) {
-			if (m_copyEdit == null) {
-				if (edit.getCopyEdit() != null) {
-					edit.getCopyEdit().removeIncompleteCopy(edit);
-				}
-				m_incompleteCopies.add(edit);
-				edit.setCopyEdit(this);
-				
-			} else {
-				m_copyEdit.addIncompleteCopy(edit);
-			}
-		}
-	}
-	
-	protected void removeIncompleteCopy(TreeNodeEdit edit) {
-		m_incompleteCopies.remove(edit);
-		edit.setCopyEdit(null);
-		if (edit instanceof DataSetNodeEdit) {
-			for (ColumnNodeEdit columnEdit : ((DataSetNodeEdit) edit).getColumnNodeEdits()) {
-				removeIncompleteCopy(columnEdit);
-			}
-		}
-	}
-	
-	protected boolean areIncompleteCopiesLeft() {
-		return !m_incompleteCopies.isEmpty();
-	}
-	
-	protected void updateIncompleteCopies() {
-    	if (m_editAction == EditAction.COPY && m_copyEdit == null) {
-    		TreeNodeEdit copyEdit = findCopyEdit();
-			if (copyEdit != null) {
-				copyEdit.addIncompleteCopy(this);
-			}
+	protected void updateCopySources() {
+    	if (m_editAction == EditAction.COPY) {
+			setCopyEdit(findCopyEdit());
 		}
     	
 		for (TreeNodeEdit edit : getAllChildren()) {
-			edit.updateIncompleteCopies();
+			edit.updateCopySources();
 		}
 	}
 	
@@ -580,15 +573,19 @@ public abstract class TreeNodeEdit {
 			int found = 0;
 			int count = 0;
 			String curInvalidPath = null;
+			Class<? extends TreeNodeEdit> curClass = null;
 			for (TreeNodeEdit invalidEdit : invalidEdits) {
 				if (invalidCause == invalidEditCauseMap.get(invalidEdit)) {
-					if (!invalidEdit.getOutputPathFromFileWithName().equals(curInvalidPath)) {
+					invalidEditCauseMap.remove(invalidEdit);
+					String path = invalidEdit.getOutputPathFromFileWithName(true);
+					if (!path.equals(curInvalidPath) || invalidEdit.getClass() != curClass) {
 						found++;
-						curInvalidPath = invalidEdit.getOutputPathFromFileWithName();
+						curInvalidPath = path;
+						curClass = invalidEdit.getClass();
 						if (found <= maxMessageCountPerCause) {
 							messageBuilder.append(found == 1 ? invalidCause.getMessage() + ":" : "");
 							messageBuilder.append(count > 1 ? " (" + count + ")" : "");
-							messageBuilder.append("\n- " + curInvalidPath);
+							messageBuilder.append("\n- " + invalidEdit.getHdfObjectType() + " " + curInvalidPath);
 							count = 1;
 						}
 					} else if (found <= maxMessageCountPerCause) {
@@ -605,17 +602,15 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public String getToolTipText() {
-		return getOutputPathFromFileWithName()
-				+ (isValid() ? "" : " (invalid" + (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : " children") + ")")
-				+ (isSupported() ? "" : " - NOT SUPPORTED (" + m_unsupportedCause + ")");
+		return (isSupported() ? (this instanceof FileNodeEdit ? ((FileNodeEdit) this).getFilePath() : getInputPathFromFileWithName())
+						+ (this instanceof ColumnNodeEdit && m_editAction != EditAction.CREATE ? "/" + m_name : "") : "NOT SUPPORTED [" + m_unsupportedCause + "]")
+				+ (isValid() ? "" : " (invalid" + (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : " children") + ")");
 	}
 	
 	private void setSuccess(boolean success, ExecutionContext exec, long totalProgressToDo) {
 		if (m_editState == EditState.IN_PROGRESS) {
 			if (success) {
-				if (!(this instanceof DataSetNodeEdit && m_editAction == EditAction.CREATE)) {
-					addProgress(getProgressToDoInEdit(), exec, totalProgressToDo);
-				}
+				addProgress(getProgressToDoInEdit(), exec, totalProgressToDo);
 				setEditState(EditState.SUCCESS);
 				
 			} else {
@@ -631,23 +626,40 @@ public abstract class TreeNodeEdit {
 		System.out.println("Progress done (Edit " + getOutputPathFromFileWithName() + "): " + progressDone);
 	}
 	
-	public String getSummaryOfEditStates() {
+	public String getSummaryOfEditStates(boolean rollback) {
 		StringBuilder summaryBuilder = new StringBuilder();
 		
 		List<TreeNodeEdit> descendants = getAllDecendants();
 		for (EditState state : EditState.values()) {
-			summaryBuilder.append("State " + state + ":\n");
-			for (TreeNodeEdit descendant : descendants.toArray(new TreeNodeEdit[descendants.size()])) {
-				if (state == descendant.getEditState()) {
-					if (!(descendant instanceof ColumnNodeEdit)) {
-						summaryBuilder.append("- " + descendant.getOutputPathFromFileWithName() + " (" + descendant.getEditAction() + ")\n");
+			if (rollback == state.isRollbackState()) {
+				summaryBuilder.append("State " + state + ":\n");
+				for (TreeNodeEdit descendant : descendants.toArray(new TreeNodeEdit[descendants.size()])) {
+					if (state == descendant.getEditState()) {
+						descendants.remove(descendant);
+						if (!(descendant instanceof ColumnNodeEdit)) {
+							summaryBuilder.append("- " + descendant.getHdfObjectType() + " " + descendant.getOutputPathFromFileWithName(true) + " (" + descendant.getEditAction() + ")\n");
+						}
 					}
-					descendants.remove(descendant);
 				}
 			}
 		}
 		
 		return summaryBuilder.toString();
+	}
+	
+	private String getHdfObjectType() {
+		if (this instanceof FileNodeEdit) {
+			return "file";
+		} else if (this instanceof GroupNodeEdit) {
+			return "group";
+		} else if (this instanceof DataSetNodeEdit) {
+			return "dataSet";
+		} else if (this instanceof ColumnNodeEdit) {
+			return "column";
+		} else if (this instanceof AttributeNodeEdit) {
+			return "attribute";
+		}
+		return "unsupported object";
 	}
 	
 	protected abstract long getProgressToDoInEdit();
@@ -865,22 +877,14 @@ public abstract class TreeNodeEdit {
 					} else {
 						TreeNodeEdit deleteEdit = null;
 						if (oldEdit instanceof GroupNodeEdit) {
-							deleteEdit = ((GroupNodeEdit) oldEdit).copyGroupEditTo((GroupNodeEdit) parentOfNewEdit, false);
+							deleteEdit = ((GroupNodeEdit) oldEdit).copyGroupEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
 						} else if (oldEdit instanceof DataSetNodeEdit) {
-							deleteEdit = ((DataSetNodeEdit) oldEdit).copyDataSetEditTo((GroupNodeEdit) parentOfNewEdit, false);
+							deleteEdit = ((DataSetNodeEdit) oldEdit).copyDataSetEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
 						} else if (oldEdit instanceof AttributeNodeEdit) {
-							if (parentOfNewEdit instanceof GroupNodeEdit) {
-								deleteEdit = ((AttributeNodeEdit) oldEdit).copyAttributeEditTo((GroupNodeEdit) parentOfNewEdit, false);
-							} else if (parentOfNewEdit instanceof DataSetNodeEdit) {
-								deleteEdit = ((AttributeNodeEdit) oldEdit).copyAttributeEditTo((DataSetNodeEdit) parentOfNewEdit, false);
-							}
+							deleteEdit = ((AttributeNodeEdit) oldEdit).copyAttributeEditTo(parentOfNewEdit, false);
 						}
 						deleteEdit.setEditAction(EditAction.DELETE);
-						// TODO do it without this line (because of copy...EditTo())
-						deleteEdit.setCopyEdit(null);
 					}
-					
-					//newEdit.setOverwrite(true);
 					break;
 				case RENAME:
 					List<String> usedNames = getNamesOfChildrenWithNameConflictPossible(newEdit.getClass());
@@ -888,27 +892,33 @@ public abstract class TreeNodeEdit {
 					newEdit.setName(Hdf5TreeElement.getUniqueName(usedNames, newEdit.getName()));
 					break;
 				case INTEGRATE:
-					// TODO test it
 					if (editToOverwrite == null || editToOverwrite.getEditAction() != EditAction.DELETE) {
 						newEdit.removeFromParent();
+						if (editToOverwrite != null) {
+							editToOverwrite.removeFromParent();
+						}
+						
 						TreeNodeEdit integrateEdit = null;
 						if (oldEdit instanceof GroupNodeEdit) {
-							integrateEdit = editToOverwrite != null ? editToOverwrite
-									: ((GroupNodeEdit) oldEdit).copyGroupEditTo((GroupNodeEdit) parentOfNewEdit, false);
+							integrateEdit = ((GroupNodeEdit) oldEdit).copyGroupEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
+							if (editToOverwrite != null) {
+								((GroupNodeEdit) integrateEdit).integrate((GroupNodeEdit) editToOverwrite, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+							}
 							for (TreeNodeEdit edit : newEdit.getAllChildren()) {
 								integrateEdit.useOverwritePolicy(edit);
 							}
-							((GroupNodeEdit) integrateEdit).integrate((GroupNodeEdit) newEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT, false);
+							((GroupNodeEdit) integrateEdit).integrate((GroupNodeEdit) newEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+							
 						} else if (oldEdit instanceof DataSetNodeEdit) {
-							integrateEdit = editToOverwrite != null ? editToOverwrite
-									: ((DataSetNodeEdit) oldEdit).copyDataSetEditTo((GroupNodeEdit) parentOfNewEdit, false);
+							integrateEdit = ((DataSetNodeEdit) oldEdit).copyDataSetEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
+							if (editToOverwrite != null) {
+								((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) editToOverwrite, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+							}
 							for (TreeNodeEdit edit : newEdit.getAllChildren()) {
 								integrateEdit.useOverwritePolicy(edit);
 							}
-							((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) newEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT, false);
+							((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) newEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
 						}
-						// TODO do it without this line (because of copy...EditTo())
-						integrateEdit.setCopyEdit(null);
 					}
 					break;
 				default:
@@ -1007,19 +1017,13 @@ public abstract class TreeNodeEdit {
 				success = deleteAction();
 				break;
 			case MODIFY:
-				success = modifyAction(exec, totalProgressToDo);
+				success = modifyAction(inputTable, saveColumnProperties, exec, totalProgressToDo);
 				break;
 			default:
 				break;
 			}
-			
-			if (success) {
-				setSuccess(true, exec, totalProgressToDo);
-			}
 		} finally {
-			if (!success) {
-				setSuccess(false, exec, totalProgressToDo);
-			}
+			setSuccess(success, exec, totalProgressToDo);
 		}
 		
 		return success && successOfOther;
@@ -1044,22 +1048,6 @@ public abstract class TreeNodeEdit {
 			}
 		}
 		
-		// TODO maybe find a better solution for the problem if MODIFY and DELETE exist for the same object (cause by OVERWRITE or INTEGRATE+OVERWRITE)
-		/*for (TreeNodeEdit otherEdit : otherEdits.toArray(new TreeNodeEdit[otherEdits.size()])) {
-			if (otherEdit.getEditAction() == EditAction.MODIFY) {
-				for (TreeNodeEdit deleteEdit : deleteEdits) {
-					if (otherEdit.isNameConflictPossible(deleteEdit.getClass())
-							&& otherEdit.getInputPathFromFileWithName().equals(deleteEdit.getInputPathFromFileWithName())) {
-						// TODO edit otherEdit so that it isn't stated as EditState.TODO
-						otherEdits.remove(otherEdit);
-						break;
-					}
-				}
-			}
-		}
-		
-		List<TreeNodeEdit> executeEdits = new ArrayList<>(deleteEdits);
-		executeEdits.addAll(otherEdits);*/
 		for (TreeNodeEdit edit : children) {
 			if (edit.isBackupNeeded(objectNames, attributeNames)) {
 				edit.createBackup();
@@ -1085,10 +1073,10 @@ public abstract class TreeNodeEdit {
 		boolean backupNeeded = false;
 		
 		if (m_editAction == EditAction.DELETE) {
-			backupNeeded = m_parent.getEditAction() != EditAction.DELETE;
+			backupNeeded = true;
 			
 		} else if (m_editAction == EditAction.MODIFY) {
-			backupNeeded = havePropertiesChanged();
+			backupNeeded = havePropertiesChanged(m_hdfObject);
 			if (!backupNeeded) {
 				String[] pathAndName = Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName);
 				backupNeeded = getOutputPathFromFile().equals(pathAndName[0])
@@ -1103,20 +1091,21 @@ public abstract class TreeNodeEdit {
 			boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException;
 	protected abstract boolean copyAction(ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException;
 	protected abstract boolean deleteAction() throws IOException;
-	protected abstract boolean modifyAction(ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException;
+	protected abstract boolean modifyAction(BufferedDataTable inputTable, boolean saveColumnProperties,
+			ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException;
 	
 	protected boolean rollbackAction() throws IOException {
 		boolean success = false;
 		
-		switch (m_editAction) {
-		case CREATE:
-		case COPY:
-			success = deleteAction();
-			break;
-		case MODIFY:
-		case DELETE:
-			String newName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
-			try {
+		try {
+			switch (m_editAction) {
+			case CREATE:
+			case COPY:
+				success = deleteAction();
+				break;
+			case MODIFY:
+			case DELETE:
+				String newName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
 				if (this instanceof AttributeNodeEdit) {
 					Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfSource();
 					setHdfObject(attribute.getParent().renameAttribute(attribute.getName(), newName));
@@ -1125,19 +1114,13 @@ public abstract class TreeNodeEdit {
 					setHdfObject(treeElement.getParent().moveObject(treeElement.getName(), treeElement.getParent(), newName));
 				}
 				success = m_hdfObject != null;
-			} catch (IOException ioe) {
-				NodeLogger.getLogger(getClass()).warn(ioe.getMessage(), ioe);
-				success = false;
+				break;
+			default:
+				success = true;
+				break;
 			}
-			break;
-		default:
-			success = true;
-			break;
-		}
-		
-		if (!success) {
-			NodeLogger.getLogger(getClass()).warn("Rollback of "
-					+ getOutputPathFromFileWithName() + " could not be executed. Backup is still available.");
+		} finally {
+			setEditState(success ? EditState.ROLLBACK_SUCCESS : EditState.ROLLBACK_FAIL);
 		}
 		
 		return success;
