@@ -11,6 +11,7 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
+import org.knime.core.data.DataColumnSpec;
 import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.CanceledExecutionException;
 import org.knime.core.node.ExecutionContext;
@@ -124,8 +125,9 @@ public class FileNodeEdit extends GroupNodeEdit {
 			useOverwritePolicy(edit);
 		}
 		
+		// postprocessing of EditOverwritePolicy.INTEGRATE
 		for (TreeNodeEdit edit : fileEdit.getAllDecendants()) {
-			if (edit.getEditAction() == EditAction.NO_ACTION) {
+			if (edit.getEditAction() == EditAction.NO_ACTION && !(edit instanceof ColumnNodeEdit)) {
 				edit.removeFromParent();
 			}
 		}
@@ -166,7 +168,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 			} else if (edit instanceof DataSetNodeEdit || edit instanceof ColumnNodeEdit) {
 				edit.setHdfObject(((Hdf5File) getHdfObject()).getDataSetByPath(edit.getInputPathFromFileWithName()));
 			} else if (edit instanceof AttributeNodeEdit) {
-				edit.setHdfObject(((Hdf5File) getRoot().getHdfObject()).getAttributeByPath(edit.getInputPathFromFileWithName()));
+				edit.setHdfObject(((Hdf5File) getHdfObject()).getAttributeByPath(edit.getInputPathFromFileWithName()));
 			}
 		}
 	}
@@ -257,6 +259,18 @@ public class FileNodeEdit extends GroupNodeEdit {
 	protected boolean isInConflict(TreeNodeEdit edit) {
 		return edit instanceof FileNodeEdit && !edit.equals(this) && ((FileNodeEdit) edit).getFilePath().equals(getFilePath())
 				&& edit.getName().equals(getName());
+	}
+	
+	public void validateCreateActions(DataColumnSpec[] colSpecs, Map<String, FlowVariable> flowVariables) {
+		for (TreeNodeEdit edit : getAllDecendants()) {
+			if (edit.getEditAction() == EditAction.CREATE) {
+				if (edit instanceof ColumnNodeEdit) {
+					((ColumnNodeEdit) edit).validateCreateAction(colSpecs);
+				} else if (edit instanceof AttributeNodeEdit) {
+					((AttributeNodeEdit) edit).validateCreateAction(flowVariables);
+				}
+			}
+		}
 	}
 	
 	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec) throws IOException, CanceledExecutionException {

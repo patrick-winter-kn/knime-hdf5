@@ -208,9 +208,6 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		edit.setParent(null);
 	}
 	
-	/**
-	 * so far with overwrite of properties
-	 */
 	void integrate(GroupNodeEdit copyEdit, long inputRowCount) {
 		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
 			if (copyGroupEdit.getEditAction() != EditAction.NO_ACTION) {
@@ -511,7 +508,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	    	private static final long serialVersionUID = 1254593831386973543L;
 	    	
 			private JTextField m_nameField = new JTextField(15);
-			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.values());
+			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getAvailableValuesForEdit(GroupNodeEdit.this));
 	    	
 			private GroupPropertiesDialog() {
 				super(GroupNodeMenu.this, "Group properties");

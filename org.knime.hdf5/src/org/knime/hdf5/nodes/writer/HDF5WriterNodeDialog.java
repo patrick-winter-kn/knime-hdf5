@@ -8,7 +8,6 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -54,7 +53,6 @@ import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.FlowVariableListCellRenderer;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5File;
-import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
 
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
@@ -181,27 +179,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	String filePath = m_filePathSettings.getStringValue();
     	
     	if (m_forceCreationOfNewFile.getBooleanValue()) {
-    		File directory = new File(Hdf5File.getDirectoryPath(filePath));
-    		if (directory.isDirectory()) {
-    			String fileName = filePath.substring(filePath.lastIndexOf(File.separator) + 1);
-    			String fileExtension = fileName.lastIndexOf(".") >= 0 ? fileName.substring(fileName.lastIndexOf(".")) : "";
-    			String fileNameWithoutExtension = fileName.substring(0, fileName.length() - fileExtension.length());
-    			
-    			List<String> usedNames = new ArrayList<>();
-    			for (File file : directory.listFiles()) {
-    				if (file.isFile()) {
-    					String name = file.getName();
-    	    			String extension = name.lastIndexOf(".") >= 0 ? name.substring(name.lastIndexOf(".")) : "";
-    	    			if (extension.equals(fileExtension)) {
-    	    				usedNames.add(name.substring(0, name.length() - extension.length()));
-    	    			}
-    				}
-    			}
-        		filePath = directory.getPath() + File.separator + Hdf5TreeElement.getUniqueName(usedNames, fileNameWithoutExtension) + fileExtension;
-        		
-    		} else {
-    			throw new IOException("Directory \"" + directory.getPath() + "\" for new file does not exist");
-    		}
+    		filePath = Hdf5File.getUniqueFilePath(filePath);
     	}
     	
     	return filePath;

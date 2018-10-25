@@ -28,6 +28,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	public static final long UNKNOWN_ROW_COUNT = -1;
 	
 	private static final int NO_COLUMN_INDEX = -1;
+	
+	private InvalidCause m_inputInvalidCause;
 
 	private final int m_inputColumnIndex;
 	
@@ -45,11 +47,16 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		if (needsCopySource && getEditAction() == EditAction.COPY) {
 			setCopyEdit(copyColumn.getParent());
 		}
+		updateDataSetEditAction(parent);
 	}
 
 	public ColumnNodeEdit(DataSetNodeEdit parent, DataColumnSpec columnSpec) {
 		this(parent, columnSpec.getName(), NO_COLUMN_INDEX, columnSpec.getName(), HdfDataType.getHdfDataType(columnSpec.getType()),
 				UNKNOWN_ROW_COUNT, EditAction.CREATE);
+		updateDataSetEditAction(parent);
+	}
+	
+	private void updateDataSetEditAction(DataSetNodeEdit parent) {
 		if (parent.getEditAction().isCreateOrCopyAction()) {
 			parent.setEditAction(EditAction.CREATE);
 		} else if (parent.getEditAction() != EditAction.DELETE) {
@@ -81,6 +88,10 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		newColumnEdit.addEditToParentNode();
 		
 		return newColumnEdit;
+	}
+	
+	InvalidCause getInputInvalidCause() {
+		return m_inputInvalidCause;
 	}
 
 	int getInputColumnIndex() {
@@ -130,11 +141,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	void setDeletion(boolean isDelete) {
-		if (isDelete) {
+		if (isDelete && getParent() != null) {
 			((DataSetNodeEdit) getParent()).disconsiderColumnNodeEdit(this);
 		}
 		super.setDeletion(isDelete);
-		if (!isDelete) {
+		if (!isDelete && getParent() != null) {
 			((DataSetNodeEdit) getParent()).considerColumnNodeEdit(this);
 		}
 	}
@@ -167,14 +178,27 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
-		InvalidCause cause = getEditAction() == EditAction.DELETE || m_inputRowCount == UNKNOWN_ROW_COUNT
-				|| m_inputRowCount == ((DataSetNodeEdit) getParent()).getInputRowCount() ? null : InvalidCause.ROW_COUNT;
+		DataSetNodeEdit parent = (DataSetNodeEdit) getParent();
+		
+		InvalidCause cause = getEditAction() != EditAction.DELETE && m_inputRowCount != UNKNOWN_ROW_COUNT
+				&& m_inputRowCount != parent.getInputRowCount() ? InvalidCause.ROW_COUNT : null;
+		
+		if (cause == null && parent.isOverwriteWithNewColumns()) {
+			ColumnNodeEdit[] columnEdits = parent.getColumnNodeEdits();
+			for (int i = 0; i < columnEdits.length; i++) {
+				if (columnEdits[i] == this) {
+					cause = getEditAction().isCreateOrCopyAction() && (i-1 < 0 || columnEdits[i-1].getEditAction().isCreateOrCopyAction())
+							? InvalidCause.COLUMN_OVERWRITE : null;
+					break;
+				}
+			}
+		}
 		
 		if (cause == null) {
 			if (getEditAction() != EditAction.CREATE || inputTable != null) {
 				Object[] values = null;
 
-				EditDataType parentDataType = ((DataSetNodeEdit) getParent()).getEditDataType();
+				EditDataType parentDataType = parent.getEditDataType();
 				if (getEditAction() == EditAction.CREATE) {
 					try {
 						DataTableSpec tableSpec = inputTable.getDataTableSpec();
@@ -203,11 +227,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 								+ getOutputPathFromFileWithName() +  "\" could not be checked: " + udte.getMessage(), udte);
 						values = null;
 					}
-				} else if (inputTable == null) {
+				} else if (inputTable == null && getEditAction() != EditAction.DELETE) {
 					try {
 						// TODO maybe check this when the columns loaded for the first time
 						TreeNodeEdit copyEdit = getEditAction() == EditAction.COPY ? getCopyEdit() : this;
-						Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) copyEdit.getHdfObject();
+						Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) copyEdit.getHdfSource();
 						dataSet.open();
 						// only supported for dataSets with max. 2 dimensions
 						values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
@@ -222,7 +246,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 				}
 				
 				if (values != null && cause == null) {
-					cause = !parentDataType.getOutputType().areValuesConvertible(values, m_inputType, parentDataType) ? InvalidCause.DATA_TYPE : cause;
+					cause = !parentDataType.getOutputType().areValuesConvertible(values, m_inputType, parentDataType) ? InvalidCause.OUTPUT_DATA_TYPE : cause;
 				}
 			}
 		}
@@ -239,6 +263,17 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	@Override
 	protected boolean isInConflict(TreeNodeEdit edit) {
 		return false;
+	}
+	
+	void validateCreateAction(DataColumnSpec[] colSpecs) {
+		for (DataColumnSpec colSpec : colSpecs) {
+			if (colSpec.getName().equals(getInputPathFromFileWithName())) {
+				m_inputInvalidCause = m_inputType == HdfDataType.getHdfDataType(colSpec.getType()) ? null : InvalidCause.INPUT_DATA_TYPE;
+				return;
+			}
+		}
+		
+		m_inputInvalidCause = InvalidCause.NO_COPY_SOURCE;
 	}
 
 	@Override

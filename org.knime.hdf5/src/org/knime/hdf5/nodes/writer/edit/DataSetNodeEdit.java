@@ -47,6 +47,7 @@ import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
+import org.knime.core.node.util.RadionButtonPanel;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
@@ -65,6 +66,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	private static final String COLUMN_PROPERTY_NAMES = "knime.columnnames";
 	
 	private static final String COLUMN_PROPERTY_TYPES = "knime.columntypes";
+	
+	private boolean m_overwriteWithNewColumns;
 
 	private HdfDataType m_inputType;
 	
@@ -146,6 +149,14 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		return newDataSetEdit;
 	}
 	
+	boolean isOverwriteWithNewColumns() {
+		return m_overwriteWithNewColumns;
+	}
+	
+	private void setOverwriteWithNewColumns(boolean overwriteWithNewColumns) {
+		m_overwriteWithNewColumns = overwriteWithNewColumns;
+	}
+	
 	public HdfDataType getInputType() {
 		return m_inputType;
 	}
@@ -216,6 +227,14 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		return propertiesChanged;
 	}
 	
+	public ColumnNodeEdit[] getColumnNodeEdits() {
+		return m_columnEdits.toArray(new ColumnNodeEdit[] {});
+	}	
+
+	public AttributeNodeEdit[] getAttributeNodeEdits() {
+		return m_attributeEdits.toArray(new AttributeNodeEdit[] {});
+	}
+	
 	public HdfDataType[] getColumnInputTypes() {
 		List<HdfDataType> hdfTypes = new ArrayList<>();
 		for (ColumnNodeEdit edit : m_columnEdits) {
@@ -226,12 +245,16 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		return hdfTypes.toArray(new HdfDataType[] {});
 	}
 	
-	public ColumnNodeEdit[] getColumnNodeEdits() {
-		return m_columnEdits.toArray(new ColumnNodeEdit[] {});
-	}	
-
-	public AttributeNodeEdit[] getAttributeNodeEdits() {
-		return m_attributeEdits.toArray(new AttributeNodeEdit[] {});
+	int getRequiredColumnCountForExecution() {
+		int colCount = 0;
+		
+		for (ColumnNodeEdit columnEdit : m_columnEdits) {
+			if (!columnEdit.getEditAction().isCreateOrCopyAction()) {
+				colCount++;
+			}
+		}
+		
+		return colCount;
 	}
 
 	public void addColumnNodeEdit(ColumnNodeEdit edit) {
@@ -272,9 +295,12 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		int index = -1;
 		
 		ColumnNodeEdit[] columnEdits = getColumnNodeEdits();
-		for (int i = 0; i < columnEdits.length; i++) {
-			if (columnEdits[i].getEditAction() != EditAction.DELETE) {
-				index++;
+		if (columnEdit.getEditAction() != EditAction.DELETE) {
+			for (int i = 0; i < columnEdits.length; i++) {
+				if (!(columnEdits[i].getEditAction() == EditAction.DELETE
+						|| m_overwriteWithNewColumns && columnEdits[i].getEditAction().isCreateOrCopyAction())) {
+					index++;
+				}
 				if (columnEdits[i] == columnEdit) {
 					break;
 				}
@@ -369,14 +395,28 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		return editCount <= 1;
 	}
 	
-	/**
-	 * so far with overwrite of properties
-	 */
 	void integrate(DataSetNodeEdit copyEdit, long inputRowCount) {
+		// (maybe) TODO only supported for dataSets if the dataSet has the correct amount of columns (the same amount as the config was created)
+		for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
+			columnEdit.removeFromParent();
+		}
+		
+		for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
+			if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
+				copyColumnEdit.setInputRowCount(inputRowCount);
+			}
+			copyColumnEdit.copyColumnEditTo(this, false).setHdfObject((Hdf5DataSet<?>) getHdfObject());
+		}
+		
+		/*
 		List<ColumnNodeEdit> newColumnEditList = new ArrayList<>(m_columnEdits);
 		List<ColumnNodeEdit> editedColumnEdits = new ArrayList<>();
 		
 		for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
+			if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
+				copyColumnEdit.setInputRowCount(inputRowCount);
+			}
+			
 			ColumnNodeEdit columnEdit = getColumnNodeEdit(copyColumnEdit.getInputPathFromFileWithName(), copyColumnEdit.getInputColumnIndex());
 			if (columnEdit != null) {
 				newColumnEditList.remove(columnEdit);
@@ -392,13 +432,15 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		for (ColumnNodeEdit copyColumnEdit : editedColumnEdits) {
 			int index = copyColumnEdit.getOutputColumnIndex();
 			int size = newColumnEditList.size();
-			newColumnEditList.add(index <= size ? index : size, copyColumnEdit);
+			newColumnEditList.add(index >= 0 && index <= size ? index : size, copyColumnEdit);
 		}
 		
 		for (ColumnNodeEdit newColumn : newColumnEditList) {
 			newColumn.copyColumnEditTo(this, false);
 			newColumn.copyColumnEditTo(copyEdit, false);
 		}
+		*/
+		
 		
 		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
 			if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
@@ -466,6 +508,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	public void saveSettingsTo(NodeSettingsWO settings) {
 		super.saveSettingsTo(settings);
 		
+		settings.addBoolean(SettingsKey.OVERWRITE_WITH_NEW_COLUMNS.getKey(), m_overwriteWithNewColumns);
 		m_editDataType.saveSettingsTo(settings);
 		m_numberOfDimensions = isOneDimensionPossible() ? m_numberOfDimensions : 2;
 		settings.addInt(SettingsKey.NUMBER_OF_DIMENSIONS.getKey(), m_numberOfDimensions);
@@ -476,10 +519,10 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	    NodeSettingsWO attributeSettings = settings.addNodeSettings(SettingsKey.ATTRIBUTES.getKey());
 		
 		for (ColumnNodeEdit edit : m_columnEdits) {
-			if (edit.getEditAction() != EditAction.NO_ACTION || edit.getInputColumnIndex() != getIndexOfColumnEdit(edit)) {
+			//if (edit.getEditAction() != EditAction.NO_ACTION || edit.getInputColumnIndex() != getIndexOfColumnEdit(edit)) {
 		        NodeSettingsWO editSettings = columnSettings.addNodeSettings("" + edit.hashCode());
 				edit.saveSettingsTo(editSettings);
-			}
+			//}
 		}
 	    
 		for (AttributeNodeEdit edit : m_attributeEdits) {
@@ -493,6 +536,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	@Override
 	@SuppressWarnings("unchecked")
 	protected void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException {
+		setOverwriteWithNewColumns(settings.getBoolean(SettingsKey.OVERWRITE_WITH_NEW_COLUMNS.getKey()));
 		m_editDataType.loadSettingsFrom(settings);
 		setNumberOfDimensions(settings.getInt(SettingsKey.NUMBER_OF_DIMENSIONS.getKey()));
 		setCompressionLevel(settings.getInt(SettingsKey.COMPRESSION.getKey()));
@@ -559,7 +603,25 @@ public class DataSetNodeEdit extends TreeNodeEdit {
     	} catch (NullPointerException npe) {
     		throw new IOException(npe.getMessage());
     	}
-
+	}
+	
+	void useOverwritePolicyOfColumns() {
+		if (m_overwriteWithNewColumns) {
+			// assumes that there are no two columnEdits with CREATE or COPY next to each other
+			ColumnNodeEdit[] columnEdits = getColumnNodeEdits();
+			for (int i = 0; i < columnEdits.length; i++) {
+				if (columnEdits[i].getEditAction().isCreateOrCopyAction()) {
+					columnEdits[i-1].setEditAction(EditAction.DELETE);
+					/*for (ColumnNodeEdit columnEdit : columnEdits) {
+						if (!columnEdit.getEditAction().isCreateOrCopyAction()
+								&& columnEdits[i].getOutputColumnIndex() == columnEdit.getOutputColumnIndex()) {
+							columnEdit.setEditAction(EditAction.DELETE);
+							break;
+						}
+					}*/
+				}
+			}
+		}
 	}
 	
 	@Override
@@ -586,13 +648,18 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		
 		List<ColumnNodeEdit> copyColumnEditList = new ArrayList<>();
 		int[] specIndices = new int[getColumnInputTypes().length];
-		for (int i = 0; i < specIndices.length; i++) {
-			ColumnNodeEdit edit = getColumnNodeEdits()[i];
+		int specIndicesIndex = 0;
+		ColumnNodeEdit[] columnEdits = getColumnNodeEdits();
+		for (int i = 0; i < columnEdits.length; i++) {
+			ColumnNodeEdit edit = columnEdits[i];
 			if (edit.getEditAction() == EditAction.CREATE) {
-				specIndices[i] = tableSpec.findColumnIndex(edit.getName());
+				specIndices[specIndicesIndex] = tableSpec.findColumnIndex(edit.getName());
+				specIndicesIndex++;
 				edit.setInputRowCount(m_inputRowCount);
-			} else {
-				specIndices[i] = -1;
+				
+			} else if (edit.getEditAction() != EditAction.DELETE) {
+				specIndices[specIndicesIndex] = -1;
+				specIndicesIndex++;
 				copyColumnEditList.add(edit);
 			}
 		}
@@ -751,9 +818,12 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		private class DataSetPropertiesDialog extends PropertiesDialog {
 	    	
 			private static final long serialVersionUID = -9060929832634560737L;
+			private static final String INSERT_NEW_COLUMNS = "insert";
+			private static final String OVERWRITE_WITH_NEW_COLUMNS = "overwrite";
 
 			private JTextField m_nameField = new JTextField(15);
-			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.values());
+			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getAvailableValuesForEdit(DataSetNodeEdit.this));
+			private RadionButtonPanel<String> m_overwriteWithNewColumnsField = new RadionButtonPanel<>(null, INSERT_NEW_COLUMNS, OVERWRITE_WITH_NEW_COLUMNS);
 			private DataTypeChooser m_dataTypeChooser = m_editDataType.new DataTypeChooser(true);
 			private JCheckBox m_useOneDimensionField = new JCheckBox();
 			private JCheckBox m_compressionCheckBox;
@@ -766,6 +836,10 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 
 				addProperty("Name: ", m_nameField);
 				addProperty("Overwrite: ", m_overwriteField);
+				
+				addProperty("Overwrite for new columns: ", m_overwriteWithNewColumnsField);
+				m_overwriteWithNewColumnsField.setEnabled(!getEditAction().isCreateOrCopyAction());
+				
 				m_dataTypeChooser.addToPropertiesDialog(this);
 				addProperty("Create dataSet with one dimension: ", m_useOneDimensionField);
 				
@@ -924,6 +998,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				DataSetNodeEdit edit = DataSetNodeEdit.this;
 				m_nameField.setText(edit.getName());
 				m_overwriteField.setSelectedItem(edit.getEditOverwritePolicy());
+				m_overwriteWithNewColumnsField.setSelectedValue(m_overwriteWithNewColumns ? OVERWRITE_WITH_NEW_COLUMNS : INSERT_NEW_COLUMNS);
 				m_dataTypeChooser.loadFromDataType(edit.getInputType().getPossiblyConvertibleHdfTypes(), m_inputType == HdfDataType.FLOAT32);
 				boolean oneDimensionPossible = isOneDimensionPossible();
 				m_useOneDimensionField.setEnabled(oneDimensionPossible);
@@ -946,6 +1021,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				DataSetNodeEdit edit = DataSetNodeEdit.this;
 				edit.setName(m_nameField.getText());
 				edit.setEditOverwritePolicy((EditOverwritePolicy) m_overwriteField.getSelectedItem());
+				edit.setOverwriteWithNewColumns(m_overwriteWithNewColumnsField.getSelectedValue().equals(OVERWRITE_WITH_NEW_COLUMNS));
 				m_dataTypeChooser.saveToDataType();
 				edit.setNumberOfDimensions(m_useOneDimensionField.isSelected() ? 1 : 2);
 				edit.setCompressionLevel(m_compressionField.isEnabled() ? (Integer) m_compressionField.getValue() : 0);

@@ -2,6 +2,10 @@ package org.knime.hdf5.lib;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -123,6 +127,30 @@ public class Hdf5File extends Hdf5Group {
 		return filePath.substring(0, dirPathLength >= 0 ? dirPathLength : 0);
 	}
 
+	public static String getUniqueFilePath(String filePath) throws IOException {
+		File directory = new File(Hdf5File.getDirectoryPath(filePath));
+		if (directory.isDirectory()) {
+			String fileName = filePath.substring(filePath.lastIndexOf(File.separator) + 1);
+			String fileExtension = fileName.lastIndexOf(".") >= 0 ? fileName.substring(fileName.lastIndexOf(".")) : "";
+			String fileNameWithoutExtension = fileName.substring(0, fileName.length() - fileExtension.length());
+			
+			List<String> usedNames = new ArrayList<>();
+			for (File file : directory.listFiles()) {
+				if (file.isFile()) {
+					String name = file.getName();
+	    			String extension = name.lastIndexOf(".") >= 0 ? name.substring(name.lastIndexOf(".")) : "";
+	    			if (extension.equals(fileExtension)) {
+	    				usedNames.add(name.substring(0, name.length() - extension.length()));
+	    			}
+				}
+			}
+    		return directory.getPath() + File.separator + Hdf5TreeElement.getUniqueName(usedNames, fileNameWithoutExtension) + fileExtension;
+    		
+		} else {
+			throw new IOException("Directory \"" + directory.getPath() + "\" for new file does not exist");
+		}
+	}
+	
 	public String getFilePath() {
 		return m_filePath;
 	}
@@ -154,6 +182,15 @@ public class Hdf5File extends Hdf5Group {
 	
 	private boolean isOpenInAnyThread() {
 		return !m_accessors.isEmpty();
+	}
+	
+	public boolean isOpenAnywhere() throws IOException {
+		try {
+			return H5.H5Fget_obj_count(getElementId(), HDF5Constants.H5F_OBJ_FILE) > 0;
+			
+		} catch (HDF5LibraryException hle) {
+			throw new IOException(hle.getMessage(), hle);
+		}
 	}
 	
 	private void create() {
@@ -218,6 +255,26 @@ public class Hdf5File extends Hdf5Group {
 			}
             NodeLogger.getLogger("HDF5 Files").error("The file \"" + getFilePath() + "\" cannot be opened: " + hlnpe.getMessage(), hlnpe);
         }
+	}
+	
+	public synchronized Hdf5File createBackup(String prefix) throws IOException {
+		Path backupPath = Files.copy(Paths.get(m_filePath), Paths.get(getUniqueFilePath(getDirectoryPath(m_filePath)
+				+ File.separator + prefix + getName())), StandardCopyOption.COPY_ATTRIBUTES);
+		return openFile(backupPath.toString(), READ_ONLY_ACCESS);
+	}
+
+	public synchronized boolean deleteFile() throws IOException {
+		File file = new File(m_filePath);
+		if (file == null || !file.exists()) {
+			throw new IOException("File cannot be deleted: it does not exist");
+		}
+		
+		close();
+		if (isOpenAnywhere()) {
+			throw new IOException("File cannot be deleted: it is still opened somewhere");
+		}
+		
+		return file.delete();
 	}
 	
 	private String whatIsOpenInFile() {

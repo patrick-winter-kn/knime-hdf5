@@ -28,6 +28,8 @@ import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
 public class AttributeNodeEdit extends TreeNodeEdit {
 	
+	private InvalidCause m_inputInvalidCause;
+	
 	private HdfDataType m_inputType;
 	
 	private List<HdfDataType> m_possibleOutputTypes;
@@ -139,6 +141,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_flowVariableArrayUsed = m_flowVariableArrayPossible;
 		
 		m_editDataType.setValues(m_inputType, Endian.LITTLE_ENDIAN, Rounding.DOWN, false, m_itemStringLength);
+	}
+	
+	InvalidCause getInputInvalidCause() {
+		return m_inputInvalidCause;
 	}
 	
 	public HdfDataType getInputType() {
@@ -295,6 +301,24 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		
 		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willModifyActionBeAbortedOnEdit(edit);
 	}
+	
+	void validateCreateAction(Map<String, FlowVariable> flowVariables) {
+		for (String name : flowVariables.keySet()) {
+			if (name.equals(getInputPathFromFileWithName())) {
+				AttributeNodeEdit testEdit = new AttributeNodeEdit(getParent(), flowVariables.get(name));
+				m_inputInvalidCause = m_inputType == testEdit.getInputType() ? null : InvalidCause.INPUT_DATA_TYPE;
+				if (m_inputInvalidCause == null) {
+					m_possibleOutputTypes = testEdit.m_possibleOutputTypes;
+					m_inputInvalidCause = m_possibleOutputTypes.contains(m_editDataType.getOutputType()) ? null : InvalidCause.OUTPUT_DATA_TYPE;
+					// TODO (if necessary) test for more errors like different string lengths
+				}
+				testEdit.removeFromParent();
+				return;
+			}
+		}
+		
+		m_inputInvalidCause = InvalidCause.NO_COPY_SOURCE;
+	}
 
 	@Override
 	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException {
@@ -377,7 +401,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			private static final long serialVersionUID = 9201153080744087510L;
 	    	
 			private JTextField m_nameField = new JTextField(15);
-			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getValuesWithoutIntegrate());
+			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getAvailableValuesForEdit(AttributeNodeEdit.this));
 			private DataTypeChooser m_dataTypeChooser = m_editDataType.new DataTypeChooser(false);
 			private JCheckBox m_flowVariableArrayField = new JCheckBox();
 			

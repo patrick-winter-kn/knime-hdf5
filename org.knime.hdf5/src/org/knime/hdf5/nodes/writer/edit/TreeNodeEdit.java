@@ -44,6 +44,7 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5Attribute;
+import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.Hdf5TreeElement;
@@ -64,16 +65,17 @@ public abstract class TreeNodeEdit {
 		FIXED("fixed"),
 		STRING_LENGTH("stringLength"),
 		STANDARD_VALUE("standardValue"),
-		TOTAL_STRING_LENGTH("totalStringLength"),
-		ITEM_STRING_LENGTH("itemStringLength"),
-		FLOW_VARIABLE_ARRAY_POSSIBLE("flowVariableArrayPossible"),
-		FLOW_VARIABLE_ARRAY_USED("flowVariableArrayUsed"),
+		OVERWRITE_WITH_NEW_COLUMNS("overwriteWithNewColumns"),
 		NUMBER_OF_DIMENSIONS("numberOfDimensions"),
 		COMPRESSION("compression"),
 		CHUNK_ROW_SIZE("chunkRowSize"),
 		INPUT_ROW_COUNT("inputRowCount"),
 		INPUT_COLUMN_INDEX("inputColumnIndex"),
 		OUTPUT_COLUMN_INDEX("outputColumnIndex"),
+		TOTAL_STRING_LENGTH("totalStringLength"),
+		ITEM_STRING_LENGTH("itemStringLength"),
+		FLOW_VARIABLE_ARRAY_POSSIBLE("flowVariableArrayPossible"),
+		FLOW_VARIABLE_ARRAY_USED("flowVariableArrayUsed"),
 		GROUPS("groups"),
 		DATA_SETS("dataSets"),
 		ATTRIBUTES("attributes"),
@@ -140,8 +142,12 @@ public abstract class TreeNodeEdit {
 		NAME_CHARS("name contains invalid characters"),
 		NAME_BACKUP_PREFIX("cannot change to name with prefix \"" + BACKUP_PREFIX + "\""),
 		ROW_COUNT("dataSet has unequal row sizes"),
+		// TODO maybe allow that the dataSet has "too many" columns; if yes, check it for every column which exceeds the limit
+		COLUMN_COUNT("dataSet does not have the correct amount of columns"),
+		COLUMN_OVERWRITE("cannot find column to overwrite"),
 		COLUMN_INDEX("no such column index exists in the dataSet source"),
-		DATA_TYPE("some values do not fit into data type"),
+		INPUT_DATA_TYPE("input data type from source and config do not fit together"),
+		OUTPUT_DATA_TYPE("some values do not fit into data type"),
 		MISSING_VALUES("there are some missing values");
 
 		private String m_message;
@@ -473,20 +479,31 @@ public abstract class TreeNodeEdit {
 	
 	boolean createBackup() {
 		try {
-			Object parentBackup = m_parent.getHdfBackup();
-			if (parentBackup != null) {
-				if (this instanceof GroupNodeEdit) {
-					setHdfBackup(((Hdf5Group) parentBackup).getGroup(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
-				} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
-					setHdfBackup(((Hdf5Group) parentBackup).getDataSet(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
-				} else if (this instanceof AttributeNodeEdit) {
-					setHdfBackup(((Hdf5TreeElement) parentBackup).getAttribute(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
-				}
+			if (this instanceof FileNodeEdit) {
+				setHdfBackup(((Hdf5File) m_hdfObject).createBackup(BACKUP_PREFIX));
 			} else {
-				if (this instanceof AttributeNodeEdit) {
-					setHdfBackup(((Hdf5Attribute<?>) m_hdfObject).createBackup(BACKUP_PREFIX));
+				Object parentBackup = (this instanceof ColumnNodeEdit ? m_parent.getParent() : m_parent).getHdfBackup();
+				if (parentBackup != null) {
+					if (this instanceof GroupNodeEdit) {
+						setHdfBackup(((Hdf5Group) parentBackup).getGroup(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
+					} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
+						setHdfBackup(((Hdf5Group) parentBackup).getDataSet(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
+					} else if (this instanceof AttributeNodeEdit) {
+						setHdfBackup(((Hdf5TreeElement) parentBackup).getAttribute(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
+					}
 				} else {
-					setHdfBackup(((Hdf5TreeElement) m_hdfObject).createBackup(BACKUP_PREFIX));
+					if (this instanceof AttributeNodeEdit) {
+						setHdfBackup(((Hdf5Attribute<?>) m_hdfObject).createBackup(BACKUP_PREFIX));
+						
+					} else if (this instanceof ColumnNodeEdit) {
+						if (m_parent.getHdfBackup() == null) {
+							m_parent.createBackup();
+						}
+						setHdfBackup((Hdf5DataSet<?>) m_parent.getHdfBackup());
+						
+					} else {
+						setHdfBackup(((Hdf5TreeElement) m_hdfObject).createBackup(BACKUP_PREFIX));
+					}
 				}
 			}
 		} catch (IOException ioe) {
@@ -501,7 +518,10 @@ public abstract class TreeNodeEdit {
 		
 		try {
 			if (m_hdfBackup != null) {
-				if (m_hdfBackup instanceof Hdf5TreeElement) {
+				if (m_hdfBackup instanceof Hdf5File) {
+					Hdf5File file = (Hdf5File) m_hdfBackup;
+					success = file.isValid() ? file.deleteFile() : true;
+				} else if (m_hdfBackup instanceof Hdf5TreeElement) {
 					Hdf5TreeElement treeElement = (Hdf5TreeElement) m_hdfBackup;
 					success = treeElement.isValid() ? treeElement.getParent().deleteObject(treeElement.getName()) >= 0 : true;
 				} else if (m_hdfBackup instanceof Hdf5Attribute<?>) {
@@ -512,6 +532,14 @@ public abstract class TreeNodeEdit {
 		} catch (IOException ioe) {
 			NodeLogger.getLogger(getClass()).warn("Backup could not be deleted: " + ioe.getMessage(), ioe);
 			success = false;
+		}
+		
+		if (success) {
+			if (m_hdfBackup instanceof Hdf5TreeElement) {
+				setHdfBackup((Hdf5TreeElement) null);
+			} else if (m_hdfBackup instanceof Hdf5Attribute<?>) {
+				setHdfBackup((Hdf5Attribute<?>) null);
+			}
 		}
 		
 		return success;
@@ -753,7 +781,7 @@ public abstract class TreeNodeEdit {
     		removeFromParent();
     		
     	} else {
-    		m_editAction = isDelete ? EditAction.DELETE : EditAction.MODIFY;
+    		m_editAction = isDelete ? EditAction.DELETE : (this instanceof ColumnNodeEdit ? EditAction.NO_ACTION : EditAction.MODIFY);
     		updateParentEditAction();
     		m_treeNodeMenu.updateDeleteItemText();
     	}
@@ -862,6 +890,10 @@ public abstract class TreeNodeEdit {
 	 * @param newEdit	the new edit which should be added to this edit
 	 */
 	protected void useOverwritePolicy(TreeNodeEdit newEdit) {
+		if (newEdit instanceof DataSetNodeEdit) {
+			((DataSetNodeEdit) newEdit).useOverwritePolicyOfColumns();
+		}
+		
 		TreeNodeEdit parentOfNewEdit = newEdit.getParent();
 		TreeNodeEdit editToOverwrite = parentOfNewEdit.getChildOfClassByInputPath(newEdit.getClass(), newEdit.getOutputPathFromFileWithName(true));
 		TreeNodeEdit oldEdit = getChildOfClass(newEdit.getClass(), newEdit.getName());
@@ -960,12 +992,14 @@ public abstract class TreeNodeEdit {
 		
 		if (externalCheck && cause == null) {
 			if (m_editAction == EditAction.COPY) {
-				cause = m_copyEdit == null ? InvalidCause.NO_COPY_SOURCE : cause;
+				cause = m_copyEdit == null ? InvalidCause.NO_COPY_SOURCE : null;
 			} else if (m_editAction == EditAction.CREATE) {
-				// TODO get inputSpec names and flowVariable names here
-				// cause = false ? InvalidCause.NO_COPY_SOURCE : cause;
-			} else {
-				cause = isSupported() && m_hdfObject == null ? InvalidCause.NO_HDF_SOURCE : cause;
+				cause = this instanceof ColumnNodeEdit ? ((ColumnNodeEdit) this).getInputInvalidCause() :
+						this instanceof AttributeNodeEdit ? ((AttributeNodeEdit) this).getInputInvalidCause() : null;
+			} else if (isSupported()) {
+				cause = m_hdfObject == null ? InvalidCause.NO_HDF_SOURCE : this instanceof DataSetNodeEdit
+						&& ((Hdf5DataSet<?>) m_hdfObject).numberOfColumns() != ((DataSetNodeEdit) this).getRequiredColumnCountForExecution()
+								? InvalidCause.COLUMN_COUNT : null;
 			}
 		}
 		
@@ -1151,7 +1185,7 @@ public abstract class TreeNodeEdit {
 				return (o1.getEditAction() == EditAction.DELETE) == (o2.getEditAction() == EditAction.DELETE) ? 0
 						: (o1.getEditAction() == EditAction.DELETE ? 1 : -1);
 			} else {
-				return compare == 0 ? o1.getName().compareTo(o2.getName()) : compare;
+				return compare == 0 ? o1.getName().toLowerCase().compareTo(o2.getName().toLowerCase()) : compare;
 			}
 		}
 		

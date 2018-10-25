@@ -182,7 +182,7 @@ abstract public class Hdf5TreeElement {
 	
 	public Hdf5TreeElement createBackup(String prefix) throws IOException, IllegalStateException, IllegalArgumentException {
 		if (isFile()) {
-			throw new IllegalStateException("Cannot create a backup for a file");
+			throw new IllegalStateException("Wrong method used for Hdf5File");
 		}
 		if (prefix.contains("/")) {
 			throw new IllegalArgumentException("Prefix for backup file cannot contain '/'");
@@ -480,7 +480,7 @@ abstract public class Hdf5TreeElement {
 				
 				try {
 					Hdf5DataType dataType = findAttributeType(name);
-					name = name.replaceAll("(?<!\\\\)/", "\\\\/");
+					name = name.replaceAll("/"/*"(?<!\\\\)/"*/, "\\\\/");
 					paths.put(path + name, dataType);
 					
 				} catch (UnsupportedDataTypeException udte) {
