@@ -65,7 +65,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		BufferedDataContainer outContainer = null;
 
 		try {
-			file = Hdf5File.openFile(m_filePathSettings.getStringValue(), Hdf5File.READ_ONLY_ACCESS);
+	        file = Hdf5File.openFile(/*FileUtil.toURL(*/m_filePathSettings.getStringValue()/*).getFile()*/, Hdf5File.READ_ONLY_ACCESS);
 			outContainer = exec.createDataContainer(createOutSpec());
 			String[] dataSetPaths = m_dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
 
@@ -133,53 +133,53 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	}
 
 	private DataTableSpec createOutSpec() throws InvalidSettingsException {
-		String filePath = m_filePathSettings.getStringValue();
 		List<DataColumnSpec> colSpecList = new ArrayList<>();
-
-		if (filePath != null) {
-			Hdf5File file = null;
-			try {
-				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-			} catch (IOException ioe) {
-				throw new InvalidSettingsException(ioe.getMessage(), ioe);
-			}
-			
-			try {
-				String[] dataSetPaths = m_dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
-			
-				for (String dsPath : dataSetPaths) {
-					Hdf5DataSet<?> dataSet = null;
-					try {
-						dataSet = file.getDataSetByPath(dsPath);
-					} catch (IOException ioe) {
-						throw new InvalidSettingsException(ioe.getMessage(), ioe);
-					}
-					
-					Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
-					
-					try {
-						DataType type = dataType.getColumnDataType();
 		
-						if (dataSet.getDimensions().length > 1) {
-							long[] colDims = new long[dataSet.getDimensions().length - 1];
-							Arrays.fill(colDims, 0);
+		String filePath = m_filePathSettings.getStringValue();
+        //CheckUtils.checkSourceFile(filePath);
+        
+		Hdf5File file = null;
+		try {
+			file = Hdf5File.openFile(/*FileUtil.toURL(*/filePath/*).getFile()*/, Hdf5File.READ_ONLY_ACCESS);
+		} catch (IOException ioe) {
+			throw new InvalidSettingsException(ioe.getMessage(), ioe);
+		}
 		
-							do {
-								colSpecList
-										.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
-							} while (dataSet.nextColumnDims(colDims));
+		try {
+			String[] dataSetPaths = m_dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
 		
-						} else {
-							// also do this for dataSet.getDimensions().length == 0 which means that the dataSet is scalar
-							colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
-						}
-					} catch (UnsupportedDataTypeException udte) {
-						NodeLogger.getLogger("HDF5 Files").warn("Unknown dataType of columns in \"" + dsPath + "\"");
-					}
+			for (String dsPath : dataSetPaths) {
+				Hdf5DataSet<?> dataSet = null;
+				try {
+					dataSet = file.getDataSetByPath(dsPath);
+				} catch (IOException ioe) {
+					throw new InvalidSettingsException(ioe.getMessage(), ioe);
 				}
-			} finally {
-				file.close();
+				
+				Hdf5KnimeDataType dataType = dataSet.getType().getKnimeType();
+				
+				try {
+					DataType type = dataType.getColumnDataType();
+	
+					if (dataSet.getDimensions().length > 1) {
+						long[] colDims = new long[dataSet.getDimensions().length - 1];
+						Arrays.fill(colDims, 0);
+	
+						do {
+							colSpecList
+									.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
+						} while (dataSet.nextColumnDims(colDims));
+	
+					} else {
+						// also do this for dataSet.getDimensions().length == 0 which means that the dataSet is scalar
+						colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
+					}
+				} catch (UnsupportedDataTypeException udte) {
+					NodeLogger.getLogger("HDF5 Files").warn("Unknown dataType of columns in \"" + dsPath + "\"");
+				}
 			}
+		} finally {
+			file.close();
 		}
 
 		return new DataTableSpec(colSpecList.toArray(new DataColumnSpec[] {}));
@@ -201,6 +201,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		if (!new File(filePath).exists()) {
 			throw new InvalidSettingsException("The selected file \"" + filePath + "\" does not exist");
 		}
+        //CheckUtils.checkSourceFile(filePath);
 		
 		Hdf5File file = null;
 		try {

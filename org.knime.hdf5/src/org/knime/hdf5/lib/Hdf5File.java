@@ -114,6 +114,7 @@ public class Hdf5File extends Hdf5Group {
 	}
 	
 	public synchronized static boolean isHdfFileCreatable(final String filePath) {
+		// TODO maybe use org.knime.core.node.util.CheckUtils
 		return hasHdf5FileEnding(filePath) && new File(getDirectoryPath(filePath)).isDirectory()
 				&& !new File(filePath).exists();
 	}
@@ -329,33 +330,36 @@ public class Hdf5File extends Hdf5Group {
 	        }
 	        
 	        opened += "]";
+	        
+	    // TODO change to 'Exception e'
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
             NodeLogger.getLogger("HDF5 Files").debug("Info of open objects in file could not be loaded: " + hlnpe.getMessage(), hlnpe);
         }
         
         return opened;
 	}
-
-	private String whatIsOpen() {
+/*
+	private synchronized static String whatIsOpen() {
 		String opened = "";
 		
-		try { 
+		try {
 			int fileNum = 0;
-			for (long id: H5.getOpenIDs()) {
+			for (long id : H5.getOpenIDs()) {
 				if (H5.H5Iis_valid(id) && H5.H5Iget_type(id) == HDF5Constants.H5I_FILE) {
 					fileNum++;
 				}
 			}
 			
-			opened = H5.getOpenIDCount() + " objects, " + (fileNum - 1) + " other files " + H5.getOpenIDs();
+			opened = H5.getOpenIDCount() + " objects, thereof " + (fileNum - 1) + " other files " + H5.getOpenIDs();
 			
+	    // TODO change to 'Exception e'
 		} catch (HDF5LibraryException hle) {
             NodeLogger.getLogger("HDF5 Files").debug("Info of open objects in total could not be loaded: " + hle.getMessage(), hle);
 		}
 		
 		return opened;
 	}
-	
+	*/
 	/**
 	 * Closes the group and all elements in this group.
 	 * 
@@ -383,7 +387,7 @@ public class Hdf5File extends Hdf5Group {
 				    		}
 				    		
 				    		NodeLogger.getLogger("HDF5 Files").debug("Number of open objects in file \""
-				    				+ getName() + "\": " + whatIsOpenInFile() + " (total number: " + whatIsOpen() + ")");
+				    				+ getName() + "\": " + whatIsOpenInFile()/* + " (total number: " + whatIsOpen() + ")"*/);
 				    		
 				    		// System.out.println(whatIsOpen());
 				    		
