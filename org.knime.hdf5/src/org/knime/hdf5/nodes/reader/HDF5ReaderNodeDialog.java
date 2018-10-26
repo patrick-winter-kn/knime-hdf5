@@ -1,6 +1,5 @@
 package org.knime.hdf5.nodes.reader;
 
-import java.io.File;
 import java.io.IOException;
 
 import javax.swing.BorderFactory;
@@ -10,6 +9,7 @@ import javax.swing.event.ChangeListener;
 
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.node.FlowVariableModel;
+import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeDialogPane;
 import org.knime.core.node.NodeSettings;
 import org.knime.core.node.NodeSettingsRO;
@@ -18,6 +18,7 @@ import org.knime.core.node.NotConfigurableException;
 import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
 import org.knime.core.node.defaultnodesettings.DialogComponentBoolean;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
+import org.knime.core.node.defaultnodesettings.DialogComponentLabel;
 import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
@@ -60,19 +61,38 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		FlowVariableModel filePathFvm = super.createFlowVariableModel(m_filePathSettings);
 		DialogComponentFileChooser fileChooser = new DialogComponentFileChooser(m_filePathSettings, "inputFilePathHistory",
 				JFileChooser.OPEN_DIALOG, false, filePathFvm, ".h5|.hdf5");
-		fileChooser.setBorderTitle("Input file:");
-		addDialogComponent(fileChooser);
+		
+		DialogComponentLabel fileInfoLabel = new DialogComponentLabel("");
 		fileChooser.getModel().addChangeListener(new ChangeListener() {
 			
 			private boolean m_specEmpty = true;
 			
 			@Override
 			public void stateChanged(ChangeEvent e) {
-				if (new File(m_filePathSettings.getStringValue()).isFile() || !m_specEmpty) {
+				boolean validFile = false;
+				String urlPath = m_filePathSettings.getStringValue();
+				try {
+					String filePath = HDF5ReaderNodeModel.getFilePathFromUrlPath(urlPath, true);
+					if (Hdf5File.hasHdf5FileEnding(filePath)) {
+						validFile = true;
+						fileInfoLabel.setText("");
+					} else {
+						fileInfoLabel.setText("Error: File ending is not valid");
+					}
+				} catch (InvalidSettingsException ise) {
+					fileInfoLabel.setText("Error: " + ise.getMessage());
+				}
+				
+				if (validFile || !m_specEmpty) {
 					m_specEmpty = updateConfigs(null);
 				}
 			}
 		});
+		
+        createNewGroup("Input file:");
+		addDialogComponent(fileChooser);
+		addDialogComponent(fileInfoLabel);
+        closeCurrentGroup();
 	}
 
 	private boolean updateConfigs(final NodeSettingsRO settings) {
@@ -90,14 +110,14 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		
 		DataTableSpec spec = null;
 		try {
-			Hdf5File file = Hdf5File.openFile(m_filePathSettings.getStringValue(), Hdf5File.READ_ONLY_ACCESS);
+			Hdf5File file = Hdf5File.openFile(HDF5ReaderNodeModel.getFilePathFromUrlPath(m_filePathSettings.getStringValue(), true), Hdf5File.READ_ONLY_ACCESS);
 			try {
 				spec = file.createSpecOfDataSets();
 			} finally {
 				file.close();
 			}
 			
-		} catch (IOException ioe) {
+		} catch (IOException | InvalidSettingsException ioise) {
 			spec = new DataTableSpec();
 		}
 		
@@ -118,14 +138,14 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		
 		DataTableSpec spec = null;
 		try {
-			Hdf5File file = Hdf5File.openFile(m_filePathSettings.getStringValue(), Hdf5File.READ_ONLY_ACCESS);
+			Hdf5File file = Hdf5File.openFile(HDF5ReaderNodeModel.getFilePathFromUrlPath(m_filePathSettings.getStringValue(), true), Hdf5File.READ_ONLY_ACCESS);
 			try {
 				spec = file.createSpecOfAttributes();
 			} finally {
 				file.close();
 			}
 			
-		} catch (IOException ioe) {
+		} catch (IOException | InvalidSettingsException ioise) {
 			spec = new DataTableSpec();
 		}
 		

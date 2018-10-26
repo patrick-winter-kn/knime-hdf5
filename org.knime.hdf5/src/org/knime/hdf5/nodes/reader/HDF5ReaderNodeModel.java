@@ -2,6 +2,8 @@ package org.knime.hdf5.nodes.reader;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.InvalidPathException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -29,7 +31,9 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
+import org.knime.core.node.util.CheckUtils;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
+import org.knime.core.util.FileUtil;
 import org.knime.hdf5.lib.Hdf5Attribute;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
@@ -65,7 +69,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		BufferedDataContainer outContainer = null;
 
 		try {
-	        file = Hdf5File.openFile(/*FileUtil.toURL(*/m_filePathSettings.getStringValue()/*).getFile()*/, Hdf5File.READ_ONLY_ACCESS);
+	        file = Hdf5File.openFile(getFilePathFromUrlPath(m_filePathSettings.getStringValue(), true), Hdf5File.READ_ONLY_ACCESS);
 			outContainer = exec.createDataContainer(createOutSpec());
 			String[] dataSetPaths = m_dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
 
@@ -134,13 +138,10 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 	private DataTableSpec createOutSpec() throws InvalidSettingsException {
 		List<DataColumnSpec> colSpecList = new ArrayList<>();
-		
-		String filePath = m_filePathSettings.getStringValue();
-        //CheckUtils.checkSourceFile(filePath);
         
 		Hdf5File file = null;
 		try {
-			file = Hdf5File.openFile(/*FileUtil.toURL(*/filePath/*).getFile()*/, Hdf5File.READ_ONLY_ACCESS);
+			file = Hdf5File.openFile(getFilePathFromUrlPath(m_filePathSettings.getStringValue(), true), Hdf5File.READ_ONLY_ACCESS);
 		} catch (IOException ioe) {
 			throw new InvalidSettingsException(ioe.getMessage(), ioe);
 		}
@@ -194,18 +195,9 @@ public class HDF5ReaderNodeModel extends NodeModel {
 	private static void checkForErrors(SettingsModelString filePathSettings, 
 			SettingsModelBoolean failIfRowSizeDiffersSettings, 
 			DataColumnSpecFilterConfiguration dataSetFilterConfig) throws InvalidSettingsException {
-		String filePath = filePathSettings.getStringValue();
-		if (filePath.trim().isEmpty()) {
-			throw new InvalidSettingsException("No file selected");
-		}
-		if (!new File(filePath).exists()) {
-			throw new InvalidSettingsException("The selected file \"" + filePath + "\" does not exist");
-		}
-        //CheckUtils.checkSourceFile(filePath);
-		
 		Hdf5File file = null;
 		try {
-			file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+			file = Hdf5File.openFile(getFilePathFromUrlPath(filePathSettings.getStringValue(), true), Hdf5File.READ_ONLY_ACCESS);
 		} catch (IOException ioe) {
 			throw new InvalidSettingsException("Could not check configuration: " + ioe.getMessage(), ioe);
 		}
@@ -243,6 +235,26 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		} finally {
 			file.close();
 		}
+	}
+	
+	static String getFilePathFromUrlPath(String urlPath, boolean mustExist) throws InvalidSettingsException {
+		if (urlPath.trim().isEmpty()) {
+			throw new InvalidSettingsException("No file selected");
+		}
+        
+        try {
+        	String filePath = FileUtil.resolveToPath(FileUtil.toURL(urlPath)).toString();
+        	if (mustExist || new File(filePath).exists()) {
+            	CheckUtils.checkSourceFile(urlPath);
+            } else {
+            	CheckUtils.checkDestinationDirectory(urlPath);
+            }
+            
+            return filePath;
+            
+        } catch (InvalidPathException | IOException | URISyntaxException | NullPointerException ipiousnpe) {
+        	throw new InvalidSettingsException("Incorrect file path/url: " + ipiousnpe.getMessage(), ipiousnpe);
+        }
 	}
 
 	@Override

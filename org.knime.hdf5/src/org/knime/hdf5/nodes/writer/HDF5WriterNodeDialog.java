@@ -84,12 +84,17 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			
 			@Override
 			public void stateChanged(ChangeEvent e) {
-				String filePath = m_filePathSettings.getStringValue();
-				if (Hdf5File.hasHdf5FileEnding(filePath)) {
-					fileInfoLabel.setText("Info: File " + (Hdf5File.existsHdfFile(filePath) ? "exists" : "does not exist"));
+				String urlPath = m_filePathSettings.getStringValue();
+				try {
+					String filePath = HDF5WriterNodeModel.getFilePathFromUrlPath(urlPath, false);
 					
-				} else {
-					fileInfoLabel.setText("Error: File ending is not valid");
+					if (Hdf5File.hasHdf5FileEnding(filePath)) {
+						fileInfoLabel.setText("Info: File " + (Hdf5File.existsHdfFile(filePath) ? "exists" : "does not exist"));
+					} else {
+						fileInfoLabel.setText("Error: File ending is not valid");
+					}
+				} catch (InvalidSettingsException ise) {
+					fileInfoLabel.setText("Error: " + ise.getMessage());
 				}
 			}
 		});
@@ -141,8 +146,8 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			public void actionPerformed(ActionEvent e) {
 				try {
 					m_editTreePanel.updateTreeWithFile(getFilePathFromSettings(), true);
-				} catch (IOException ioe) {
-		    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+				} catch (IOException | InvalidSettingsException ioise) {
+		    		NodeLogger.getLogger(getClass()).error(ioise.getMessage(), ioise);
 				}
 			}
 		});
@@ -175,8 +180,8 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		outputPanel.add(m_editTreePanel);
 	}
     
-    private String getFilePathFromSettings() throws IOException {
-    	String filePath = m_filePathSettings.getStringValue();
+    private String getFilePathFromSettings() throws IOException, InvalidSettingsException {
+    	String filePath = HDF5WriterNodeModel.getFilePathFromUrlPath(m_filePathSettings.getStringValue(), false);
     	
     	if (m_forceCreationOfNewFile.getBooleanValue()) {
     		filePath = Hdf5File.getUniqueFilePath(filePath);
@@ -326,8 +331,8 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	if (!m_filePathSettings.getStringValue().trim().isEmpty()) {
 			try {
 				m_editTreePanel.updateTreeWithResetConfig(getFilePathFromSettings());
-			} catch (IOException ioe) {
-	    		NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+			} catch (IOException | InvalidSettingsException ioise) {
+	    		NodeLogger.getLogger(getClass()).error(ioise.getMessage(), ioise);
 			}
 		
 			EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();

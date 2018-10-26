@@ -2,6 +2,8 @@ package org.knime.hdf5.nodes.writer;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.InvalidPathException;
 
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.node.BufferedDataTable;
@@ -17,6 +19,8 @@ import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 import org.knime.core.node.port.PortType;
+import org.knime.core.node.util.CheckUtils;
+import org.knime.core.util.FileUtil;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 
@@ -132,6 +136,26 @@ public class HDF5WriterNodeModel extends NodeModel {
 		} else if (Hdf5File.existsHdfFile(filePath)) {
 			throw new InvalidSettingsException("The selected file \"" + filePath + "\" does already exist");
 		}
+	}
+	
+	static String getFilePathFromUrlPath(String urlPath, boolean mustExist) throws InvalidSettingsException {
+		if (urlPath.trim().isEmpty()) {
+			throw new InvalidSettingsException("No file selected");
+		}
+        
+        try {
+        	String filePath = FileUtil.resolveToPath(FileUtil.toURL(urlPath)).toString();
+        	if (mustExist || new File(filePath).exists()) {
+            	CheckUtils.checkSourceFile(urlPath);
+            } else {
+            	CheckUtils.checkDestinationDirectory(urlPath);
+            }
+            
+            return filePath;
+            
+        } catch (InvalidPathException | IOException | URISyntaxException | NullPointerException ipiousnpe) {
+        	throw new InvalidSettingsException("Incorrect file path/url: " + ipiousnpe.getMessage(), ipiousnpe);
+        }
 	}
 
 	@Override
