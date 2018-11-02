@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 
 import org.knime.core.data.DataTableSpec;
 import org.knime.core.node.BufferedDataTable;
@@ -22,23 +23,24 @@ import org.knime.core.node.port.PortType;
 import org.knime.core.node.util.CheckUtils;
 import org.knime.core.util.FileUtil;
 import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.nodes.writer.edit.EditOverwritePolicy;
 import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 
 public class HDF5WriterNodeModel extends NodeModel {
 
 	private SettingsModelString m_filePathSettings;
 	
-	private SettingsModelBoolean m_forceCreationOfNewFile;
+	private SettingsModelString m_fileOverwritePolicySettings;
 	
-	private SettingsModelBoolean m_saveColumnProperties;
+	private SettingsModelBoolean m_saveColumnPropertiesSettings;
 	
 	private EditTreeConfiguration m_editTreeConfig;
 	
 	protected HDF5WriterNodeModel() {
 		super(new PortType[] { BufferedDataTable.TYPE_OPTIONAL }, new PortType[] {});
 		m_filePathSettings = SettingsFactory.createFilePathSettings();
-		m_forceCreationOfNewFile = SettingsFactory.createForceCreationOfNewFileSettings();
-		m_saveColumnProperties = SettingsFactory.createSaveColumnPropertiesSettings();
+		m_fileOverwritePolicySettings = SettingsFactory.createFileOverwritePolicySettings();
+		m_saveColumnPropertiesSettings = SettingsFactory.createSaveColumnPropertiesSettings();
 		m_editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 	}
 	
@@ -54,7 +56,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 		boolean success = false;
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
 		try {
-			success = fileEdit.doAction(inData[0], getAvailableFlowVariables(), m_saveColumnProperties.getBooleanValue(), exec);
+			success = fileEdit.doAction(inData[0], getAvailableFlowVariables(), m_saveColumnPropertiesSettings.getBooleanValue(), exec);
 			
 		} finally {
 			// TODO change after testing
@@ -111,30 +113,32 @@ public class HDF5WriterNodeModel extends NodeModel {
 			throw new InvalidSettingsException("No file selected");
 		}
 		
-		String filePath = fileEdit.getFilePath();
-		if (!fileEdit.getEditAction().isCreateOrCopyAction()) {
-			Hdf5File file = null;
-			try {
-				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-				FileNodeEdit oldFileEdit = new FileNodeEdit(file);
-				oldFileEdit.loadChildrenOfHdfObject();
-				boolean valid = inputTable == null ? oldFileEdit.integrate(fileEdit) : oldFileEdit.doLastValidationBeforeExecution(fileEdit, inputTable);
-				if (!valid) {
-					// TODO change after testing
-					System.out.println(inputTable == null ? "1." : "2.");
-					NodeLogger.getLogger(HDF5WriterNodeModel.class).warn/*throw new InvalidSettingsException*/("The configuration for file \"" + oldFileEdit.getFilePath()
-							+ "\" is not valid:\n" + oldFileEdit.getInvalidCauseMessages(fileEdit));
-				}
-			} catch (IOException ioe) {
-				throw new InvalidSettingsException("Could not check configuration: " + ioe.getMessage(), ioe.getCause());
+		Hdf5File file = null;
+		try {
+			FileNodeEdit oldFileEdit = null;
+			if (fileEdit.getEditAction().isCreateOrCopyAction()) {
+				oldFileEdit = new FileNodeEdit(fileEdit.getFilePath(), fileEdit.isOverwriteHdfFile());
 				
-			} finally {
-				if (file != null) {
-					file.close();
-				}
+			} else {
+				file = Hdf5File.openFile(fileEdit.getFilePath(), Hdf5File.READ_ONLY_ACCESS);
+				oldFileEdit = new FileNodeEdit(file);
+				oldFileEdit.loadChildrenOfHdfObject();
 			}
-		} else if (Hdf5File.existsHdfFile(filePath)) {
-			throw new InvalidSettingsException("The selected file \"" + filePath + "\" does already exist");
+			
+			boolean valid = inputTable == null ? oldFileEdit.integrate(fileEdit) : oldFileEdit.doLastValidationBeforeExecution(fileEdit, inputTable);
+			if (!valid) {
+				// TODO change after testing
+				System.out.println(inputTable == null ? "1." : "2.");
+				NodeLogger.getLogger(HDF5WriterNodeModel.class).warn/*throw new InvalidSettingsException*/("The configuration for file \"" + oldFileEdit.getFilePath()
+						+ "\" is not valid:\n" + oldFileEdit.getInvalidCauseMessages(fileEdit));
+			}
+		} catch (IOException ioe) {
+			throw new InvalidSettingsException("Could not check configuration: " + ioe.getMessage(), ioe.getCause());
+			
+		} finally {
+			if (file != null) {
+				file.close();
+			}
 		}
 	}
 	
@@ -144,14 +148,14 @@ public class HDF5WriterNodeModel extends NodeModel {
 		}
         
         try {
-        	String filePath = FileUtil.resolveToPath(FileUtil.toURL(urlPath)).toString();
-        	if (mustExist || new File(filePath).exists()) {
-            	CheckUtils.checkSourceFile(urlPath);
+        	Path filePath = FileUtil.resolveToPath(FileUtil.toURL(urlPath));
+        	if (mustExist || filePath.toFile().exists()) {
+            	CheckUtils.checkSourceFile(filePath.toString());
             } else {
-            	CheckUtils.checkDestinationDirectory(urlPath);
+            	CheckUtils.checkDestinationDirectory(filePath.getParent().toString());
             }
             
-            return filePath;
+            return filePath.toString();
             
         } catch (InvalidPathException | IOException | URISyntaxException | NullPointerException ipiousnpe) {
         	throw new InvalidSettingsException("Incorrect file path/url: " + ipiousnpe.getMessage(), ipiousnpe);
@@ -169,8 +173,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 	@Override
 	protected void saveSettingsTo(NodeSettingsWO settings) {
 		m_filePathSettings.saveSettingsTo(settings);
-		m_forceCreationOfNewFile.saveSettingsTo(settings);
-		m_saveColumnProperties.saveSettingsTo(settings);
+		m_fileOverwritePolicySettings.saveSettingsTo(settings);
+		m_saveColumnPropertiesSettings.saveSettingsTo(settings);
 		m_editTreeConfig.saveConfiguration(settings);
 	}
 
@@ -180,13 +184,13 @@ public class HDF5WriterNodeModel extends NodeModel {
 		filePathSettings.validateSettings(settings);
 		filePathSettings.loadSettingsFrom(settings);
 
-		SettingsModelBoolean forceCreationOfNewFile = SettingsFactory.createForceCreationOfNewFileSettings();
-		forceCreationOfNewFile.validateSettings(settings);
-		forceCreationOfNewFile.loadSettingsFrom(settings);
+		SettingsModelString fileOverWritePolicySettings = SettingsFactory.createFileOverwritePolicySettings();
+		fileOverWritePolicySettings.validateSettings(settings);
+		fileOverWritePolicySettings.loadSettingsFrom(settings);
 		
-		SettingsModelBoolean saveColumnProperties = SettingsFactory.createSaveColumnPropertiesSettings();
-		saveColumnProperties.validateSettings(settings);
-		saveColumnProperties.loadSettingsFrom(settings);
+		SettingsModelBoolean saveColumnPropertiesSettings = SettingsFactory.createSaveColumnPropertiesSettings();
+		saveColumnPropertiesSettings.validateSettings(settings);
+		saveColumnPropertiesSettings.loadSettingsFrom(settings);
 		
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 		editTreeConfig.loadConfiguration(settings);
@@ -196,8 +200,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 	@Override
 	protected void loadValidatedSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
 		m_filePathSettings.loadSettingsFrom(settings);
-		m_forceCreationOfNewFile.loadSettingsFrom(settings);
-		m_saveColumnProperties.loadSettingsFrom(settings);
+		m_fileOverwritePolicySettings.loadSettingsFrom(settings);
+		m_saveColumnPropertiesSettings.loadSettingsFrom(settings);
 		
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 		editTreeConfig.loadConfiguration(settings);
@@ -205,5 +209,14 @@ public class HDF5WriterNodeModel extends NodeModel {
 	}
 
 	@Override
-	protected void reset() {}
+	protected void reset() {
+		if (EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()) == EditOverwritePolicy.RENAME) {
+			try {
+				m_editTreeConfig.updateFilePathOfConfig(true);
+				
+			} catch (IOException ioe) {
+				NodeLogger.getLogger(getClass()).error("File path for renaming could not be updated: " + ioe.getMessage(), ioe);
+			}
+		}
+	}
 }

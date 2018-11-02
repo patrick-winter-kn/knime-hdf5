@@ -85,7 +85,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	ColumnNodeEdit copyColumnEditTo(DataSetNodeEdit parent, boolean needsCopySource) {
 		ColumnNodeEdit newColumnEdit = new ColumnNodeEdit(parent, this, needsCopySource);
-		newColumnEdit.addEditToParentNode();
+		newColumnEdit.addEditToParentNodeIfPossible();
 		
 		return newColumnEdit;
 	}

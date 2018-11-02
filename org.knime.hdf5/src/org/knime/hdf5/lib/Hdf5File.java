@@ -113,10 +113,10 @@ public class Hdf5File extends Hdf5Group {
 		return hasHdf5FileEnding(filePath) && new File(filePath).exists();
 	}
 	
-	public synchronized static boolean isHdfFileCreatable(final String filePath) {
-		// TODO maybe use org.knime.core.node.util.CheckUtils
+	public synchronized static boolean isHdfFileCreatable(final String filePath, final boolean overwriteHdfFile) {
+		// TODO maybe use org.knime.core.node.util.CheckUtils, but without possibility for url
 		return hasHdf5FileEnding(filePath) && new File(getDirectoryPath(filePath)).isDirectory()
-				&& !new File(filePath).exists();
+				&& (!new File(filePath).exists() || overwriteHdfFile);
 	}
 	
 	public static boolean hasHdf5FileEnding(final String filePath) {
@@ -185,9 +185,19 @@ public class Hdf5File extends Hdf5Group {
 		return !m_accessors.isEmpty();
 	}
 	
-	public boolean isOpenAnywhere() throws IOException {
+	public synchronized boolean isOpenAnywhere() throws IOException {
 		try {
-			return H5.H5Fget_obj_count(getElementId(), HDF5Constants.H5F_OBJ_FILE) > 0;
+			boolean wasOpen = isOpen();
+			if (!wasOpen) {
+				open(READ_ONLY_ACCESS);
+			}
+			
+			boolean openSomewhereElse = H5.H5Fget_obj_count(getElementId(), HDF5Constants.H5F_OBJ_FILE) > 1;
+			
+			if (!wasOpen) {
+				close();
+			}
+			return openSomewhereElse;
 			
 		} catch (HDF5LibraryException hle) {
 			throw new IOException(hle.getMessage(), hle);
@@ -258,13 +268,19 @@ public class Hdf5File extends Hdf5Group {
         }
 	}
 	
-	public synchronized Hdf5File createBackup(String prefix) throws IOException {
-		Path backupPath = Files.copy(Paths.get(m_filePath), Paths.get(getUniqueFilePath(getDirectoryPath(m_filePath)
-				+ File.separator + prefix + getName())), StandardCopyOption.COPY_ATTRIBUTES);
+	public Hdf5File createBackup(String prefix) throws IOException {
+		return copyFile(getUniqueFilePath(getDirectoryPath(m_filePath) + File.separator + prefix + getName()));
+	}
+	
+	public synchronized Hdf5File copyFile(String newPath) throws IOException {
+		Path backupPath = Files.copy(Paths.get(m_filePath), Paths.get(newPath), StandardCopyOption.COPY_ATTRIBUTES);
 		return openFile(backupPath.toString(), READ_ONLY_ACCESS);
 	}
 
 	public synchronized boolean deleteFile() throws IOException {
+		// TODO maybe only allow deletion in write access; same for deletion of children
+		// TODO check if some other threads are still waiting for this file
+		
 		File file = new File(m_filePath);
 		if (file == null || !file.exists()) {
 			throw new IOException("File cannot be deleted: it does not exist");

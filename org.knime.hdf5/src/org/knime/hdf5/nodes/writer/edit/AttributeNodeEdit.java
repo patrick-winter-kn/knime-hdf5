@@ -122,7 +122,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	AttributeNodeEdit copyAttributeEditTo(TreeNodeEdit parent, boolean needsCopySource) {
 		AttributeNodeEdit newAttributeEdit = new AttributeNodeEdit(parent, this, needsCopySource);
-		newAttributeEdit.addEditToParentNode();
+		newAttributeEdit.addEditToParentNodeIfPossible();
 		
 		return newAttributeEdit;
 	}
@@ -272,8 +272,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 
 	@Override
 	protected void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException {
-		setEditOverwritePolicy(EditOverwritePolicy.values()[settings.getInt(SettingsKey.EDIT_OVERWRITE_POLICY.getKey())]);
-		
 		m_possibleOutputTypes = new ArrayList<>();
 		int[] typeIds = settings.getIntArray(SettingsKey.POSSIBLE_OUTPUT_TYPES.getKey());
 		for (int typeId : typeIds) {

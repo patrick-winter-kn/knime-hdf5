@@ -132,7 +132,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	DataSetNodeEdit copyDataSetEditTo(GroupNodeEdit parent, boolean needsCopySource, boolean copyWithAllChildren) {
 		DataSetNodeEdit newDataSetEdit = new DataSetNodeEdit(parent, this, needsCopySource);
-		newDataSetEdit.addEditToParentNode();
+		newDataSetEdit.addEditToParentNodeIfPossible();
 
 		for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
 			if (copyWithAllChildren || columnEdit.getEditAction().isCreateOrCopyAction()) {
@@ -558,7 +558,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		while (attributeEnum.hasMoreElements()) {
 			NodeSettingsRO editSettings = attributeEnum.nextElement();
 			AttributeNodeEdit edit = new AttributeNodeEdit(this, editSettings.getString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey()),
-					editSettings.getString(SettingsKey.NAME.getKey()), EditOverwritePolicy.values()[editSettings.getInt(SettingsKey.EDIT_OVERWRITE_POLICY.getKey())],
+					editSettings.getString(SettingsKey.NAME.getKey()), EditOverwritePolicy.get(editSettings.getString(SettingsKey.EDIT_OVERWRITE_POLICY.getKey())),
 					HdfDataType.get(editSettings.getInt(SettingsKey.INPUT_TYPE.getKey())), EditAction.get(editSettings.getString(SettingsKey.EDIT_ACTION.getKey())));
 			edit.loadSettingsFrom(editSettings);
         }
@@ -578,11 +578,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				int colCount = (int) dataSet.getDimensions()[1];
 				for (int i = 0; i < colCount; i++) {
 					ColumnNodeEdit columnEdit = new ColumnNodeEdit(this, i, "col" + (i+1), dataType, rowCount);
-					columnEdit.addEditToParentNode();
+					columnEdit.addEditToParentNodeIfPossible();
 				}
 			} else if (dataSet.getDimensions().length < 2) {
 				ColumnNodeEdit columnEdit = new ColumnNodeEdit(this, 0, "col", dataType, rowCount);
-				columnEdit.addEditToParentNode();	
+				columnEdit.addEditToParentNodeIfPossible();	
 			}
 		}
 		
@@ -592,12 +592,12 @@ public class DataSetNodeEdit extends TreeNodeEdit {
     			try {
         			Hdf5Attribute<?> child = dataSet.updateAttribute(attributeName);
         			childEdit = new AttributeNodeEdit(this, child);
-        			childEdit.addEditToParentNode();
+        			childEdit.addEditToParentNodeIfPossible();
         			
     			} catch (UnsupportedDataTypeException udte) {
     				// for unsupported attributes
         			childEdit = new AttributeNodeEdit(this, attributeName, "Unsupported data type");
-        			childEdit.addEditToParentNode();
+        			childEdit.addEditToParentNodeIfPossible();
     			}
     		}
     	} catch (NullPointerException npe) {

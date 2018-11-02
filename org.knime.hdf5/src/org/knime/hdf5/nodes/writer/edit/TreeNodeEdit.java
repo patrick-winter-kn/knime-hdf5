@@ -55,6 +55,7 @@ public abstract class TreeNodeEdit {
 		NAME("name"),
 		INPUT_PATH_FROM_FILE_WITH_NAME("inputPathFromFileWithName"),
 		EDIT_OVERWRITE_POLICY("editOverwritePolicy"),
+		OVERWRITE_HDF_FILE("overwriteHdfFile"),
 		EDIT_ACTION("editAction"),
 		FILE_PATH("filePath"),
 		INPUT_TYPE("inputType"),
@@ -855,14 +856,14 @@ public abstract class TreeNodeEdit {
 	protected void saveSettingsTo(NodeSettingsWO settings) {
 		settings.addString(SettingsKey.INPUT_PATH_FROM_FILE_WITH_NAME.getKey(), m_inputPathFromFileWithName);
 		settings.addString(SettingsKey.NAME.getKey(), m_name);
-		settings.addInt(SettingsKey.EDIT_OVERWRITE_POLICY.getKey(), m_editOverwritePolicy.ordinal());
+		settings.addString(SettingsKey.EDIT_OVERWRITE_POLICY.getKey(), m_editOverwritePolicy.getName());
 		settings.addString(SettingsKey.EDIT_ACTION.getKey(), m_editAction.getActionName());
 	}
 
 	protected abstract void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException;
 
 	@SuppressWarnings("unchecked")
-	public void addEditToParentNode() {
+	public boolean addEditToParentNodeIfPossible() {
 		DefaultMutableTreeNode parentNode = getParent().getTreeNode();
 		if (parentNode != null && !parentNode.isNodeChild(m_treeNode)) {
 			if (m_treeNode == null) {
@@ -881,9 +882,13 @@ public abstract class TreeNodeEdit {
 			parentNode.insert(m_treeNode, insert);
 			
 			for (TreeNodeEdit edit : getAllChildren()) {
-		        edit.addEditToParentNode();
+		        edit.addEditToParentNodeIfPossible();
 			}
+			
+			return true;
 		}
+		
+		return false;
 	}
 	
 	/**

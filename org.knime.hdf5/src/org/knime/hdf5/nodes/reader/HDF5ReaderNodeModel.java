@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -243,14 +244,14 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		}
         
         try {
-        	String filePath = FileUtil.resolveToPath(FileUtil.toURL(urlPath)).toString();
-        	if (mustExist || new File(filePath).exists()) {
-            	CheckUtils.checkSourceFile(urlPath);
+        	Path filePath = FileUtil.resolveToPath(FileUtil.toURL(urlPath));
+        	if (mustExist || filePath.toFile().exists()) {
+            	CheckUtils.checkSourceFile(filePath.toString());
             } else {
-            	CheckUtils.checkDestinationDirectory(urlPath);
+            	CheckUtils.checkDestinationDirectory(filePath.getParent().toString());
             }
             
-            return filePath;
+            return filePath.toString();
             
         } catch (InvalidPathException | IOException | URISyntaxException | NullPointerException ipiousnpe) {
         	throw new InvalidSettingsException("Incorrect file path/url: " + ipiousnpe.getMessage(), ipiousnpe);

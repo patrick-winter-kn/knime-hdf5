@@ -65,14 +65,14 @@ final class SettingsFactory {
 		return new SettingsModelString("filePath" + OUTPUT_CONFIG_KEY, "");
 	}
 	
-    /**
-	 * Factory method for the source setting of the CheckBox for structure match.
+	/**
+	 * Factory method for the source setting of the overwrite policy for the file.
 	 * 
 	 * 
 	 * @return Source <code>SettingsModel</code>
 	 */
-	static SettingsModelBoolean createForceCreationOfNewFileSettings() {
-		return new SettingsModelBoolean("forceCreationOfNewFile" + OUTPUT_CONFIG_KEY, false);
+	static SettingsModelString createFileOverwritePolicySettings() {
+		return new SettingsModelString("fileOverwritePolicy" + OUTPUT_CONFIG_KEY, "");
 	}
 	
     /**

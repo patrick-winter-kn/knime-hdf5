@@ -30,7 +30,6 @@ import javax.swing.tree.TreePath;
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.workflow.FlowVariable;
-import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
 import org.knime.hdf5.nodes.writer.edit.AttributeNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.ColumnNodeEdit;
@@ -269,7 +268,7 @@ public class EditTreePanel extends JPanel {
 						if (createDataSetForColumns) {
 							String newName = TreeNodeEdit.getUniqueName(dropLocationEdit, DataSetNodeEdit.class, "dataSet");
                 			DataSetNodeEdit newDataSetEdit = new DataSetNodeEdit((GroupNodeEdit) dropLocationEdit, newName);
-                			newDataSetEdit.addEditToParentNode();
+                			newDataSetEdit.addEditToParentNodeIfPossible();
                 			return newDataSetEdit;
                 			
 						} else {
@@ -319,20 +318,20 @@ public class EditTreePanel extends JPanel {
                 	if (!(parentEdit instanceof DataSetNodeEdit)) {
                 		String newName = TreeNodeEdit.getUniqueName(parentEdit, DataSetNodeEdit.class, "dataSet");
             			DataSetNodeEdit newEdit = new DataSetNodeEdit((GroupNodeEdit) parentEdit, newName);
-                    	newEdit.addEditToParentNode();
+                    	newEdit.addEditToParentNodeIfPossible();
                     	parentEdit = newEdit;
                 	}
 
                 	for (int i = 0; i < data.size(); i++) {
                 		DataColumnSpec spec = (DataColumnSpec) data.get(i);
                 		ColumnNodeEdit newEdit = new ColumnNodeEdit((DataSetNodeEdit) parentEdit, spec);
-                    	newEdit.addEditToParentNode();
+                    	newEdit.addEditToParentNodeIfPossible();
                 	}
                 } else if (data.get(0) instanceof FlowVariable) {
                     for (int i = 0; i < data.size(); i++) {
                     	FlowVariable var = (FlowVariable) data.get(i);
                     	AttributeNodeEdit newEdit = new AttributeNodeEdit((TreeNodeEdit) parentEdit, var);
-                    	newEdit.addEditToParentNode();
+                    	newEdit.addEditToParentNodeIfPossible();
                 	}
                 }
 				
@@ -429,8 +428,9 @@ public class EditTreePanel extends JPanel {
 	}
 
 	void updateTreeWithResetConfig() throws IOException {
-		if (m_editTreeConfig.getFileNodeEdit() != null) {
-			updateTreeWithFile(m_editTreeConfig.getFileNodeEdit().getFilePath(), false);
+		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
+		if (fileEdit != null) {
+			updateTreeWithFile(fileEdit.getFilePath(), fileEdit.isOverwriteHdfFile(), false);
 		}
 	}
 	
@@ -439,43 +439,21 @@ public class EditTreePanel extends JPanel {
 	 * the file with the path {@code filePath} will be loaded.
 	 * 
 	 * @param filePath
+	 * @param keepOldFileEditIfPossible
+	 * @param overwriteFile
 	 * @throws IOException
 	 */
-	void updateTreeWithResetConfig(String filePath) throws IOException {
-		if (m_editTreeConfig.getFileNodeEdit() != null) {
+	void updateTreeWithResetConfig(String filePath, boolean keepOldFileEditIfPossible, boolean overwriteFile) throws IOException {
+		FileNodeEdit oldFileEdit = m_editTreeConfig.getFileNodeEdit();
+		if (keepOldFileEditIfPossible && oldFileEdit != null && oldFileEdit.isOverwriteHdfFile() == overwriteFile) {
 			updateTreeWithResetConfig();
 		} else {
-			updateTreeWithFile(filePath, false);
+			updateTreeWithFile(filePath, overwriteFile, false);
 		}
 	}
 	
-	void updateTreeWithFile(String filePath, boolean keepConfig) throws IOException {
-		Hdf5File file = null;
-		
-		try {
-			FileNodeEdit oldFileEdit = m_editTreeConfig.getFileNodeEdit();
-			FileNodeEdit newFileEdit = null;
-			if (Hdf5File.existsHdfFile(filePath)) {
-				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-				newFileEdit = new FileNodeEdit(file);
-			} else {
-				newFileEdit = new FileNodeEdit(filePath);
-			}
-			m_editTreeConfig.setFileNodeEdit(newFileEdit);
-			newFileEdit.setEditAsRootOfTree(m_tree);
-			if (!newFileEdit.getEditAction().isCreateOrCopyAction()) {
-				newFileEdit.loadChildrenOfHdfObject();
-			}
-			if (keepConfig && oldFileEdit != null) {
-				newFileEdit.integrate(oldFileEdit);
-			}
-			newFileEdit.reloadTreeWithEditVisible(true);
-			
-		} finally {
-			if (file != null) {
-				file.close();
-			}
-		}
+	void updateTreeWithFile(String filePath, boolean overwriteFile, boolean keepConfig) throws IOException {
+		m_editTreeConfig.initConfigOfFile(filePath, overwriteFile, keepConfig, m_tree);
 	}
 	
 	void removeEditsWithoutSource() {

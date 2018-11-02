@@ -46,6 +46,7 @@ import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.NotConfigurableException;
 import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
 import org.knime.core.node.defaultnodesettings.DialogComponentBoolean;
+import org.knime.core.node.defaultnodesettings.DialogComponentButtonGroup;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.DialogComponentLabel;
 import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
@@ -54,14 +55,15 @@ import org.knime.core.node.util.FlowVariableListCellRenderer;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
+import org.knime.hdf5.nodes.writer.edit.EditOverwritePolicy;
 
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
-	
+
 	private SettingsModelString m_filePathSettings;
 	
-	private SettingsModelBoolean m_forceCreationOfNewFile;
+	private SettingsModelString m_fileOverwritePolicySettings;
 	
-	private SettingsModelBoolean m_saveColumnProperties;
+	private SettingsModelBoolean m_saveColumnPropertiesSettings;
 
 	private ListPanel m_columnSpecPanel = new ListPanel();
 	
@@ -99,21 +101,24 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			}
 		});
 		
+		// TODO is it clear for the user that here is only meant the file as whole and not also its components?
+		m_fileOverwritePolicySettings = SettingsFactory.createFileOverwritePolicySettings();
+		DialogComponentButtonGroup fileOverwritePolicy = new DialogComponentButtonGroup(m_fileOverwritePolicySettings,
+				false, "Overwrite file: ", EditOverwritePolicy.getNames(EditOverwritePolicy.getAvailableValuesForFile()));
+		
         createNewGroup("Output file:");
 		addDialogComponent(fileChooser);
 		addDialogComponent(fileInfoLabel);
+		addDialogComponent(fileOverwritePolicy);
         closeCurrentGroup();
         
         
-		m_forceCreationOfNewFile = SettingsFactory.createForceCreationOfNewFileSettings();
-		DialogComponentBoolean forceCreationOfNewFile = new DialogComponentBoolean(m_forceCreationOfNewFile,
-				"Force creation of new file");
-		m_saveColumnProperties = SettingsFactory.createSaveColumnPropertiesSettings();
-		DialogComponentBoolean saveColumnProperties = new DialogComponentBoolean(m_saveColumnProperties,
+		m_saveColumnPropertiesSettings = SettingsFactory.createSaveColumnPropertiesSettings();
+		DialogComponentBoolean saveColumnProperties = new DialogComponentBoolean(m_saveColumnPropertiesSettings,
 				"Save column properties");
 		
+		
         createNewGroup("Advanced settings:");
-		addDialogComponent(forceCreationOfNewFile);
 		addDialogComponent(saveColumnProperties);
         closeCurrentGroup();
 		
@@ -145,7 +150,8 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				try {
-					m_editTreePanel.updateTreeWithFile(getFilePathFromSettings(), true);
+					m_editTreePanel.updateTreeWithFile(getFilePathFromSettings(),
+							EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()) == EditOverwritePolicy.OVERWRITE, true);
 				} catch (IOException | InvalidSettingsException ioise) {
 		    		NodeLogger.getLogger(getClass()).error(ioise.getMessage(), ioise);
 				}
@@ -183,7 +189,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     private String getFilePathFromSettings() throws IOException, InvalidSettingsException {
     	String filePath = HDF5WriterNodeModel.getFilePathFromUrlPath(m_filePathSettings.getStringValue(), false);
     	
-    	if (m_forceCreationOfNewFile.getBooleanValue()) {
+    	if (EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()) == EditOverwritePolicy.RENAME) {
     		filePath = Hdf5File.getUniqueFilePath(filePath);
     	}
     	
@@ -327,22 +333,23 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	List<?> vars = new ArrayList<>(getAvailableFlowVariables().values());
     	Collections.reverse(vars);
     	initListModel(SpecInfo.FLOW_VARIABLE_SPECS, vars.toArray());
-    	
-    	if (!m_filePathSettings.getStringValue().trim().isEmpty()) {
-			try {
-				m_editTreePanel.updateTreeWithResetConfig(getFilePathFromSettings());
-			} catch (IOException | InvalidSettingsException ioise) {
-	    		NodeLogger.getLogger(getClass()).error(ioise.getMessage(), ioise);
-			}
-		
-			EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
-			try {
-				editTreeConfig.loadConfiguration(settings);
+
+		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
+		try {
+			editTreeConfig.loadConfiguration(settings);
+			
+			boolean fileEditExists = editTreeConfig.getFileNodeEdit() != null;
+	    	if (!m_filePathSettings.getStringValue().trim().isEmpty() || fileEditExists) {
+	    		EditOverwritePolicy policy = EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue());
+				m_editTreePanel.updateTreeWithResetConfig(fileEditExists ? editTreeConfig.getFilePathToUpdate(policy == EditOverwritePolicy.RENAME)
+						: getFilePathFromSettings(), false, policy == EditOverwritePolicy.OVERWRITE);
+
+				// TODO test it
+				editTreeConfig.getFileNodeEdit().validateCreateActions(colSpecs, getAvailableFlowVariables());
 				m_editTreePanel.loadConfiguration(editTreeConfig);
-				
-			} catch (InvalidSettingsException ise) {
-				new NotConfigurableException(ise.getMessage());
 			}
+		} catch (IOException | InvalidSettingsException ioise) {
+    		throw new NotConfigurableException(ioise.getMessage(), ioise);
 		}
     }
     
