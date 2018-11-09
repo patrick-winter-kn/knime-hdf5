@@ -198,11 +198,11 @@ public class Hdf5HdfDataType {
 				types.add(HdfDataType.INT16);
 				types.add(HdfDataType.UINT16);
 			case FLOAT32:
+			case FLOAT64:
 				types.add(HdfDataType.INT32);
 				types.add(HdfDataType.UINT32);
 				types.add(HdfDataType.INT64);
 				types.add(HdfDataType.UINT64);
-			case FLOAT64:
 				types.add(HdfDataType.FLOAT32);
 				types.add(HdfDataType.FLOAT64);
 			case STRING:

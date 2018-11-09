@@ -58,6 +58,7 @@ public abstract class TreeNodeEdit {
 		OVERWRITE_HDF_FILE("overwriteHdfFile"),
 		EDIT_ACTION("editAction"),
 		FILE_PATH("filePath"),
+		INPUT_INVALID_CAUSE("inputInvalidCause"),
 		INPUT_TYPE("inputType"),
 		POSSIBLE_OUTPUT_TYPES("possibleOutputTypes"),
 		OUTPUT_TYPE("outputType"),
@@ -163,10 +164,10 @@ public abstract class TreeNodeEdit {
 	}
 	
 	static enum EditState {
-		TODO, IN_PROGRESS, SUCCESS, FAIL, ROLLBACK_SUCCESS, ROLLBACK_FAIL;
+		TODO, IN_PROGRESS, SUCCESS, FAIL, ROLLBACK_SUCCESS, ROLLBACK_FAIL, ROLLBACK_NOTHING_TODO;
 		
 		boolean isRollbackState() {
-			return this == ROLLBACK_SUCCESS || this == ROLLBACK_FAIL;
+			return this == ROLLBACK_SUCCESS || this == ROLLBACK_FAIL || this == ROLLBACK_NOTHING_TODO;
 		}
 		
 		boolean isExecutedState() {
@@ -631,7 +632,7 @@ public abstract class TreeNodeEdit {
 	}
 	
 	public String getToolTipText() {
-		return (isSupported() ? (this instanceof FileNodeEdit ? ((FileNodeEdit) this).getFilePath() : getInputPathFromFileWithName())
+		return (isSupported() ? (this instanceof FileNodeEdit ? ((FileNodeEdit) this).getFilePath() : m_inputPathFromFileWithName != null ? m_inputPathFromFileWithName : "NEW")
 						+ (this instanceof ColumnNodeEdit && m_editAction != EditAction.CREATE ? "/" + m_name : "") : "NOT SUPPORTED [" + m_unsupportedCause + "]")
 				+ (isValid() ? "" : " (invalid" + (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : " children") + ")");
 	}
@@ -1136,30 +1137,40 @@ public abstract class TreeNodeEdit {
 	protected boolean rollbackAction() throws IOException {
 		boolean success = false;
 		
-		try {
-			switch (m_editAction) {
-			case CREATE:
-			case COPY:
-				success = deleteAction();
-				break;
-			case MODIFY:
-			case DELETE:
-				String newName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
-				if (this instanceof AttributeNodeEdit) {
-					Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfSource();
-					setHdfObject(attribute.getParent().renameAttribute(attribute.getName(), newName));
+		if (m_editState != EditState.ROLLBACK_NOTHING_TODO) {
+			try {
+				if ((m_parent.getEditAction() == EditAction.DELETE || m_parent.getEditAction() == EditAction.MODIFY && m_hdfBackup != null)
+						&& m_parent.getEditState() == EditState.ROLLBACK_SUCCESS) {
+					// this edit's rollback has already been done successfully in the parent's rollback
+					success = true;
+					
 				} else {
-					Hdf5TreeElement treeElement = (Hdf5TreeElement) getHdfSource();
-					setHdfObject(treeElement.getParent().moveObject(treeElement.getName(), treeElement.getParent(), newName));
+					switch (m_editAction) {
+					case CREATE:
+					case COPY:
+						success = deleteAction();
+						break;
+					case MODIFY:
+					case DELETE:
+						String newName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
+						if (this instanceof AttributeNodeEdit) {
+							Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfSource();
+							setHdfObject(attribute.getParent().renameAttribute(attribute.getName(), newName));
+						} else {
+							Hdf5TreeElement treeElement = (Hdf5TreeElement) getHdfSource();
+							setHdfObject(treeElement.getParent().moveObject(treeElement.getName(), treeElement.getParent(), newName));
+						}
+						success = m_hdfObject != null;
+						// do not set m_hdfBackup to null here because '!=null' check is needed for children
+						break;
+					default:
+						success = true;
+						break;
+					}
 				}
-				success = m_hdfObject != null;
-				break;
-			default:
-				success = true;
-				break;
+			} finally {
+				setEditState(success ? EditState.ROLLBACK_SUCCESS : EditState.ROLLBACK_FAIL);
 			}
-		} finally {
-			setEditState(success ? EditState.ROLLBACK_SUCCESS : EditState.ROLLBACK_FAIL);
 		}
 		
 		return success;

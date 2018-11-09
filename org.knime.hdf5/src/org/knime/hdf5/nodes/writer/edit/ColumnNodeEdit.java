@@ -126,7 +126,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit) {
-		// nothing to do here
+		m_inputInvalidCause = ((ColumnNodeEdit) copyEdit).getInputInvalidCause();
 	}
 	
 	@Override
@@ -165,14 +165,20 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	public void saveSettingsTo(NodeSettingsWO settings) {
 		super.saveSettingsTo(settings);
 
-		settings.addInt(SettingsKey.INPUT_TYPE.getKey(), m_inputType.getTypeId());
-		settings.addLong(SettingsKey.INPUT_ROW_COUNT.getKey(), m_inputRowCount);
+		if (m_inputInvalidCause != null) {
+			settings.addInt(SettingsKey.INPUT_INVALID_CAUSE.getKey(), m_inputInvalidCause.ordinal());
+		}
 		settings.addInt(SettingsKey.INPUT_COLUMN_INDEX.getKey(), m_inputColumnIndex);
 		settings.addInt(SettingsKey.OUTPUT_COLUMN_INDEX.getKey(), ((DataSetNodeEdit) getParent()).getIndexOfColumnEdit(this));
+		settings.addInt(SettingsKey.INPUT_TYPE.getKey(), m_inputType.getTypeId());
+		settings.addLong(SettingsKey.INPUT_ROW_COUNT.getKey(), m_inputRowCount);
 	}
 	
 	@Override
 	protected void loadSettingsFrom(NodeSettingsRO settings) throws InvalidSettingsException {
+		if (settings.containsKey(SettingsKey.INPUT_INVALID_CAUSE.getKey())) {
+			m_inputInvalidCause = InvalidCause.values()[settings.getInt(SettingsKey.INPUT_INVALID_CAUSE.getKey())];
+		}
 		m_outputColumnIndex = settings.getInt(SettingsKey.OUTPUT_COLUMN_INDEX.getKey());
 	}
 	
@@ -266,6 +272,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	void validateCreateAction(DataColumnSpec[] colSpecs) {
+		m_inputInvalidCause = null;
 		for (DataColumnSpec colSpec : colSpecs) {
 			if (colSpec.getName().equals(getInputPathFromFileWithName())) {
 				m_inputInvalidCause = m_inputType == HdfDataType.getHdfDataType(colSpec.getType()) ? null : InvalidCause.INPUT_DATA_TYPE;

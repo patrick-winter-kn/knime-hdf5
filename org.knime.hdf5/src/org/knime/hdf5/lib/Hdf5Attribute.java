@@ -160,11 +160,12 @@ public class Hdf5Attribute<Type> {
 						} 
 					} else {
 						NodeLogger.getLogger(Hdf5Attribute.class).warn("FlowVariable " + flowVariable.getName()
-								+ " has incompatible array format (needs exactly one '] (' sequence)");
+								+ " has incompatible array format (needs exactly one '] (' sequence). Its type is a scalar string now.");
 					}
 				}
 			} catch (NumberFormatException nfe) {
-				// nothing to do
+				NodeLogger.getLogger(Hdf5Attribute.class).warn("FlowVariable " + flowVariable.getName()
+						+ " has wrong type to convert is as array. Its type is a scalar string now.");
 			}
 			return new String[] { attr };
 		}

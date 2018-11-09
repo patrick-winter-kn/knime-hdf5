@@ -778,8 +778,9 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		Hdf5DataSet<?> oldDataSet = (Hdf5DataSet<?>) getHdfSource();
 		if (havePropertiesChanged(oldDataSet)) {
 			createAction(inputTable, null, saveColumnProperties, exec, totalProgressToDo);
-			if (oldDataSet != getHdfBackup()) {
-				((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(oldDataSet.getName());
+			Hdf5DataSet<?> newDataSet = (Hdf5DataSet<?>) getHdfObject();
+			for (String attrName : oldDataSet.loadAttributeNames()) {
+				oldDataSet.copyAttribute(oldDataSet.getAttribute(attrName), newDataSet, attrName);
 			}
 		} else {
 			if (!oldDataSet.getName().equals(getName())) {

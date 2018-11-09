@@ -386,6 +386,9 @@ public class FileNodeEdit extends GroupNodeEdit {
 			for (TreeNodeEdit edit : rollbackEdits.toArray(new TreeNodeEdit[rollbackEdits.size()])) {
 				if (!edit.getEditState().isExecutedState()) {
 					rollbackEdits.remove(edit);
+				} else if (edit.getEditState() == EditState.SUCCESS && edit.getEditAction() == EditAction.MODIFY_CHILDREN_ONLY
+						|| edit.getEditState() == EditState.FAIL && edit.getEditAction().isCreateOrCopyAction() && edit.getHdfObject() == null) {
+					edit.setEditState(EditState.ROLLBACK_NOTHING_TODO);
 				} else if (edit.getEditAction() == EditAction.MODIFY || edit.getEditAction() == EditAction.DELETE) {
 					(edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).add(edit.getInputPathFromFileWithName());
 				}

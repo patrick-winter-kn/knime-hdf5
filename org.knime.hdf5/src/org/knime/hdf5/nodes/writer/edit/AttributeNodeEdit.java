@@ -206,6 +206,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	protected void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit) {
 		if (copyEdit instanceof AttributeNodeEdit) {
 			AttributeNodeEdit copyAttributeEdit = (AttributeNodeEdit) copyEdit;
+			m_inputInvalidCause = copyAttributeEdit.getInputInvalidCause();
 			m_possibleOutputTypes = Arrays.asList(copyAttributeEdit.getPossibleOutputTypes());
 			m_editDataType.setValues(copyAttributeEdit.getEditDataType());
 			m_totalStringLength = copyAttributeEdit.getTotalStringLength();
@@ -255,6 +256,9 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	public void saveSettingsTo(NodeSettingsWO settings) {
 		super.saveSettingsTo(settings);
 
+		if (m_inputInvalidCause != null) {
+			settings.addInt(SettingsKey.INPUT_INVALID_CAUSE.getKey(), m_inputInvalidCause.ordinal());
+		}
 		settings.addInt(SettingsKey.INPUT_TYPE.getKey(), m_inputType.getTypeId());
 		
 		int[] typeIds = new int[m_possibleOutputTypes.size()];
@@ -272,6 +276,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 
 	@Override
 	protected void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException {
+		if (settings.containsKey(SettingsKey.INPUT_INVALID_CAUSE.getKey())) {
+			m_inputInvalidCause = InvalidCause.values()[settings.getInt(SettingsKey.INPUT_INVALID_CAUSE.getKey())];
+		}
+		
 		m_possibleOutputTypes = new ArrayList<>();
 		int[] typeIds = settings.getIntArray(SettingsKey.POSSIBLE_OUTPUT_TYPES.getKey());
 		for (int typeId : typeIds) {
@@ -301,16 +309,21 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 	
 	void validateCreateAction(Map<String, FlowVariable> flowVariables) {
+		m_inputInvalidCause = null;
 		for (String name : flowVariables.keySet()) {
 			if (name.equals(getInputPathFromFileWithName())) {
 				AttributeNodeEdit testEdit = new AttributeNodeEdit(getParent(), flowVariables.get(name));
+				testEdit.removeFromParent();
+				
 				m_inputInvalidCause = m_inputType == testEdit.getInputType() ? null : InvalidCause.INPUT_DATA_TYPE;
 				if (m_inputInvalidCause == null) {
 					m_possibleOutputTypes = testEdit.m_possibleOutputTypes;
 					m_inputInvalidCause = m_possibleOutputTypes.contains(m_editDataType.getOutputType()) ? null : InvalidCause.OUTPUT_DATA_TYPE;
-					// TODO (if necessary) test for more errors like different string lengths
 				}
-				testEdit.removeFromParent();
+				if (m_inputInvalidCause == null) {
+					m_totalStringLength = testEdit.getTotalStringLength();
+					m_itemStringLength = testEdit.getItemStringLength();
+				}
 				return;
 			}
 		}
