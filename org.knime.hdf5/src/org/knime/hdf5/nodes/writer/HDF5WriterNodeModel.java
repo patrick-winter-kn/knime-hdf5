@@ -125,7 +125,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 				oldFileEdit.loadChildrenOfHdfObject();
 			}
 			
-			boolean valid = inputTable == null ? oldFileEdit.integrate(fileEdit) : oldFileEdit.doLastValidationBeforeExecution(fileEdit, inputTable);
+			boolean valid = inputTable == null ? oldFileEdit.integrateAndValidate(fileEdit) : oldFileEdit.doLastValidationBeforeExecution(fileEdit, inputTable);
 			if (!valid) {
 				// TODO change after testing
 				System.out.println(inputTable == null ? "1." : "2.");
@@ -210,13 +210,12 @@ public class HDF5WriterNodeModel extends NodeModel {
 
 	@Override
 	protected void reset() {
-		if (EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()) == EditOverwritePolicy.RENAME) {
-			try {
-				m_editTreeConfig.updateFilePathOfConfig(true);
-				
-			} catch (IOException ioe) {
-				NodeLogger.getLogger(getClass()).error("File path for renaming could not be updated: " + ioe.getMessage(), ioe);
-			}
+		EditOverwritePolicy policy = EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue());
+		try {
+			m_editTreeConfig.updateFilePathOfConfig(policy == EditOverwritePolicy.RENAME);
+			
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error("Config of file path after reset could not be updated: " + ioe.getMessage(), ioe);
 		}
 	}
 }

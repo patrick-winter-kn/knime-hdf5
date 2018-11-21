@@ -76,6 +76,25 @@ public class Hdf5HdfDataType {
 			}
 		}
 		
+		public static HdfDataType getHdfDataType(Object[] values, boolean unsigned) {
+			Class<?> type = values.getClass().getComponentType();
+			if (type == Byte.class) {
+				return unsigned ? UINT8 : INT8;
+			} else if (type == Short.class) {
+				return unsigned ? UINT16 : INT16;
+			} else if (type == Integer.class) {
+				return unsigned ? UINT32 : INT32;
+			} else if (type == Long.class) {
+				return unsigned ? UINT64 : INT64;
+			} else if (type == Float.class) {
+				return FLOAT32;
+			} else if (type == Double.class) {
+				return FLOAT64;
+			} else {
+				return STRING;
+			}
+		}
+		
 		public static List<HdfDataType> getConvertibleTypes(HdfDataType inputType, Object[] values) {
 			List<HdfDataType> types = inputType.getAlwaysConvertibleHdfTypes();
 

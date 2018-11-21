@@ -183,7 +183,7 @@ public class EditDataType {
 		
 		private JRadioButton m_stringLengthAuto = new JRadioButton("auto");
 		private JRadioButton m_stringLengthFixed = new JRadioButton("fixed");
-		private JSpinner m_stringLengthSpinner = new JSpinner(new SpinnerNumberModel(0, 0, Integer.MAX_VALUE, 1));
+		private JSpinner m_stringLengthSpinner = new JSpinner(new SpinnerNumberModel(1, 1, Integer.MAX_VALUE, 1));
 		private JSpinner m_standardValueIntSpinner = new JSpinner(new SpinnerNumberModel((Long) 0L, (Long) Long.MIN_VALUE, (Long) Long.MAX_VALUE, (Long) 1L));
 		private JSpinner m_standardValueFloatSpinner = new JSpinner(new SpinnerNumberModel(0.0, null, null, 0.1));
 		private JTextField m_standardValueStringTextField = new JTextField(15);

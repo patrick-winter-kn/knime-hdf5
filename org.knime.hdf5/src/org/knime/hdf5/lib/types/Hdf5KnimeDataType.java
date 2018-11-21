@@ -109,14 +109,18 @@ public enum Hdf5KnimeDataType {
 				return (Integer) ((IntCell) dataCell).getIntValue();
 			} else if (type.equals(LongCell.TYPE)) {
 				return (Integer) (int) ((LongCell) dataCell).getLongValue();
-			} 
+			} else if (type.equals(DoubleCell.TYPE)) {
+				return (Integer) (int) ((DoubleCell) dataCell).getDoubleValue();
+			}
 			break;
 		case LONG:
 			if (type.equals(IntCell.TYPE)) {
 				return (Long) (long) ((IntCell) dataCell).getIntValue();
 			} else if (type.equals(LongCell.TYPE)) {
 				return (Long) ((LongCell) dataCell).getLongValue();
-			} 
+			} else if (type.equals(DoubleCell.TYPE)) {
+				return (Long) (long) ((DoubleCell) dataCell).getDoubleValue();
+			}
 			break;
 		case DOUBLE:
 			if (type.equals(IntCell.TYPE)) {

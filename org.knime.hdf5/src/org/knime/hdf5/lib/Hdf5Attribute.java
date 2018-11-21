@@ -322,7 +322,7 @@ public class Hdf5Attribute<Type> {
 	}
 	
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public boolean copyValuesTo(Hdf5Attribute<Object> attribute, Rounding rounding) throws HDF5LibraryException, IOException {
+	public boolean copyValuesFrom(Hdf5Attribute<?> attribute, Rounding rounding) throws HDF5DataspaceInterfaceException, IOException {
 		if (!m_open || !attribute.isOpen()) {
 			throw new IOException("Attribute \"" + (!m_open ? this : attribute).getPathFromFileWithName() + "\" is not open");
 		}
@@ -332,20 +332,72 @@ public class Hdf5Attribute<Type> {
 					+ attribute.getPathFromFileWithName() + "\" do not have the same length");
 		}
 		
-		if (m_type.isSimilarTo(attribute.getType())) {
-			return H5.H5Acopy(getAttributeId(), attribute.getAttributeId()) >= 0;
-		}
-		
-		Type[] copyData = read();
-		Object[] dataIn = attribute.getType().getKnimeType().createArray((int) m_dimension);
-		Class copyClass = m_type.getKnimeClass();
-		Class inputClass = attribute.getType().getKnimeClass();
-		for (int i = 0; i < dataIn.length; i++) {
-			// TODO maybe use hdfToHdf here
-			dataIn[i] = m_type.knimeToKnime(copyClass,
-					copyClass.cast(copyData[i]), inputClass, attribute.getType(), rounding);
-		}
-		return attribute.write(dataIn, rounding);
+		try {
+			if (m_type.isSimilarTo(attribute.getType())) {
+				return H5.H5Acopy(attribute.getAttributeId(), m_attributeId) >= 0;
+			}
+			
+			if (m_dimension > Integer.MAX_VALUE) {
+	            NodeLogger.getLogger("HDF5 Files").warn("Attribute \"" + getPathFromFileWithName()
+	            		+ "\" contains more values than it could be read");
+			}
+			
+			int dim = (int) attribute.getDimension();
+			Hdf5DataType type = attribute.getType();
+			Object[] dataRead = type.getHdfType().createArray(dim);
+			
+			if (type.isHdfType(HdfDataType.STRING)) {
+	            if (type.isVlen()) {
+					long typeId = H5.H5Tget_native_type(type.getConstants()[0]);
+	                H5.H5AreadVL(attribute.getAttributeId(), typeId, (String[]) dataRead);
+					H5.H5Tclose(typeId);
+	                
+	            } else {
+	            	long stringLength = type.getHdfType().getStringLength();
+					byte[] dataReadByte = new byte[dim * ((int) stringLength + 1)];
+					H5.H5Aread(attribute.getAttributeId(), type.getConstants()[1], dataReadByte);
+					
+					dataRead = new String[dim];
+					char[][] dataReadChar = new char[dim][(int) stringLength];
+					for (int i = 0; i < dataReadChar.length; i++) {
+						for (int j = 0; j < dataReadChar[0].length; j++) {
+							dataReadChar[i][j] = (char) dataReadByte[i * ((int) stringLength + 1) + j];
+						}
+						
+						dataRead[i] = String.copyValueOf(dataReadChar[i]).trim();
+					}
+				}
+			} else {
+				H5.H5Aread(attribute.getAttributeId(), type.getConstants()[1], dataRead);	
+			}
+			
+			Object[] dataWrite = m_type.getHdfType().createArray((int) m_dimension);
+			Class inputClass = type.getHdfClass();
+			Class outputClass = m_type.getHdfClass();
+			for (int i = 0; i < dataWrite.length; i++) {
+				dataWrite[i] = type.hdfToHdf(inputClass, inputClass.cast(dataRead[i]), outputClass, m_type, rounding);
+			}
+			
+			if (m_type.isHdfType(HdfDataType.STRING)) {
+	            long stringLength = m_type.getHdfType().getStringLength();
+				byte[] dataWriteByte = new byte[dim * ((int) stringLength + 1)];
+				
+				for (int i = 0; i < dim; i++) {
+					char[] dataWriteChar = dataWrite[i].toString().toCharArray();
+					
+					for (int j = 0; j < dataWriteChar.length; j++) {
+						dataWriteByte[i * ((int) stringLength + 1) + j] = (byte) dataWriteChar[j];
+					}
+				}
+				
+				return H5.H5Awrite(m_attributeId, m_type.getConstants()[1], dataWriteByte) >= 0;
+				
+			} else {
+				return H5.H5Awrite(m_attributeId, m_type.getConstants()[1], dataWrite) >= 0;
+			}
+		} catch (HDF5Exception | NullPointerException hnpe) {
+			throw new IOException(hnpe.getMessage(), hnpe);
+	    }
 	}
 	
 	@SuppressWarnings("unchecked")

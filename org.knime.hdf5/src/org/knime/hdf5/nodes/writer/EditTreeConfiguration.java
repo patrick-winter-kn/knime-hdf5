@@ -55,22 +55,23 @@ public class EditTreeConfiguration {
 				m_fileEdit = new FileNodeEdit(filePath, overwriteFile);
 			}
 			
-			boolean treeAvailable = tree != null;
-			if (treeAvailable) {
+			if (tree != null) {
 				m_fileEdit.setEditAsRootOfTree(tree);
-			}
-			
-			if (!m_fileEdit.getEditAction().isCreateOrCopyAction()) {
-				m_fileEdit.loadChildrenOfHdfObject();
-			}
-			if (keepConfig && oldFileEdit != null) {
-				m_fileEdit.integrate(oldFileEdit);
-			}
-			
-			if (treeAvailable) {
+				if (!m_fileEdit.getEditAction().isCreateOrCopyAction()) {
+					m_fileEdit.loadChildrenOfHdfObject();
+				}
+				
+				if (keepConfig && oldFileEdit != null) {
+					m_fileEdit.integrateAndValidate(oldFileEdit);
+				}
+				
 				m_fileEdit.reloadTreeWithEditVisible(true);
+				
+			} else {
+				if (keepConfig && oldFileEdit != null) {
+					m_fileEdit.integrate(oldFileEdit);
+				}
 			}
-			
 		} finally {
 			if (file != null) {
 				file.close();

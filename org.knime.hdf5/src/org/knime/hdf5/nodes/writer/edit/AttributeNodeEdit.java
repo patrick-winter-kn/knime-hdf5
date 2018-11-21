@@ -133,6 +133,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_possibleOutputTypes = HdfDataType.getConvertibleTypes(m_inputType, values);
 		m_totalStringLength = var.getValueAsString().length();
 		
+		m_itemStringLength = 1;
 		for (Object value : values) {
 			int newStringLength = value.toString().length();
 			m_itemStringLength = newStringLength > m_itemStringLength ? newStringLength : m_itemStringLength;
@@ -222,7 +223,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	protected long getProgressToDoInEdit() {
+	protected long getProgressToDoInEdit() throws IOException {
 		long totalToDo = 0L;
 		
 		if (getEditAction() != EditAction.NO_ACTION && getEditState() != EditState.SUCCESS) {
@@ -230,7 +231,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			if (havePropertiesChanged(getEditAction() != EditAction.CREATE ? findCopySource() : null)) {
 				HdfDataType dataType = m_editDataType.getOutputType();
 				long dataTypeToDo = dataType.isNumber() ? dataType.getSize()/8 : m_editDataType.getStringLength();
-				totalToDo += m_totalStringLength / m_itemStringLength * dataTypeToDo;
+				totalToDo += m_totalStringLength / Math.max(1, m_itemStringLength) * dataTypeToDo;
 			}
 		}
 		

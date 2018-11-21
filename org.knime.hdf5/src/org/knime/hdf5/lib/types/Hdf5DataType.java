@@ -203,67 +203,6 @@ public class Hdf5DataType {
 		}
 	}
 
-	public <T, S> S knimeToKnime(Class<T> inputClass, T inputValue, Class<S> outputClass, Hdf5DataType outputType, Rounding rounding) throws UnsupportedDataTypeException {
-		if (inputClass == inputValue.getClass() && inputClass == getKnimeClass() && outputClass == outputType.getKnimeClass()) {
-			if (inputClass == outputClass) {
-				return outputClass.cast(inputValue);
-			}
-			
-			if (outputType.isKnimeType(Hdf5KnimeDataType.STRING)) {
-				return outputClass.cast(inputValue.toString());
-			}
-			
-			switch (getKnimeType()) {
-			case INTEGER:
-				int inputValueInt = (int) inputValue;
-				switch (outputType.getKnimeType()) {
-				case LONG:
-					return outputClass.cast((long) inputValueInt);
-				case DOUBLE:
-					return outputClass.cast((double) inputValueInt);
-				default:
-					break;
-				}
-			case LONG:
-				long inputValueLong = (long) inputValue;
-				switch (outputType.getKnimeType()) {
-				case INTEGER:
-					return outputClass.cast((int) inputValueLong);
-				case DOUBLE:
-					return outputClass.cast((double) inputValueLong);
-				default:
-					break;
-				}
-			case DOUBLE:
-				double inputValueDouble = (double) inputValue;
-				switch (outputType.getKnimeType()) {
-				case INTEGER:
-					return outputClass.cast((int) inputValueDouble);
-				case LONG:
-					return outputClass.cast((long) inputValueDouble);
-				default:
-					break;
-				}
-			case STRING:
-				String inputValueString = (String) inputValue;
-				switch (outputType.getKnimeType()) {
-				case INTEGER:
-					return outputClass.cast(Integer.parseInt(inputValueString));
-				case LONG:
-					return outputClass.cast(Long.parseLong(inputValueString));
-				case DOUBLE:
-					return outputClass.cast(Double.parseDouble(inputValueString));
-				default:
-					break;
-				}
-			default:
-				break;
-			}
-		}
-		
-		throw new UnsupportedDataTypeException("Incorrect combination of input classes");
-	}
-
 	public <T, S> S knimeToHdf(Class<T> knimeClass, T knimeValue, Class<S> hdfClass, Rounding rounding) throws UnsupportedDataTypeException {
 		if (knimeClass == knimeValue.getClass() && knimeClass == getKnimeClass() && hdfClass == getHdfClass()) {
 			if (isHdfType(HdfDataType.STRING)) {
@@ -384,6 +323,82 @@ public class Hdf5DataType {
 				
 			} else {
 				throw new UnsupportedDataTypeException("Unknown hdfDataType");
+			}
+		}
+		
+		throw new UnsupportedDataTypeException("Incorrect combination of input classes");
+	}
+	
+	public <T, S> S hdfToHdf(Class<T> inputClass, T inputValue, Class<S> outputClass, Hdf5DataType outputType, Rounding rounding) throws UnsupportedDataTypeException {
+		if (inputClass == inputValue.getClass() && inputClass == getHdfClass() && outputClass == outputType.getHdfClass()) {
+			if (inputClass == outputClass) {
+				return outputClass.cast(inputValue);
+			}
+			
+			if (outputType.isHdfType(HdfDataType.STRING)) {
+				return outputClass.cast(inputValue.toString());
+			}
+
+			HdfDataType inputHdfType = getHdfType().getType();
+			HdfDataType outputHdfType = outputType.getHdfType().getType();
+			if (inputHdfType.isNumber()) {
+				long inputValueLong = inputHdfType.isFloat() ? rounding.round(((Number) inputValue).doubleValue()) : ((Number) inputValue).longValue();
+				switch (inputHdfType) {
+				case UINT8:
+					inputValueLong += POW_2_8;
+					break;
+				case UINT16:
+					inputValueLong += POW_2_16;
+					break;
+				case UINT32:
+					inputValueLong += POW_2_32;
+					break;
+				default:
+					break;
+				}
+				
+				if (outputHdfType == HdfDataType.INT8 || outputHdfType == HdfDataType.UINT8) {
+					return outputClass.cast((byte) inputValueLong);
+					
+				} else if (outputHdfType == HdfDataType.INT16 || outputHdfType == HdfDataType.UINT16) {
+					return outputClass.cast((short) inputValueLong);
+					
+				} else if (outputHdfType == HdfDataType.INT32 || outputHdfType == HdfDataType.UINT32) {
+					return outputClass.cast((int) inputValueLong);
+					
+				} else if (outputHdfType == HdfDataType.INT64 || outputHdfType == HdfDataType.UINT64) {
+					return outputClass.cast(inputValueLong);
+					
+				} else if (outputHdfType == HdfDataType.FLOAT32) {
+					return outputClass.cast(inputHdfType.isFloat() ? ((Number) inputValue).floatValue()
+							: ((float) inputValueLong + (inputHdfType == HdfDataType.UINT64 ? POW_2_64 : 0)));
+				
+				} else if (outputHdfType == HdfDataType.FLOAT64) {
+					return outputClass.cast(inputHdfType.isFloat() ? ((Number) inputValue).doubleValue()
+							: ((double) inputValueLong + (inputHdfType == HdfDataType.UINT64 ? POW_2_64 : 0)));
+				}
+			} else {
+				String inputValueString = (String) inputValue;
+				switch (outputHdfType) {
+				case INT8:
+				case UINT8:
+					return outputClass.cast(Byte.parseByte(inputValueString));
+				case INT16:
+				case UINT16:
+					return outputClass.cast(Short.parseShort(inputValueString));
+				case INT32:
+				case UINT32:
+					return outputClass.cast(Integer.parseInt(inputValueString));
+				case INT64:
+				case UINT64:
+					return outputClass.cast(Long.parseLong(inputValueString));
+				case FLOAT32:
+					return outputClass.cast(Float.parseFloat(inputValueString));
+				case FLOAT64:
+					return outputClass.cast(Double.parseDouble(inputValueString));
+				default:
+					break;
+				}
 			}
 		}
 		

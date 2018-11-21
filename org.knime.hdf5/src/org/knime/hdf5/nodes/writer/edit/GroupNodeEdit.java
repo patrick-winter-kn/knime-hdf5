@@ -220,7 +220,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 					groupEdit.integrate(copyGroupEdit, inputRowCount);
 					
 				} else {
-					copyGroupEdit.copyGroupEditTo(this, false, isCreateOrCopyAction);
+					copyGroupEdit.copyGroupEditTo(this, false, groupEdit == null);
 				}
 			}
 		}
@@ -236,7 +236,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 					dataSetEdit.integrate(copyDataSetEdit, inputRowCount);
 					
 				} else {
-					copyDataSetEdit.copyDataSetEditTo(this, false, isCreateOrCopyAction);
+					copyDataSetEdit.copyDataSetEditTo(this, false, dataSetEdit == null);
 					for (ColumnNodeEdit copyColumnEdit : copyDataSetEdit.getColumnNodeEdits()) {
 						if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
 							copyColumnEdit.setInputRowCount(inputRowCount);

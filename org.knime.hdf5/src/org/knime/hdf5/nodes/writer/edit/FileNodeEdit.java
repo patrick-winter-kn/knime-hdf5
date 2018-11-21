@@ -105,7 +105,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 		return edit;
 	}
 
-	private long getTotalProgressToDo() {
+	private long getTotalProgressToDo() throws IOException {
 		long progressToDo = 0;
 		
 		for (TreeNodeEdit edit : getAllDecendants()) {
@@ -135,17 +135,21 @@ public class FileNodeEdit extends GroupNodeEdit {
 		
 		// postprocessing of EditOverwritePolicy.INTEGRATE
 		for (TreeNodeEdit edit : fileEdit.getAllDecendants()) {
-			if (edit.getEditAction() == EditAction.NO_ACTION && !(edit instanceof ColumnNodeEdit)) {
+			if (edit.getEditAction() == EditAction.NO_ACTION && !(edit instanceof ColumnNodeEdit || edit instanceof FileNodeEdit)) {
 				edit.removeFromParent();
 			}
 		}
 	}
-	
-	public boolean integrate(FileNodeEdit copyEdit) {
-		super.integrate(copyEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+
+	public boolean integrateAndValidate(FileNodeEdit copyEdit) {
+		integrate(copyEdit);
 		updateCopySources();
 		validate();
 		return isValid();
+	}
+	
+	public void integrate(FileNodeEdit copyEdit) {
+		super.integrate(copyEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
 	}
 
 	@Override
@@ -311,8 +315,9 @@ public class FileNodeEdit extends GroupNodeEdit {
 		exec.setProgress(0.0);
 		// TODO change after testing
 		long pTD = getTotalProgressToDo();
+		boolean success = preparationSuccess && doAction(inputTable, flowVariables, saveColumnProperties, exec, pTD);
 		System.out.println("TotalProgressToDo: " + pTD);
-		return preparationSuccess && doAction(inputTable, flowVariables, saveColumnProperties, exec, pTD);
+		return success;
 	}
 
 	@Override

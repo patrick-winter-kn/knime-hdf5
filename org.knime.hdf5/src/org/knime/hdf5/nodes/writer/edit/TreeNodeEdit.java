@@ -340,14 +340,14 @@ public abstract class TreeNodeEdit {
 	}
 	
 	protected void setCopyEdit(TreeNodeEdit copyEdit) throws IllegalArgumentException {
-		if (getRoot() != copyEdit.getRoot()) {
+		if (copyEdit != null && getRoot() != copyEdit.getRoot()) {
 			throw new IllegalArgumentException("Copy source must have the same root as this edit");
 			
 		} else if (this == copyEdit) {
 			throw new IllegalArgumentException("Copy source may not be this edit ifself");
 		}
 		
-		m_copyEdit = copyEdit.getCopyEdit() != null ? copyEdit.getCopyEdit() : copyEdit;
+		m_copyEdit = copyEdit != null && copyEdit.getCopyEdit() != null ? copyEdit.getCopyEdit() : copyEdit;
 	}
 
 	public boolean isSupported() {
@@ -454,29 +454,37 @@ public abstract class TreeNodeEdit {
 		return m_hdfBackup != null ? m_hdfBackup : m_hdfObject;
 	}
 	
-	Object findCopySource() {
+	Object findCopySource() throws IOException {
+		Object copySource = null;
+		
 		FileNodeEdit fileEdit = getRoot();
 		if (this instanceof GroupNodeEdit) {
-			try {
-				return ((Hdf5File) fileEdit.getHdfObject()).getGroupByPath(m_inputPathFromFileWithName);
-			} catch (IOException ioe) {
-				return fileEdit.getGroupEditByPath(m_inputPathFromFileWithName).getHdfBackup();
+			GroupNodeEdit copyGroupEdit = fileEdit.getGroupEditByPath(m_inputPathFromFileWithName);
+			if (copyGroupEdit != null) {
+				copySource = copyGroupEdit.getHdfBackup();
+			}
+			if (copySource == null) {
+				copySource = ((Hdf5File) fileEdit.getHdfObject()).getGroupByPath(m_inputPathFromFileWithName);
 			}
 		} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
-			try {
-				return ((Hdf5File) fileEdit.getHdfObject()).getDataSetByPath(m_inputPathFromFileWithName);
-			} catch (IOException ioe) {
-				return fileEdit.getDataSetEditByPath(m_inputPathFromFileWithName).getHdfBackup();
+			DataSetNodeEdit copyDataSetEdit = fileEdit.getDataSetEditByPath(m_inputPathFromFileWithName);
+			if (copyDataSetEdit != null) {
+				copySource = copyDataSetEdit.getHdfBackup();
+			}
+			if (copySource == null) {
+				copySource = ((Hdf5File) fileEdit.getHdfObject()).getDataSetByPath(m_inputPathFromFileWithName);
 			}
 		} else if (this instanceof AttributeNodeEdit) {
-			try {
-				return ((Hdf5File) fileEdit.getHdfObject()).getAttributeByPath(m_inputPathFromFileWithName);
-			} catch (IOException ioe) {
-				return fileEdit.getAttributeEditByPath(m_inputPathFromFileWithName).getHdfBackup();
+			AttributeNodeEdit copyGroupEdit = fileEdit.getAttributeEditByPath(m_inputPathFromFileWithName);
+			if (copyGroupEdit != null) {
+				copySource = copyGroupEdit.getHdfBackup();
+			}
+			if (copySource == null) {
+				copySource = ((Hdf5File) fileEdit.getHdfObject()).getAttributeByPath(m_inputPathFromFileWithName);
 			}
 		}
 		
-		return null;
+		return copySource;
 	}
 	
 	boolean createBackup() {
@@ -614,7 +622,7 @@ public abstract class TreeNodeEdit {
 						curClass = invalidEdit.getClass();
 						if (found <= maxMessageCountPerCause) {
 							messageBuilder.append(found == 1 ? invalidCause.getMessage() + ":" : "");
-							messageBuilder.append(count > 1 ? " (" + count + ")" : "");
+							messageBuilder.append(count > 1 ? " (count: " + count + ")" : "");
 							messageBuilder.append("\n- " + invalidEdit.getHdfObjectType() + " " + curInvalidPath);
 							count = 1;
 						}
@@ -637,10 +645,10 @@ public abstract class TreeNodeEdit {
 				+ (isValid() ? "" : " (invalid" + (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : " children") + ")");
 	}
 	
-	private void setSuccess(boolean success, ExecutionContext exec, long totalProgressToDo) {
+	private void setSuccess(boolean success, ExecutionContext exec, long totalProgressToDo) throws IOException {
 		if (m_editState == EditState.IN_PROGRESS) {
 			if (success) {
-				addProgress(getProgressToDoInEdit(), exec, totalProgressToDo);
+				addProgress(getProgressToDoInEdit(), exec, totalProgressToDo, true);
 				setEditState(EditState.SUCCESS);
 				
 			} else {
@@ -649,10 +657,13 @@ public abstract class TreeNodeEdit {
 		}
 	}
 	
-	protected void addProgress(long progressToAdd, ExecutionContext exec, long totalProgressToDo) {
+	protected void addProgress(long progressToAdd, ExecutionContext exec, long totalProgressToDo, boolean updateMessage) {
 		// TODO change after testing
 		long progressDone = Math.round(exec.getProgressMonitor().getProgress() * totalProgressToDo) + progressToAdd;
 		exec.setProgress((double) progressDone / totalProgressToDo);
+		if (updateMessage) {
+			exec.setMessage(getSummary());
+		}
 		System.out.println("Progress done (Edit " + getOutputPathFromFileWithName() + "): " + progressDone);
 	}
 	
@@ -667,7 +678,7 @@ public abstract class TreeNodeEdit {
 					if (state == descendant.getEditState()) {
 						descendants.remove(descendant);
 						if (!(descendant instanceof ColumnNodeEdit)) {
-							summaryBuilder.append("- " + descendant.getHdfObjectType() + " " + descendant.getOutputPathFromFileWithName(true) + " (" + descendant.getEditAction() + ")\n");
+							summaryBuilder.append("- " + descendant.getSummary() + "\n");
 						}
 					}
 				}
@@ -675,6 +686,10 @@ public abstract class TreeNodeEdit {
 		}
 		
 		return summaryBuilder.toString();
+	}
+	
+	private String getSummary() {
+		return getHdfObjectType() + " " + getOutputPathFromFileWithName(true) + " (" + m_editAction + ")";
 	}
 	
 	private String getHdfObjectType() {
@@ -692,7 +707,7 @@ public abstract class TreeNodeEdit {
 		return "unsupported object";
 	}
 	
-	protected abstract long getProgressToDoInEdit();
+	protected abstract long getProgressToDoInEdit() throws IOException;
 	
 	private TreeNodeEdit findCopyEdit() {
 		if (this instanceof GroupNodeEdit) {
@@ -1137,38 +1152,39 @@ public abstract class TreeNodeEdit {
 	protected boolean rollbackAction() throws IOException {
 		boolean success = false;
 		
-		if (m_editState != EditState.ROLLBACK_NOTHING_TODO) {
-			try {
-				if ((m_parent.getEditAction() == EditAction.DELETE || m_parent.getEditAction() == EditAction.MODIFY && m_hdfBackup != null)
-						&& m_parent.getEditState() == EditState.ROLLBACK_SUCCESS) {
+		try {
+			if (m_editState == EditState.ROLLBACK_NOTHING_TODO
+					|| m_parent.getEditState() == EditState.ROLLBACK_SUCCESS
+					&& (m_parent.getEditAction() == EditAction.DELETE || m_parent.getEditAction() == EditAction.MODIFY && m_hdfBackup != null)) {
 					// this edit's rollback has already been done successfully in the parent's rollback
-					success = true;
-					
-				} else {
-					switch (m_editAction) {
-					case CREATE:
-					case COPY:
-						success = deleteAction();
-						break;
-					case MODIFY:
-					case DELETE:
-						String newName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
-						if (this instanceof AttributeNodeEdit) {
-							Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfSource();
-							setHdfObject(attribute.getParent().renameAttribute(attribute.getName(), newName));
-						} else {
-							Hdf5TreeElement treeElement = (Hdf5TreeElement) getHdfSource();
-							setHdfObject(treeElement.getParent().moveObject(treeElement.getName(), treeElement.getParent(), newName));
-						}
-						success = m_hdfObject != null;
-						// do not set m_hdfBackup to null here because '!=null' check is needed for children
-						break;
-					default:
-						success = true;
-						break;
+				success = true;
+				
+			} else {
+				switch (m_editAction) {
+				case CREATE:
+				case COPY:
+					success = deleteAction();
+					break;
+				case MODIFY:
+				case DELETE:
+					String newName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
+					if (this instanceof AttributeNodeEdit) {
+						Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfSource();
+						setHdfObject(attribute.getParent().renameAttribute(attribute.getName(), newName));
+					} else {
+						Hdf5TreeElement treeElement = (Hdf5TreeElement) getHdfSource();
+						setHdfObject(treeElement.getParent().moveObject(treeElement.getName(), treeElement.getParent(), newName));
 					}
+					success = m_hdfObject != null;
+					// do not set m_hdfBackup to null here because '!=null' check is needed for children
+					break;
+				default:
+					success = true;
+					break;
 				}
-			} finally {
+			}
+		} finally {
+			if (m_editState != EditState.ROLLBACK_NOTHING_TODO) {
 				setEditState(success ? EditState.ROLLBACK_SUCCESS : EditState.ROLLBACK_FAIL);
 			}
 		}

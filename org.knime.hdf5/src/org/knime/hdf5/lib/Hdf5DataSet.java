@@ -290,13 +290,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			
     			if (m_type.isHdfType(HdfDataType.STRING)) {
     				H5.H5Dwrite_string(getElementId(), m_type.getConstants()[1],
-    						memSpaceId, m_dataspaceId,
-    						HDF5Constants.H5P_DEFAULT, (String[]) dataIn);
+    						memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, (String[]) dataIn);
     				
     			} else if (m_type.hdfTypeEqualsKnimeType()) {
                     H5.H5Dwrite(getElementId(), m_type.getConstants()[1],
-                    		memSpaceId, m_dataspaceId,
-                            HDF5Constants.H5P_DEFAULT, dataIn);
+                    		memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, dataIn);
                 
     			} else {
     				int numberOfValues = 1;
@@ -306,8 +304,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
     				
 					Object[] dataWrite = m_type.getHdfType().createArray(numberOfValues);
 		            
-					Class hdfClass = m_type.getHdfClass();
 					Class knimeClass = m_type.getKnimeClass();
+					Class hdfClass = m_type.getHdfClass();
 					for (int i = 0; i < dataWrite.length; i++) {
 						dataWrite[i] = m_type.knimeToHdf(knimeClass, knimeClass.cast(dataIn[i]), hdfClass, rounding);
 					}
@@ -329,19 +327,98 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
     	}
 	}
 	
-	@SuppressWarnings("unchecked")
-	public boolean writeRowToDataSet(DataRow row, int[] specIndices, long rowIndex, Type[] copyValues,
-			Type standardValue, Rounding rounding) throws IOException, HDF5DataspaceInterfaceException {
-		Hdf5KnimeDataType knimeType = m_type.getKnimeType();
-		Type[] dataIn = (Type[]) knimeType.createArray((int) numberOfColumns());
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public boolean copyValuesToRow(long rowIndex, DataRow row, int[] dataRowColumnIndices, Hdf5DataSet<?>[] dataSets, long[] dataSetColumnIndices,
+			Type standardValue, Rounding rounding) throws HDF5DataspaceInterfaceException, IOException {
+		Object[] dataWrite = m_type.getHdfType().createArray((int) numberOfColumns());
+		Class outputClass = m_type.getHdfClass();
+		int dataSetCount = 0;
 		
-		int copyIndex = 0;
-		for (int i = 0; i < dataIn.length; i++) {
-			Type value = specIndices[i] >= 0 ? (Type) knimeType.getValueFromDataCell(row.getCell(specIndices[i])) : copyValues[copyIndex++];
-			dataIn[i] = value == null ? standardValue : value;
-		}
-		
-		return writeRow(dataIn, rowIndex, rounding);
+		try {
+			for (int i = 0; i < dataWrite.length; i++) {
+				if (dataRowColumnIndices[i] >= 0) {
+					Type value = (Type) m_type.getKnimeType().getValueFromDataCell(row.getCell(dataRowColumnIndices[i]));
+					value = value == null ? standardValue : value;
+					
+					Class knimeClass = m_type.getKnimeClass();
+					Class hdfClass = m_type.getHdfClass();
+					dataWrite[i] = m_type.knimeToHdf(knimeClass, knimeClass.cast(value), hdfClass, rounding);
+					
+				} else {
+					Hdf5DataSet<?> dataSet = dataSets[dataSetCount];
+		            Hdf5DataType type = dataSet.getType();
+					Object[] value = dataSet.getType().getHdfType().createArray(1);
+					long columnIndex = dataSetColumnIndices[dataSetCount];
+					
+					long memSpaceId = -1;
+					try {
+						long[] dims = dataSet.getDimensions();
+						long[] offset = new long[dims.length];
+						long[] count = new long[dims.length];
+						if (dims.length > 0) {
+							offset[0] = rowIndex;
+							for (int dim = offset.length-1; dim >= 2; i--) {
+								offset[i] = columnIndex % dims[i];
+								columnIndex = columnIndex / dims[i];
+							}
+							offset[1] = columnIndex;
+							Arrays.fill(count, 1);
+						}
+	
+						dataSet.checkDimensions(offset, count);
+			            memSpaceId = dataSet.selectChunk(offset, count);
+	
+						if (type.isHdfType(HdfDataType.STRING)) {
+			                if (type.isVlen()) {
+								long typeId = H5.H5Tget_native_type(type.getConstants()[0]);
+			                    H5.H5DreadVL(dataSet.getElementId(), typeId,
+			                    		memSpaceId, dataSet.getDataspaceId(), HDF5Constants.H5P_DEFAULT, value);
+			    				H5.H5Tclose(typeId);
+			                    
+			                } else {
+								H5.H5Dread_string(dataSet.getElementId(), type.getConstants()[1],
+										memSpaceId, dataSet.getDataspaceId(), HDF5Constants.H5P_DEFAULT, (String[]) value);
+							}
+						} else {
+				            H5.H5Dread(dataSet.getElementId(), type.getConstants()[1],
+				            		memSpaceId, dataSet.getDataspaceId(), HDF5Constants.H5P_DEFAULT, value);
+						}
+			        } finally {
+						dataSet.unselectChunk(memSpaceId);
+			        }
+					
+					Class inputClass = type.getHdfClass();
+					dataWrite[i] = type.hdfToHdf(inputClass, inputClass.cast(value[0]), outputClass, m_type, rounding);
+					dataSetCount++;
+				}
+			}
+			
+	    	long memSpaceId = -1;
+	    	try {
+	    		long[] offset = new long[m_dimensions.length];
+	    		long[] count = m_dimensions.clone();
+	    		if (m_dimensions.length > 0) {
+	    			offset[0] = rowIndex;
+	    			count[0] = 1;
+	    		}
+	    		
+	        	checkDimensions(offset, count);
+	    		memSpaceId = selectChunk(offset, count);
+	    		
+				if (m_type.isHdfType(HdfDataType.STRING)) {
+					return H5.H5Dwrite_string(getElementId(), m_type.getConstants()[1],
+							memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, (String[]) dataWrite) >= 0;
+					
+				} else {
+		            return H5.H5Dwrite(getElementId(), m_type.getConstants()[1],
+		            		memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, dataWrite) >= 0;
+				}
+	        } finally {
+				unselectChunk(memSpaceId);
+	        }
+		} catch (HDF5Exception | NullPointerException hnpe) {
+			throw new IOException(hnpe.getMessage(), hnpe);
+	    }
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -419,19 +496,16 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	                if (m_type.isVlen()) {
 						long typeId = H5.H5Tget_native_type(m_type.getConstants()[0]);
 	                    H5.H5DreadVL(getElementId(), typeId,
-	                    		memSpaceId, m_dataspaceId,
-								HDF5Constants.H5P_DEFAULT, dataOut);
+	                    		memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, dataOut);
 	    				H5.H5Tclose(typeId);
 	                    
 	                } else {
 						H5.H5Dread_string(getElementId(), m_type.getConstants()[1],
-								memSpaceId, m_dataspaceId,
-								HDF5Constants.H5P_DEFAULT, (String[]) dataOut);
+								memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, (String[]) dataOut);
 					}
 				} else if (m_type.hdfTypeEqualsKnimeType()) {
 		            H5.H5Dread(getElementId(), m_type.getConstants()[1],
-		            		memSpaceId, m_dataspaceId,
-		                    HDF5Constants.H5P_DEFAULT, dataOut);
+		            		memSpaceId, m_dataspaceId, HDF5Constants.H5P_DEFAULT, dataOut);
 					
 				} else {
 					Object[] dataRead = m_type.getHdfType().createArray(numberOfValues);

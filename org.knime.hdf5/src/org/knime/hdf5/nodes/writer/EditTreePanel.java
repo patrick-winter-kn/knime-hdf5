@@ -472,7 +472,7 @@ public class EditTreePanel extends JPanel {
 	
 	void loadConfiguration(EditTreeConfiguration editTreeConfig) {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
-		fileEdit.integrate(editTreeConfig.getFileNodeEdit());
+		fileEdit.integrateAndValidate(editTreeConfig.getFileNodeEdit());
 		fileEdit.reloadTreeWithEditVisible(true);
 	}
 }

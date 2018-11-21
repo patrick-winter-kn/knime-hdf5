@@ -215,95 +215,110 @@ abstract public class Hdf5TreeElement {
 		}
 	}
 	
-	@SuppressWarnings({ "unchecked", "rawtypes" })
-	public <Type> boolean createAndWriteAttribute(final String name, Type[] values) throws IOException {
-		Hdf5Attribute<Type> attribute = null;
-		Hdf5DataType dataType = null;
+	@SuppressWarnings("unchecked")
+	public Hdf5Attribute<?> createAndWriteAttribute(final String name, Object[] values, boolean unsigned) throws IOException {
+		Hdf5Attribute<Object> attribute = null;
 		
-		Class valuesType = values.getClass().getComponentType();
-		if (valuesType == Integer.class) {
-			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.INT32, Endian.BIG_ENDIAN),
-					Hdf5KnimeDataType.INTEGER, false, false, 0L);
-			
-		} else if (valuesType == Double.class) {
-			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.FLOAT64, Endian.BIG_ENDIAN),
-					Hdf5KnimeDataType.DOUBLE, false, false, 0L);
-			
-		} else if (valuesType == String.class) {
-			long stringLength = 0;
-			for (Type value : values) {
+		HdfDataType hdfType = HdfDataType.getHdfDataType(values, unsigned);
+		Hdf5KnimeDataType knimeType = Hdf5KnimeDataType.getKnimeDataType(hdfType, false);
+		long stringLength = 0L;
+		if (hdfType == HdfDataType.STRING) {
+			for (Object value : values) {
 				long length = ((String) value).length();
 				stringLength = length > stringLength ? length : stringLength;
 			}
-			dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(HdfDataType.STRING, Endian.BIG_ENDIAN),
-					Hdf5KnimeDataType.STRING, false, false, stringLength);
 		}
+		Hdf5DataType dataType = Hdf5DataType.createDataType(Hdf5HdfDataType.getInstance(hdfType, Endian.BIG_ENDIAN),
+				knimeType, false, false, stringLength);
 		
 		if (dataType != null) {
-			attribute = (Hdf5Attribute<Type>) createAttribute(name, values.length, dataType);
-			return attribute.write(values, Rounding.DOWN);
+			attribute = (Hdf5Attribute<Object>) createAttribute(name, values.length, dataType);
+			
+			boolean success = false;
+			try {
+				success = attribute.write(values, Rounding.DOWN);
+				
+			} finally {
+				if (!success && existsAttribute(name)) {
+					deleteAttribute(name);
+				}
+			}
 		}
 		
-		return false;
+		return existsAttribute(name) ? getAttribute(name) : null;
 	}
 	
 	@SuppressWarnings("unchecked")
-	public Hdf5Attribute<Object> createAndWriteAttribute(AttributeNodeEdit edit, FlowVariable flowVariable) throws IOException {
-		boolean success = false;
-		
+	public Hdf5Attribute<?> createAndWriteAttribute(AttributeNodeEdit edit, FlowVariable flowVariable) throws IOException {
 		Object[] values = Hdf5Attribute.getFlowVariableValues(flowVariable);
 		Hdf5Attribute<Object> attribute = (Hdf5Attribute<Object>) createAttributeFromEdit(edit, values.length);
 		if (attribute != null) {
 			Rounding rounding = edit.getEditDataType().getRounding();
 			
-			if (!edit.isFlowVariableArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
-				success = attribute.write(new String[] { flowVariable.getStringValue() }, rounding);
-			} else {
-				success = attribute.write(values, rounding);
+			boolean success = false;
+			try {
+				if (!edit.isFlowVariableArrayUsed() && flowVariable.getType() == FlowVariable.Type.STRING) {
+					success = attribute.write(new String[] { flowVariable.getStringValue() }, rounding);
+				} else {
+					success = attribute.write(values, rounding);
+				}
+			} finally {
+				if (!success && existsAttribute(edit.getName())) {
+					deleteAttribute(edit.getName());
+				}
 			}
 		}
 	
-		return success ? attribute : null;
+		return existsAttribute(edit.getName()) ? getAttribute(edit.getName()) : null;
 	}
 	
-	@SuppressWarnings("unchecked")
 	public Hdf5Attribute<?> createAndWriteAttribute(AttributeNodeEdit edit, Hdf5Attribute<?> copyAttribute) throws IOException {
-		boolean success = false;
-		Hdf5Attribute<Object> newAttribute = null;
-		
 		try {
-			newAttribute = (Hdf5Attribute<Object>) createAttributeFromEdit(edit, copyAttribute.getDimension());
-			
+			Hdf5Attribute<?> newAttribute = createAttributeFromEdit(edit, copyAttribute.getDimension());
 			if (newAttribute != null) {
-				copyAttribute.open();
-				success = copyAttribute.copyValuesTo(newAttribute, edit.getEditDataType().getRounding());
+				boolean success = false;
+				try {
+					copyAttribute.open();
+					success = newAttribute.copyValuesFrom(copyAttribute, edit.getEditDataType().getRounding());
+					
+				} finally {
+					if (!success && existsAttribute(edit.getName())) {
+						deleteAttribute(edit.getName());
+					}
+				}
 			}
 		} catch (HDF5LibraryException | IOException hlioe) {
 			throw new IOException("Attribute \"" + copyAttribute.getPathFromFileWithName()
 					+ "\" could not be copied to \"" + getPathFromFileWithName() + "\": " + hlioe.getMessage(), hlioe);
 		}
 		
-		return success ? newAttribute : null;
+		return existsAttribute(edit.getName()) ? getAttribute(edit.getName()) : null;
 	}
 	
-	@SuppressWarnings("unchecked")
 	public Hdf5Attribute<?> copyAttribute(Hdf5Attribute<?> copyAttribute, Hdf5TreeElement newParent, String newName) throws IOException {
-		boolean success = false;
-		Hdf5Attribute<Object> newAttribute = null;
+		Hdf5Attribute<?> newAttribute = null;
 		
 		try {
-			newAttribute = (Hdf5Attribute<Object>) newParent.createAttribute(newName, copyAttribute.getDimension(), Hdf5DataType.createCopyFrom(copyAttribute.getType()));
+			newAttribute = newParent.createAttribute(newName, copyAttribute.getDimension(), Hdf5DataType.createCopyFrom(copyAttribute.getType()));
 			
 			if (newAttribute != null) {
-				copyAttribute.open();
-				success = copyAttribute.copyValuesTo(newAttribute, Rounding.DOWN);
+				boolean success = false;
+				try {
+					copyAttribute.open();
+					success = newAttribute.copyValuesFrom(copyAttribute, Rounding.DOWN);
+					
+				} finally {
+					if (!success && existsAttribute(newName)) {
+						deleteAttribute(newName);
+					}
+				}
 			}
 		} catch (HDF5LibraryException | IOException hlioe) {
 			throw new IOException("Attribute \"" + copyAttribute.getPathFromFileWithName()
 					+ "\" could not be copied with name \"" + newName + "\": " + hlioe.getMessage(), hlioe);
 		}
-		
-		return success ? newAttribute : null;
+
+		return existsAttribute(newName) ? getAttribute(newName) : null;
 	}
 	
 	public synchronized Hdf5Attribute<?> getAttribute(final String name) throws IOException {
