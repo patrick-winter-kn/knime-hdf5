@@ -408,51 +408,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			copyColumnEdit.copyColumnEditTo(this, false).setHdfObject((Hdf5DataSet<?>) getHdfObject());
 		}
 		
-		/*
-		List<ColumnNodeEdit> newColumnEditList = new ArrayList<>(m_columnEdits);
-		List<ColumnNodeEdit> editedColumnEdits = new ArrayList<>();
-		
-		for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
-			if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
-				copyColumnEdit.setInputRowCount(inputRowCount);
-			}
-			
-			ColumnNodeEdit columnEdit = getColumnNodeEdit(copyColumnEdit.getInputPathFromFileWithName(), copyColumnEdit.getInputColumnIndex());
-			if (columnEdit != null) {
-				newColumnEditList.remove(columnEdit);
-			}
-			editedColumnEdits.add(copyColumnEdit);
-			copyEdit.removeColumnNodeEdit(copyColumnEdit);
-		}
-		
-		for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
-			removeColumnNodeEdit(columnEdit);
-		}
-		
-		for (ColumnNodeEdit copyColumnEdit : editedColumnEdits) {
-			int index = copyColumnEdit.getOutputColumnIndex();
-			int size = newColumnEditList.size();
-			newColumnEditList.add(index >= 0 && index <= size ? index : size, copyColumnEdit);
-		}
-		
-		for (ColumnNodeEdit newColumn : newColumnEditList) {
-			newColumn.copyColumnEditTo(this, false);
-			newColumn.copyColumnEditTo(copyEdit, false);
-		}
-		*/
-		
-		
-		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
-			if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
-				AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
-				boolean isCreateOrCopyAction = copyAttributeEdit.getEditAction().isCreateOrCopyAction();
-				if (attributeEdit != null && !isCreateOrCopyAction) {
-					attributeEdit.copyPropertiesFrom(copyAttributeEdit);
-				} else {
-					copyAttributeEdit.copyAttributeEditTo(this, false);
-				}
-			}
-		}
+		integrateAttributeEdits(copyEdit);
 	}
 	
 	@Override

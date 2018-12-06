@@ -365,6 +365,27 @@ public abstract class TreeNodeEdit {
 	protected void setEditState(EditState editState) {
 		m_editState = editState;
 	}
+
+	protected void integrateAttributeEdits(TreeNodeEdit copyEdit) {
+		if ((this instanceof GroupNodeEdit || this instanceof DataSetNodeEdit)
+				&& (copyEdit instanceof GroupNodeEdit || copyEdit instanceof DataSetNodeEdit)) {
+			AttributeNodeEdit[] copyAttributeEdits = copyEdit instanceof GroupNodeEdit
+					? ((GroupNodeEdit) copyEdit).getAttributeNodeEdits() : ((DataSetNodeEdit) copyEdit).getAttributeNodeEdits();
+			for (AttributeNodeEdit copyAttributeEdit : copyAttributeEdits) {
+				if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
+					AttributeNodeEdit attributeEdit = this instanceof GroupNodeEdit
+							? ((GroupNodeEdit) this).getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction())
+							: ((DataSetNodeEdit) this).getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
+					boolean isCreateOrCopyAction = copyAttributeEdit.getEditAction().isCreateOrCopyAction();
+					if (attributeEdit != null && !isCreateOrCopyAction) {
+						attributeEdit.copyPropertiesFrom(copyAttributeEdit);
+					} else {
+						copyAttributeEdit.copyAttributeEditTo(this, false);
+					}
+				}
+			}
+		}
+	}
 	
 	protected abstract boolean havePropertiesChanged(Object hdfSource);
 	
@@ -1155,7 +1176,7 @@ public abstract class TreeNodeEdit {
 		try {
 			if (m_editState == EditState.ROLLBACK_NOTHING_TODO
 					|| m_parent.getEditState() == EditState.ROLLBACK_SUCCESS
-					&& (m_parent.getEditAction() == EditAction.DELETE || m_parent.getEditAction() == EditAction.MODIFY && m_hdfBackup != null)) {
+					&& (m_parent.getEditAction() == EditAction.DELETE || m_parent.getEditAction() == EditAction.MODIFY && m_parent.getHdfBackup() != null)) {
 					// this edit's rollback has already been done successfully in the parent's rollback
 				success = true;
 				
@@ -1176,7 +1197,10 @@ public abstract class TreeNodeEdit {
 						setHdfObject(treeElement.getParent().moveObject(treeElement.getName(), treeElement.getParent(), newName));
 					}
 					success = m_hdfObject != null;
-					// do not set m_hdfBackup to null here because '!=null' check is needed for children
+					/* 
+					 * do not set m_hdfBackup to null here because '!=null' check is needed for children
+					 * (at the beginning of this try-finally-block)
+					 */
 					break;
 				default:
 					success = true;

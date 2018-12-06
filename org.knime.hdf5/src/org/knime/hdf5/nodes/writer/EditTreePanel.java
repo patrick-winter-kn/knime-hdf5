@@ -426,6 +426,10 @@ public class EditTreePanel extends JPanel {
 	JTree getTree() {
 		return m_tree;
 	}
+	
+	String getFilePathOfRoot() {
+		return m_editTreeConfig.getFileNodeEdit() != null ? m_editTreeConfig.getFileNodeEdit().getFilePath() : null;
+	}
 
 	void updateTreeWithResetConfig() throws IOException {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();

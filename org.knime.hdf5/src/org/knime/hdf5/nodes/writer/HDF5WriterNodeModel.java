@@ -142,9 +142,9 @@ public class HDF5WriterNodeModel extends NodeModel {
 		}
 	}
 	
-	static String getFilePathFromUrlPath(String urlPath, boolean mustExist) throws InvalidSettingsException {
-		if (urlPath.trim().isEmpty()) {
-			throw new InvalidSettingsException("No file selected");
+	static String getFilePathFromUrlPath(String urlPath, boolean mustExist) throws IOException {
+		if (urlPath == null || urlPath.trim().isEmpty()) {
+			throw new IOException("No file selected");
 		}
         
         try {
@@ -157,8 +157,8 @@ public class HDF5WriterNodeModel extends NodeModel {
             
             return filePath.toString();
             
-        } catch (InvalidPathException | IOException | URISyntaxException | NullPointerException ipiousnpe) {
-        	throw new InvalidSettingsException("Incorrect file path/url: " + ipiousnpe.getMessage(), ipiousnpe);
+        } catch (InvalidSettingsException | InvalidPathException | IOException | URISyntaxException | NullPointerException isipiousnpe) {
+        	throw new IOException("Incorrect file path/url: " + isipiousnpe.getMessage(), isipiousnpe);
         }
 	}
 
@@ -187,13 +187,14 @@ public class HDF5WriterNodeModel extends NodeModel {
 		SettingsModelString fileOverWritePolicySettings = SettingsFactory.createFileOverwritePolicySettings();
 		fileOverWritePolicySettings.validateSettings(settings);
 		fileOverWritePolicySettings.loadSettingsFrom(settings);
+		EditOverwritePolicy policy = EditOverwritePolicy.get(fileOverWritePolicySettings.getStringValue());
 		
 		SettingsModelBoolean saveColumnPropertiesSettings = SettingsFactory.createSaveColumnPropertiesSettings();
 		saveColumnPropertiesSettings.validateSettings(settings);
 		saveColumnPropertiesSettings.loadSettingsFrom(settings);
 		
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
-		editTreeConfig.loadConfiguration(settings);
+		editTreeConfig.loadConfiguration(settings, null, policy);
 		checkForErrors(editTreeConfig, null);
 	}
 
@@ -204,18 +205,17 @@ public class HDF5WriterNodeModel extends NodeModel {
 		m_saveColumnPropertiesSettings.loadSettingsFrom(settings);
 		
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
-		editTreeConfig.loadConfiguration(settings);
+		editTreeConfig.loadConfiguration(settings, null, EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()));
 		m_editTreeConfig = editTreeConfig;
 	}
 
 	@Override
 	protected void reset() {
-		EditOverwritePolicy policy = EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue());
 		try {
-			m_editTreeConfig.updateFilePathOfConfig(policy == EditOverwritePolicy.RENAME);
-			
+			m_editTreeConfig.updateConfiguration(m_filePathSettings.getStringValue(),
+					EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()));
 		} catch (IOException ioe) {
-			NodeLogger.getLogger(getClass()).error("Config of file path after reset could not be updated: " + ioe.getMessage(), ioe);
+			NodeLogger.getLogger("HDF5 Files").error("Reset failed: " + ioe.getMessage(), ioe);
 		}
 	}
 }

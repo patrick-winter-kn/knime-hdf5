@@ -56,6 +56,7 @@ import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
 import org.knime.hdf5.nodes.writer.edit.EditOverwritePolicy;
+import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 
@@ -95,8 +96,8 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 					} else {
 						fileInfoLabel.setText("Error: File ending is not valid");
 					}
-				} catch (InvalidSettingsException ise) {
-					fileInfoLabel.setText("Error: " + ise.getMessage());
+				} catch (IOException ioe) {
+					fileInfoLabel.setText("Error: " + ioe.getMessage());
 				}
 			}
 		});
@@ -336,16 +337,18 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 		try {
-			editTreeConfig.loadConfiguration(settings);
+    		EditOverwritePolicy policy = EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue());
+			editTreeConfig.loadConfiguration(settings, m_editTreePanel.getFilePathOfRoot(), policy);
 			
 			boolean fileEditExists = editTreeConfig.getFileNodeEdit() != null;
 	    	if (!m_filePathSettings.getStringValue().trim().isEmpty() || fileEditExists) {
-	    		EditOverwritePolicy policy = EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue());
-				m_editTreePanel.updateTreeWithResetConfig(fileEditExists ? editTreeConfig.getFilePathToUpdate(policy == EditOverwritePolicy.RENAME)
-						: getFilePathFromSettings(), false, policy == EditOverwritePolicy.OVERWRITE);
-
+				//m_editTreePanel.updateTreeWithResetConfig(fileEditExists ? editTreeConfig.getFilePathToUpdate(policy == EditOverwritePolicy.RENAME)
+				//		: getFilePathFromSettings(), false, policy == EditOverwritePolicy.OVERWRITE);
+	    		FileNodeEdit fileEdit = editTreeConfig.getFileNodeEdit();
+	    		m_editTreePanel.updateTreeWithFile(fileEdit.getFilePath(), fileEdit.isOverwriteHdfFile(), false);
+	    		
 				// TODO test it
-				editTreeConfig.getFileNodeEdit().validateCreateActions(colSpecs, getAvailableFlowVariables());
+	    		fileEdit.validateCreateActions(colSpecs, getAvailableFlowVariables());
 				m_editTreePanel.loadConfiguration(editTreeConfig);
 			}
 		} catch (IOException | InvalidSettingsException ioise) {

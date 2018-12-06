@@ -212,6 +212,14 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
 			if (copyGroupEdit.getEditAction() != EditAction.NO_ACTION) {
 				GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
+				if (groupEdit == null) {
+					DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
+					if (dataSetEdit != null) {
+						dataSetEdit.integrateAttributeEdits(copyGroupEdit);
+						break;
+					}
+				}
+				
 				boolean isCreateOrCopyAction = copyGroupEdit.getEditAction().isCreateOrCopyAction();
 				if (groupEdit != null && !isCreateOrCopyAction) {
 					if (copyGroupEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
@@ -228,6 +236,14 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		for (DataSetNodeEdit copyDataSetEdit : copyEdit.getDataSetNodeEdits()) {
 			if (copyDataSetEdit.getEditAction() != EditAction.NO_ACTION) {
 				DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
+				if (dataSetEdit == null) {
+					GroupNodeEdit groupEdit = getGroupNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
+					if (groupEdit != null) {
+						groupEdit.integrateAttributeEdits(copyDataSetEdit);
+						break;
+					}
+				}
+				
 				boolean isCreateOrCopyAction = copyDataSetEdit.getEditAction().isCreateOrCopyAction();
 				if (dataSetEdit != null && !isCreateOrCopyAction) {
 					if (copyDataSetEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
@@ -246,17 +262,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			}
 		}
 		
-		for (AttributeNodeEdit copyAttributeEdit : copyEdit.getAttributeNodeEdits()) {
-			if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
-				AttributeNodeEdit attributeEdit = getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
-				boolean isCreateOrCopyAction = copyAttributeEdit.getEditAction().isCreateOrCopyAction();
-				if (attributeEdit != null && !isCreateOrCopyAction) {
-					attributeEdit.copyPropertiesFrom(copyAttributeEdit);
-				} else {
-					copyAttributeEdit.copyAttributeEditTo(this, false);
-				}
-			}
-		}
+		integrateAttributeEdits(copyEdit);
 	}
 	
 	@Override

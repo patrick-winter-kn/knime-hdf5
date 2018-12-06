@@ -96,10 +96,22 @@ public class FileNodeEdit extends GroupNodeEdit {
 		return attributeEdit;
 	}
 	
-	public static FileNodeEdit useFileSettings(final NodeSettingsRO settings) throws InvalidSettingsException {
-		FileNodeEdit edit = new FileNodeEdit(settings.getString(SettingsKey.FILE_PATH.getKey()),
-				settings.getBoolean(SettingsKey.OVERWRITE_HDF_FILE.getKey()),
-				EditAction.get(settings.getString(SettingsKey.EDIT_ACTION.getKey())));
+	public static FileNodeEdit useFileSettings(final NodeSettingsRO settings, String filePath, final EditOverwritePolicy policy) throws InvalidSettingsException {
+		FileNodeEdit edit = null;
+		
+		if (filePath == null || filePath.trim().isEmpty()) {
+			filePath = settings.getString(SettingsKey.FILE_PATH.getKey());
+		}
+		try {
+			String renamedFilePath = policy == EditOverwritePolicy.RENAME ? Hdf5File.getUniqueFilePath(filePath) : filePath;
+			EditAction editAction = policy == EditOverwritePolicy.OVERWRITE || !filePath.equals(renamedFilePath)
+					? EditAction.CREATE : EditAction.get(settings.getString(SettingsKey.EDIT_ACTION.getKey()));
+			
+			edit = new FileNodeEdit(renamedFilePath, policy == EditOverwritePolicy.OVERWRITE, editAction);
+			
+		} catch (IOException ioe) {
+			throw new InvalidSettingsException(ioe.getMessage(), ioe);
+		}
 	    
 		edit.loadSettingsFrom(settings);
 		return edit;
@@ -321,15 +333,10 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 
 	@Override
-	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) {
-		try {
-			setHdfObject(Hdf5File.createFile(m_filePath));
-			return getHdfObject() != null;
-			
-		} catch (IOException ioe) {
-			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-		}
-		return false;
+	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables,
+			boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException {
+		setHdfObject(Hdf5File.createFile(m_filePath));
+		return getHdfObject() != null;
 	}
 
 	@Override
@@ -398,18 +405,21 @@ public class FileNodeEdit extends GroupNodeEdit {
 					(edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).add(edit.getInputPathFromFileWithName());
 				}
 			}
-			
-			for (TreeNodeEdit edit : rollbackEdits) {
+
+			for (TreeNodeEdit edit : rollbackEdits.toArray(new TreeNodeEdit[rollbackEdits.size()])) {
 				if (edit.getHdfBackup() == null && !edit.getEditAction().isCreateOrCopyAction()
 						&& (edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).contains(edit.getOutputPathFromFileWithName(true))) {
 					success &= edit.createBackup();
 				}
+				// in case hdfObject was created/edited before the fail, delete it so that it can be substituted by hdfBackup
 				if (edit.getHdfBackup() != null && edit.getHdfObject() != null) {
 					try {
 						success &= edit.deleteAction();
 					} catch (IOException ioe) {
 						success = false;
-						NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+						rollbackEdits.remove(edit);
+						edit.setEditState(EditState.ROLLBACK_FAIL);
+						NodeLogger.getLogger(getClass()).error("Fail in rollback of \"" + edit.getOutputPathFromFileWithName() + "\": " + ioe.getMessage(), ioe);
 					}
 				}
 			}
