@@ -149,6 +149,7 @@ public abstract class TreeNodeEdit {
 		COLUMN_OVERWRITE("cannot find column to overwrite"),
 		COLUMN_INDEX("no such column index exists in the dataSet source"),
 		INPUT_DATA_TYPE("input data type from source and config do not fit together"),
+		INPUT_ROW_SIZE("input row size from source and config do not fit together"),
 		OUTPUT_DATA_TYPE("some values do not fit into data type"),
 		MISSING_VALUES("there are some missing values");
 
@@ -410,8 +411,8 @@ public abstract class TreeNodeEdit {
 
 	protected boolean avoidsOverwritePolicyNameConflict(TreeNodeEdit edit) {
 		if (getClass() == edit.getClass()) {
-			boolean wasHereBefore = getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName());
-			if (wasHereBefore || edit.getOutputPathFromFileWithName(true).equals(edit.getInputPathFromFileWithName())) {
+			boolean wasHereBefore = !getEditAction().isCreateOrCopyAction() && getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName());
+			if (wasHereBefore || !edit.getEditAction().isCreateOrCopyAction() && edit.getOutputPathFromFileWithName(true).equals(edit.getInputPathFromFileWithName())) {
 				EditOverwritePolicy policy = (wasHereBefore ? edit : this).getEditOverwritePolicy();
 				if (policy == EditOverwritePolicy.INTEGRATE) {
 					// TODO does not include every case
@@ -551,13 +552,13 @@ public abstract class TreeNodeEdit {
 			if (m_hdfBackup != null) {
 				if (m_hdfBackup instanceof Hdf5File) {
 					Hdf5File file = (Hdf5File) m_hdfBackup;
-					success = file.isValid() ? file.deleteFile() : true;
+					success = file.exists() ? file.deleteFile() : true;
 				} else if (m_hdfBackup instanceof Hdf5TreeElement) {
 					Hdf5TreeElement treeElement = (Hdf5TreeElement) m_hdfBackup;
-					success = treeElement.isValid() ? treeElement.getParent().deleteObject(treeElement.getName()) >= 0 : true;
+					success = treeElement.exists() ? treeElement.getParent().deleteObject(treeElement.getName()) : true;
 				} else if (m_hdfBackup instanceof Hdf5Attribute<?>) {
 					Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) m_hdfBackup;
-					success = attribute.isValid() ? attribute.getParent().deleteAttribute(attribute.getName()) >= 0 : true;
+					success = attribute.exists() ? attribute.getParent().deleteAttribute(attribute.getName()) : true;
 				}
 			}
 		} catch (IOException ioe) {

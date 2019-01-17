@@ -45,7 +45,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 		m_filePath = filePath;
 		m_overwriteHdfFile = overwriteFile;
 	}
-
+	
 	public String getFilePath() {
 		return m_filePath;
 	}
@@ -263,7 +263,11 @@ public class FileNodeEdit extends GroupNodeEdit {
 			
 		} finally {
 			if (file != null) {
-				file.close();
+				try {
+					file.close();
+				} catch (IOException ioe) {
+					NodeLogger.getLogger("HDF5 Files").error(ioe.getMessage(), ioe);
+				}
 			}
 		}
 	}

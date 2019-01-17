@@ -239,9 +239,13 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 						TreeNodeEdit copyEdit = getEditAction() == EditAction.COPY ? getCopyEdit() : this;
 						Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) copyEdit.getHdfSource();
 						dataSet.open();
-						// only supported for dataSets with max. 2 dimensions
-						values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
 						
+						// only supported for dataSets with max. 2 dimensions
+						if (m_inputRowCount == dataSet.numberOfRows()) {
+							values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
+						} else {
+							cause = InvalidCause.INPUT_ROW_SIZE;
+						}
 					} catch (IOException ioe) {
 						NodeLogger.getLogger(getClass()).error("Validation of dataType of new column \""
 								+ getOutputPathFromFileWithName() +  "\" could not be checked: " + ioe.getMessage(), ioe);

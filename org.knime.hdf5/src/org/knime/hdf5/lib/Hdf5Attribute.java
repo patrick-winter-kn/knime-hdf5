@@ -3,8 +3,6 @@ package org.knime.hdf5.lib;
 import java.io.IOException;
 import java.util.Arrays;
 
-import javax.activation.UnsupportedDataTypeException;
-
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.types.Hdf5DataType;
@@ -259,12 +257,25 @@ public class Hdf5Attribute<Type> {
 		return getPathFromFile() + getName();
 	}
 	
-	public boolean isValid() {
-		return m_attributeId != -1;
+	public boolean exists() throws IOException {
+		return m_parent != null && m_parent.existsAttribute(m_name);
+	}
+	
+	private void checkExists() throws IOException {
+    	if (!exists()) {
+			throw new IOException("Attribute does not exist");
+		}
+	}
+	
+	private void checkOpen() throws IOException {
+		checkExists();
+    	if (!m_open) {
+			throw new IOException("Attribute is not open");
+		}
 	}
 
 	public Hdf5Attribute<?> createBackup(String prefix) throws IOException {
-		return m_parent.copyAttribute(this, m_parent, Hdf5TreeElement.getUniqueName(m_parent.loadAttributeNames(), prefix + m_name));
+		return m_parent.copyAttribute(this, m_parent, Hdf5TreeElement.getUniqueName(Arrays.asList(m_parent.loadAttributeNames()), prefix + m_name));
 	}
 	
 	/**
@@ -279,6 +290,8 @@ public class Hdf5Attribute<Type> {
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public boolean write(final Type[] value, Rounding rounding) throws IOException {
         try {
+        	checkOpen();
+        	
 			int dim = (int) m_dimension;
         	if (dim > 0) {
             	if (m_type.isHdfType(HdfDataType.STRING)) {
@@ -315,24 +328,23 @@ public class Hdf5Attribute<Type> {
 			m_value = value;
 			return true;
 			
-		} catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException hudtnpe) {
+		} catch (HDF5Exception | IOException | NullPointerException hionpe) {
             throw new IOException("Attribute \"" + getPathFromFileWithName()
-            		+ "\" could not be written: " + hudtnpe.getMessage(), hudtnpe);
+            		+ "\" could not be written: " + hionpe.getMessage(), hionpe);
 		}
 	}
 	
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public boolean copyValuesFrom(Hdf5Attribute<?> attribute, Rounding rounding) throws HDF5DataspaceInterfaceException, IOException {
-		if (!m_open || !attribute.isOpen()) {
-			throw new IOException("Attribute \"" + (!m_open ? this : attribute).getPathFromFileWithName() + "\" is not open");
-		}
-		
-		if (m_dimension != attribute.getDimension()) {
-			throw new HDF5DataspaceInterfaceException("Attributes \"" + getPathFromFileWithName() + "\" and \""
-					+ attribute.getPathFromFileWithName() + "\" do not have the same length");
-		}
-		
 		try {
+			checkOpen();
+			attribute.checkOpen();
+			
+			if (m_dimension != attribute.getDimension()) {
+				throw new HDF5DataspaceInterfaceException("Attributes \"" + getPathFromFileWithName() + "\" and \""
+						+ attribute.getPathFromFileWithName() + "\" do not have the same length");
+			}
+			
 			if (m_type.isSimilarTo(attribute.getType())) {
 				return H5.H5Acopy(attribute.getAttributeId(), m_attributeId) >= 0;
 			}
@@ -395,8 +407,9 @@ public class Hdf5Attribute<Type> {
 			} else {
 				return H5.H5Awrite(m_attributeId, m_type.getConstants()[1], dataWrite) >= 0;
 			}
-		} catch (HDF5Exception | NullPointerException hnpe) {
-			throw new IOException(hnpe.getMessage(), hnpe);
+		} catch (HDF5Exception | IOException | NullPointerException hionpe) {
+			throw new IOException("Values of attribute \"" + getPathFromFileWithName() + "\" could not be copied to \""
+					+ attribute.getPathFromFileWithName() + "\": " + hionpe.getMessage(), hionpe);
 	    }
 	}
 	
@@ -419,6 +432,8 @@ public class Hdf5Attribute<Type> {
 		Type[] dataOut = null;
 		
 		try {
+			checkOpen();
+			
 			if (m_dimension > Integer.MAX_VALUE) {
 	            NodeLogger.getLogger("HDF5 Files").warn("Attribute \"" + getPathFromFileWithName()
 	            		+ "\" contains more values than it could be read");
@@ -463,8 +478,9 @@ public class Hdf5Attribute<Type> {
 					}
 				}
 			}
-		} catch (HDF5Exception | UnsupportedDataTypeException | NullPointerException hudtnpe) {
-			throw new IOException(hudtnpe.getMessage(), hudtnpe);
+		} catch (HDF5Exception | IOException | NullPointerException hionpe) {
+			throw new IOException("Attribute \"" + getPathFromFileWithName()
+					+ "\" could not be read: " + hionpe.getMessage(), hionpe);
         }
 		
 		m_value = dataOut;
@@ -474,15 +490,14 @@ public class Hdf5Attribute<Type> {
 	/**
 	 * Opens this attribute. Does nothing if it is already open. If the parent is not open, the
 	 * parent will also be opened so that the attribute can be opened too. Also opens the dataSpace
-	 * of this attribute to load the dimension of this attribute. <br>
-	 * Be careful that the returning {@code boolean} of this method is not the same as calling
-	 * {@code isOpen()} afterwards.
+	 * of this attribute to load the dimension of this attribute.
 	 * 
-	 * @return {@code true} if this attribute was not open before and is open now,
-	 * 			{@code false} otherwise
+	 * @return {@code true} if this attribute is open
 	 */
 	public boolean open() throws IOException, IllegalStateException {
 		try {
+			checkExists();
+			
 			if (!isOpen()) {
 				if (!getParent().isOpen()) {
 					getParent().open();
@@ -493,15 +508,14 @@ public class Hdf5Attribute<Type> {
 				
 				setOpen(true);
 		    	loadDimension();
-		    	
-				return true;
 			}
-		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+	    	
+			return true;
+			
+		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
 			throw new IOException("Attribute \"" + getPathFromFileWithName()
-            		+ "\" could not be opened", hlnpe);
+					+ "\" could not be opened: " + hlionpe.getMessage(), hlionpe);
         }
-		
-		return false;
 	}
 	
 	private void createDimension(long dimension) throws IOException {
@@ -521,42 +535,35 @@ public class Hdf5Attribute<Type> {
 	private void loadDimension() throws IOException, IllegalStateException {
 		// Get dataSpace and allocate memory for read buffer.
 		try {
-			if (isOpen()) {
-				m_dataspaceId = H5.H5Aget_space(m_attributeId);
+			m_dataspaceId = H5.H5Aget_space(m_attributeId);
+			
+			long dimension = 1;
+			int ndims = H5.H5Sget_simple_extent_ndims(m_dataspaceId);
+			// scalar attributes have ndims == 0 by definition
+			if (ndims > 0) { 
+				long[] dims = new long[ndims];
+				H5.H5Sget_simple_extent_dims(m_dataspaceId, dims, null);
+                for (int j = 0; j < dims.length; j++) {
+                    dimension *= dims[j];
+                }
+            }
+			
+			m_dimension = dimension;
 				
-				long dimension = 1;
-				int ndims = H5.H5Sget_simple_extent_ndims(m_dataspaceId);
-				// scalar attributes have ndims == 0 by definition
-				if (ndims > 0) { 
-					long[] dims = new long[ndims];
-					H5.H5Sget_simple_extent_dims(m_dataspaceId, dims, null);
-	                for (int j = 0; j < dims.length; j++) {
-	                    dimension *= dims[j];
-	                }
-	            }
-				
-				m_dimension = dimension;
-				
-			} else {
-				throw new IllegalStateException("Attribute \""
-						+ getPathFromFileWithName() + "\" is not open");
-			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			throw new IOException("Dimension for attribute \""
-					+ getPathFromFileWithName() + "\" could not be loaded", hlnpe);
+					+ getPathFromFileWithName() + "\" could not be loaded: " + hlnpe.getMessage(), hlnpe);
         }
 	}
 	
 	/**
 	 * Closes this attribute. Does nothing if it is already closed. The dataSpace of this attribute
-	 * will also be closed. <br>
-	 * Be careful that the returning {@code boolean} of this method is not the same as calling
-	 * {@code !isOpen()} afterwards.
+	 * will also be closed.
 	 * 
-	 * @return {@code true} if this attribute was open before and is not open now,
-	 * 			{@code false} otherwise
+	 * @return {@code true} if this attribute is closed
+	 * @throws IOException 
 	 */
-	public boolean close() {
+	public boolean close() throws IOException {
 		/* TODO at the site
 		 * https://support.hdfgroup.org/ftp/HDF5/hdf-java/hdf-java-examples/jnative/h5/
 		 * HDF5AttributeCreate.java
@@ -564,20 +571,28 @@ public class Hdf5Attribute<Type> {
 		 * 
 		 */
         try {
+        	checkExists();
+        	
+        	boolean success = true;
+        	
             if (isOpen()) {
-                H5.H5Sclose(m_dataspaceId);
-                m_dataspaceId = -1;
-
-                H5.H5Aclose(m_attributeId);
+                success &= H5.H5Sclose(m_dataspaceId) >= 0;
                 
-                setOpen(false);
-                return true;
+                if (success) {
+                	m_dataspaceId = -1;
+                    success &= H5.H5Aclose(m_attributeId) >= 0;
+                }
+
+                if (success) {
+                    setOpen(false);
+                }
             }
-        } catch (HDF5LibraryException hle) {
-			NodeLogger.getLogger("HDF5 Files").error("Attribute \"" + getPathFromFileWithName()
-					+ "\" could not be closed");
+            
+            return success;
+            
+        } catch (HDF5LibraryException | IOException hlioe) {
+			throw new IOException("Attribute \"" + getPathFromFileWithName()
+					+ "\" could not be closed: " + hlioe.getMessage(), hlioe);
         }
-        
-        return false;
 	}
 }

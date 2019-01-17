@@ -2,6 +2,7 @@ package org.knime.hdf5.nodes.writer.edit;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
@@ -368,16 +369,18 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		Hdf5Group group = (Hdf5Group) getHdfObject();
 		
     	try {
-    		List<String> groupNames = group.loadGroupNames();
-    		for (String groupName : groupNames) {
+    		List<String> otherObjectNames = new ArrayList<>(Arrays.asList(group.loadObjectNames()));
+    		
+    		for (String groupName : group.loadGroupNames()) {
     			Hdf5Group child = group.getGroup(groupName);
     			GroupNodeEdit childEdit = new GroupNodeEdit(this, child);
     			childEdit.addEditToParentNodeIfPossible();
     			childEdit.loadChildrenOfHdfObject();
+    			
+    			otherObjectNames.remove(groupName);
     		}
 
-    		List<String> dataSetNames = group.loadDataSetNames();
-    		for (String dataSetName : dataSetNames) {
+    		for (String dataSetName : group.loadDataSetNames()) {
     			DataSetNodeEdit childEdit = null;
     			try {
         			Hdf5DataSet<?> child = group.updateDataSet(dataSetName);
@@ -394,11 +397,9 @@ public class GroupNodeEdit extends TreeNodeEdit {
         			childEdit = new DataSetNodeEdit(this, dataSetName, "Unsupported data type");
         			childEdit.addEditToParentNodeIfPossible();
     			}
+    			otherObjectNames.remove(dataSetName);
     		}
     		
-    		List<String> otherObjectNames = group.loadObjectNames();
-    		otherObjectNames.removeAll(groupNames);
-    		otherObjectNames.removeAll(dataSetNames);
     		for (String otherObjectName : otherObjectNames) {
     			UnsupportedObjectNodeEdit childEdit = new UnsupportedObjectNodeEdit(this, otherObjectName);
     			childEdit.addEditToParentNodeIfPossible();
@@ -457,7 +458,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	@Override
 	protected boolean deleteAction() throws IOException {
 		Hdf5Group group = (Hdf5Group) getHdfObject();
-		if (((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(group.getName()) >= 0) {
+		if (((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(group.getName())) {
 			setHdfObject((Hdf5Group) null);
 		}
 		

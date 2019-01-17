@@ -356,7 +356,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	@Override
 	protected boolean deleteAction() throws IOException {
 		Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfObject();
-		if (getOpenedHdfObjectOfParent().deleteAttribute(attribute.getName()) >= 0) {
+		if (getOpenedHdfObjectOfParent().deleteAttribute(attribute.getName())) {
 			setHdfObject((Hdf5Attribute<?>) null);
 		}
 		

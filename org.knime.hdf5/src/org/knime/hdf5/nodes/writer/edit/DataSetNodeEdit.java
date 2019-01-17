@@ -713,7 +713,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	@Override
 	protected boolean deleteAction() throws IOException {
 		Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) getHdfObject();
-		if (((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(dataSet.getName()) >= 0) {
+		if (((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(dataSet.getName())) {
 			setHdfObject((Hdf5DataSet<?>) null);
 		}
 		

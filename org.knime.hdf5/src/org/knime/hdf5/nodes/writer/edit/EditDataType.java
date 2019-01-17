@@ -252,6 +252,8 @@ public class EditDataType {
 			m_stringLengthSpinner.setEnabled(isString && m_stringLengthFixed.isSelected());
 			
 			if (m_standardValueEnabled) {
+				m_standardValueCheckBox.setSelected(m_standardValue != null);
+				
 				boolean isFloat = selectedType.isFloat();
 				boolean isInteger = selectedType.isNumber() && !isFloat;
 				m_standardValueIntSpinner.setVisible(isInteger);

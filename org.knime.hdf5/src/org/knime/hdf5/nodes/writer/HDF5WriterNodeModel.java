@@ -128,8 +128,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 			boolean valid = inputTable == null ? oldFileEdit.integrateAndValidate(fileEdit) : oldFileEdit.doLastValidationBeforeExecution(fileEdit, inputTable);
 			if (!valid) {
 				// TODO change after testing
-				System.out.println(inputTable == null ? "1." : "2.");
-				NodeLogger.getLogger(HDF5WriterNodeModel.class).warn/*throw new InvalidSettingsException*/("The configuration for file \"" + oldFileEdit.getFilePath()
+				// System.out.println(inputTable == null ? "1." : "2.");
+				/*NodeLogger.getLogger(HDF5WriterNodeModel.class).warn*/throw new InvalidSettingsException("The configuration for file \"" + oldFileEdit.getFilePath()
 						+ "\" is not valid:\n" + oldFileEdit.getInvalidCauseMessages(fileEdit));
 			}
 		} catch (IOException ioe) {
@@ -137,7 +137,11 @@ public class HDF5WriterNodeModel extends NodeModel {
 			
 		} finally {
 			if (file != null) {
-				file.close();
+				try {
+					file.close();
+				} catch (IOException ioe) {
+					NodeLogger.getLogger("HDF5 Files").error(ioe.getMessage(), ioe);
+				}
 			}
 		}
 	}

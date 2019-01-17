@@ -181,7 +181,11 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				}
 			}
 		} finally {
-			file.close();
+			try {
+				file.close();
+			} catch (IOException ioe) {
+				NodeLogger.getLogger("HDF5 Files").error(ioe.getMessage(), ioe);
+			}
 		}
 
 		return new DataTableSpec(colSpecList.toArray(new DataColumnSpec[] {}));
@@ -234,7 +238,11 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				}
 			}
 		} finally {
-			file.close();
+			try {
+				file.close();
+			} catch (IOException ioe) {
+				NodeLogger.getLogger("HDF5 Files").error(ioe.getMessage(), ioe);
+			}
 		}
 	}
 	

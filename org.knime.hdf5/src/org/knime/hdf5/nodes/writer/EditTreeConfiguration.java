@@ -58,21 +58,25 @@ public class EditTreeConfiguration {
 		FileNodeEdit oldFileEdit = m_fileEdit;
 		m_fileEdit = null;
 		
-		String filePath = urlPath.trim().isEmpty() ? oldFileEdit.getFilePath() : HDF5WriterNodeModel.getFilePathFromUrlPath(urlPath, false);
-		if (policy == EditOverwritePolicy.RENAME) {
-			filePath = Hdf5File.getUniqueFilePath(filePath);
-		}
+		String oldFilePath = oldFileEdit != null ? oldFileEdit.getFilePath() : null;
+		String filePath = urlPath.trim().isEmpty() ? oldFilePath : HDF5WriterNodeModel.getFilePathFromUrlPath(urlPath, false);
 		
-		boolean overwriteFile = policy == EditOverwritePolicy.OVERWRITE;
-		if (!overwriteFile && Hdf5File.existsHdfFile(filePath)) {
-			Hdf5File file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-			m_fileEdit = new FileNodeEdit(file);
-			file.close();
-		} else {
-			m_fileEdit = new FileNodeEdit(filePath, overwriteFile);
+		if (filePath != null) {
+			if (policy == EditOverwritePolicy.RENAME) {
+				filePath = Hdf5File.getUniqueFilePath(filePath);
+			}
+			
+			boolean overwriteFile = policy == EditOverwritePolicy.OVERWRITE;
+			if (!overwriteFile && Hdf5File.existsHdfFile(filePath)) {
+				Hdf5File file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+				m_fileEdit = new FileNodeEdit(file);
+				file.close();
+			} else {
+				m_fileEdit = new FileNodeEdit(filePath, overwriteFile);
+			}
+			
+			m_fileEdit.integrate(oldFileEdit);
 		}
-		
-		m_fileEdit.integrate(oldFileEdit);
 	}
 	
 	void initConfigOfFile(String filePath, boolean overwriteFile, boolean keepConfig, JTree tree) throws IOException {
