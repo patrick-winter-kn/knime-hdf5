@@ -212,12 +212,12 @@ public class Hdf5HdfDataType {
 			case UINT32:
 			case INT64:
 			case UINT64:
+			case FLOAT32:
+			case FLOAT64:
 				types.add(HdfDataType.INT8);
 				types.add(HdfDataType.UINT8);
 				types.add(HdfDataType.INT16);
 				types.add(HdfDataType.UINT16);
-			case FLOAT32:
-			case FLOAT64:
 				types.add(HdfDataType.INT32);
 				types.add(HdfDataType.UINT32);
 				types.add(HdfDataType.INT64);
@@ -246,22 +246,21 @@ public class Hdf5HdfDataType {
 						return false;
 					}
 				}
-			} else {
-				int stringLength = editDataType != null ? editDataType.getStringLength() : AUTO_STRING_LENGTH;
-				if (editDataType != null && editDataType.isFixed()) {
+			} else if (editDataType != null) {
+				if (editDataType.isFixed()) {
+					int stringLength = editDataType.getStringLength();
 					for (Object value : values) {
 						if (value.toString().length() > stringLength) {
 							return false;
 						}
 					}
 				} else {
+					int stringLength = AUTO_STRING_LENGTH;
 					for (Object value : values) {
 						int newStringLength = value.toString().length();
 						stringLength = newStringLength > stringLength ? newStringLength : stringLength;
 					}
-					if (editDataType != null) {
-						editDataType.setStringLength(stringLength);
-					}
+					editDataType.setStringLength(stringLength);
 				}
 			}
 			

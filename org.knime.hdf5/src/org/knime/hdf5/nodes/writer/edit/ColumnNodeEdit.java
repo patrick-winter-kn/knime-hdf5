@@ -57,9 +57,9 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	private void updateDataSetEditAction(DataSetNodeEdit parent) {
-		if (parent.getEditAction().isCreateOrCopyAction()) {
+		/*if (parent.getEditAction().isCreateOrCopyAction()) {
 			parent.setEditAction(EditAction.CREATE);
-		} else if (parent.getEditAction() != EditAction.DELETE) {
+		} else */if (parent.getEditAction() != EditAction.DELETE) {
 			parent.setEditAction(EditAction.MODIFY);
 		}
 	}
@@ -237,14 +237,16 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 					try {
 						// TODO maybe check this when the columns loaded for the first time
 						TreeNodeEdit copyEdit = getEditAction() == EditAction.COPY ? getCopyEdit() : this;
-						Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) copyEdit.getHdfSource();
-						dataSet.open();
-						
-						// only supported for dataSets with max. 2 dimensions
-						if (m_inputRowCount == dataSet.numberOfRows()) {
-							values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
-						} else {
-							cause = InvalidCause.INPUT_ROW_SIZE;
+						Hdf5DataSet<?> dataSet = copyEdit != null ? (Hdf5DataSet<?>) copyEdit.getHdfSource() : null;
+						if (dataSet != null) {
+							dataSet.open();
+							
+							// only supported for dataSets with max. 2 dimensions
+							if (m_inputRowCount == dataSet.numberOfRows()) {
+								values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
+							} else {
+								cause = InvalidCause.INPUT_ROW_SIZE;
+							}
 						}
 					} catch (IOException ioe) {
 						NodeLogger.getLogger(getClass()).error("Validation of dataType of new column \""
@@ -323,7 +325,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 			edit.setDeletion(edit.getEditAction() != EditAction.DELETE);
 
         	DataSetNodeEdit parentEdit = (DataSetNodeEdit) parentOfVisible;
-        	if (parentEdit.getTreeNode().getChildCount() == 0) {
+        	parentEdit.setEditAction(EditAction.MODIFY);
+        	if (parentEdit.getColumnInputTypes().length == 0) {
         		parentOfVisible = parentEdit.getParent();
 				parentEdit.setDeletion(true);
         	}

@@ -19,7 +19,7 @@ public class Hdf5DataType {
 	
 	static final long POW_2_32 = (long) Math.pow(2, 32);
 	
-	static final double POW_2_64 = Math.pow(2, 64);
+	static final float POW_2_64 = (float) Math.pow(2, 64);
 	
 	private final Hdf5HdfDataType m_hdfType;
 
@@ -378,24 +378,24 @@ public class Hdf5DataType {
 							: ((double) inputValueLong + (inputHdfType == HdfDataType.UINT64 ? POW_2_64 : 0)));
 				}
 			} else {
-				String inputValueString = (String) inputValue;
+				double inputValueDouble = Double.parseDouble((String) inputValue);
 				switch (outputHdfType) {
 				case INT8:
 				case UINT8:
-					return outputClass.cast(Byte.parseByte(inputValueString));
+					return outputClass.cast((byte) inputValueDouble);
 				case INT16:
 				case UINT16:
-					return outputClass.cast(Short.parseShort(inputValueString));
+					return outputClass.cast((short) inputValueDouble);
 				case INT32:
 				case UINT32:
-					return outputClass.cast(Integer.parseInt(inputValueString));
+					return outputClass.cast((int) inputValueDouble);
 				case INT64:
 				case UINT64:
-					return outputClass.cast(Long.parseLong(inputValueString));
+					return outputClass.cast((long) inputValueDouble);
 				case FLOAT32:
-					return outputClass.cast(Float.parseFloat(inputValueString));
+					return outputClass.cast((float) inputValueDouble);
 				case FLOAT64:
-					return outputClass.cast(Double.parseDouble(inputValueString));
+					return outputClass.cast(inputValueDouble);
 				default:
 					break;
 				}

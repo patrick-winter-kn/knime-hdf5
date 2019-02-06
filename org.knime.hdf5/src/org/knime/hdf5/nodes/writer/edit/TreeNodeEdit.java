@@ -483,7 +483,7 @@ public abstract class TreeNodeEdit {
 		if (this instanceof GroupNodeEdit) {
 			GroupNodeEdit copyGroupEdit = fileEdit.getGroupEditByPath(m_inputPathFromFileWithName);
 			if (copyGroupEdit != null) {
-				copySource = copyGroupEdit.getHdfBackup();
+				copySource = copyGroupEdit.getHdfSource();
 			}
 			if (copySource == null) {
 				copySource = ((Hdf5File) fileEdit.getHdfObject()).getGroupByPath(m_inputPathFromFileWithName);
@@ -491,15 +491,15 @@ public abstract class TreeNodeEdit {
 		} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
 			DataSetNodeEdit copyDataSetEdit = fileEdit.getDataSetEditByPath(m_inputPathFromFileWithName);
 			if (copyDataSetEdit != null) {
-				copySource = copyDataSetEdit.getHdfBackup();
+				copySource = copyDataSetEdit.getHdfSource();
 			}
 			if (copySource == null) {
 				copySource = ((Hdf5File) fileEdit.getHdfObject()).getDataSetByPath(m_inputPathFromFileWithName);
 			}
 		} else if (this instanceof AttributeNodeEdit) {
-			AttributeNodeEdit copyGroupEdit = fileEdit.getAttributeEditByPath(m_inputPathFromFileWithName);
-			if (copyGroupEdit != null) {
-				copySource = copyGroupEdit.getHdfBackup();
+			AttributeNodeEdit copyAttributeEdit = fileEdit.getAttributeEditByPath(m_inputPathFromFileWithName);
+			if (copyAttributeEdit != null) {
+				copySource = copyAttributeEdit.getHdfSource();
 			}
 			if (copySource == null) {
 				copySource = ((Hdf5File) fileEdit.getHdfObject()).getAttributeByPath(m_inputPathFromFileWithName);
@@ -816,18 +816,20 @@ public abstract class TreeNodeEdit {
 	}
 	
 	void setDeletion(boolean isDelete) {
-    	if (isDelete && getEditAction().isCreateOrCopyAction() || !isDelete && m_invalidEdits.get(this) == InvalidCause.NO_HDF_SOURCE && getEditAction() == EditAction.DELETE) {
-    		removeFromParent();
-    		
-    	} else {
-    		m_editAction = isDelete ? EditAction.DELETE : (this instanceof ColumnNodeEdit ? EditAction.NO_ACTION : EditAction.MODIFY);
-    		updateParentEditAction();
-    		m_treeNodeMenu.updateDeleteItemText();
-    	}
-    	
-    	for (TreeNodeEdit edit : getAllChildren()) {
-        	edit.setDeletion(isDelete);
-    	}
+		if (isDelete != (getEditAction() == EditAction.DELETE)) {
+	    	if (isDelete && getEditAction().isCreateOrCopyAction() || !isDelete && m_invalidEdits.get(this) == InvalidCause.NO_HDF_SOURCE && getEditAction() == EditAction.DELETE) {
+	    		removeFromParent();
+	    		
+	    	} else {
+	    		m_editAction = isDelete ? EditAction.DELETE : (this instanceof ColumnNodeEdit ? EditAction.NO_ACTION : EditAction.MODIFY);
+	    		updateParentEditAction();
+	    		m_treeNodeMenu.updateDeleteItemText();
+	    	}
+	    	
+	    	for (TreeNodeEdit edit : getAllChildren()) {
+	        	edit.setDeletion(isDelete);
+	    	}
+		}
 	}
 
 	private TreeNodeEdit getChildOfClass(Class<?> editClass, String name) {
@@ -948,7 +950,7 @@ public abstract class TreeNodeEdit {
 					break;
 				case OVERWRITE:
 					if (editToOverwrite != null) {
-						editToOverwrite.setEditAction(EditAction.DELETE);
+						editToOverwrite.setDeletion(true);
 					} else {
 						TreeNodeEdit deleteEdit = null;
 						if (oldEdit instanceof GroupNodeEdit) {
@@ -958,7 +960,7 @@ public abstract class TreeNodeEdit {
 						} else if (oldEdit instanceof AttributeNodeEdit) {
 							deleteEdit = ((AttributeNodeEdit) oldEdit).copyAttributeEditTo(parentOfNewEdit, false);
 						}
-						deleteEdit.setEditAction(EditAction.DELETE);
+						deleteEdit.setDeletion(true);
 					}
 					break;
 				case RENAME:
@@ -987,12 +989,13 @@ public abstract class TreeNodeEdit {
 						} else if (oldEdit instanceof DataSetNodeEdit) {
 							integrateEdit = ((DataSetNodeEdit) oldEdit).copyDataSetEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
 							if (editToOverwrite != null) {
-								((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) editToOverwrite, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+								((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) editToOverwrite, ColumnNodeEdit.UNKNOWN_ROW_COUNT, false);
+								
 							}
 							for (TreeNodeEdit edit : newEdit.getAllChildren()) {
 								integrateEdit.useOverwritePolicy(edit);
 							}
-							((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) newEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+							((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) newEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT, false);
 						}
 					}
 					break;
@@ -1020,19 +1023,6 @@ public abstract class TreeNodeEdit {
 	protected void validate(BufferedDataTable inputTable, boolean internalCheck, boolean externalCheck) {
 		InvalidCause cause = null;
 		
-		if (externalCheck && m_parent != null) {
-			cause = cause == null && m_parent.getEditAction() == EditAction.DELETE && m_editAction != EditAction.DELETE ? InvalidCause.PARENT_DELETE : cause;
-			
-			if (cause == null) {
-				for (TreeNodeEdit edit : m_parent.getAllChildren()) {
-					if (isInConflict(edit)) {
-						cause = InvalidCause.NAME_DUPLICATE;
-						break;
-					}
-				}
-			}
-		}
-		
 		if (externalCheck && cause == null) {
 			if (m_editAction == EditAction.COPY) {
 				cause = m_copyEdit == null ? InvalidCause.NO_COPY_SOURCE : null;
@@ -1043,6 +1033,19 @@ public abstract class TreeNodeEdit {
 				cause = m_hdfObject == null ? InvalidCause.NO_HDF_SOURCE : this instanceof DataSetNodeEdit
 						&& ((Hdf5DataSet<?>) m_hdfObject).numberOfColumns() != ((DataSetNodeEdit) this).getRequiredColumnCountForExecution()
 								? InvalidCause.COLUMN_COUNT : null;
+			}
+		}
+		
+		if (externalCheck && m_parent != null) {
+			cause = cause == null && m_parent.getEditAction() == EditAction.DELETE && m_editAction != EditAction.DELETE ? InvalidCause.PARENT_DELETE : cause;
+			
+			if (cause == null) {
+				for (TreeNodeEdit edit : m_parent.getAllChildren()) {
+					if (isInConflict(edit)) {
+						cause = InvalidCause.NAME_DUPLICATE;
+						break;
+					}
+				}
 			}
 		}
 		

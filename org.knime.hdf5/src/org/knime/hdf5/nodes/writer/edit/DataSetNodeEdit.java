@@ -10,10 +10,13 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.activation.UnsupportedDataTypeException;
 import javax.swing.DefaultListCellRenderer;
@@ -140,6 +143,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			}
 		}
 		
+		// set back to COPY if dataSet is copied by drag-and-drop in EditTreePanel
+		/*if (needsCopySource) {
+			newDataSetEdit.setEditAction(EditAction.COPY);
+		}*/
+		
 		for (AttributeNodeEdit attributeEdit : getAttributeNodeEdits()) {
 			if (copyWithAllChildren || attributeEdit.getEditAction().isCreateOrCopyAction()) {
 				attributeEdit.copyAttributeEditTo(newDataSetEdit, needsCopySource);
@@ -228,11 +236,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	}
 	
 	public ColumnNodeEdit[] getColumnNodeEdits() {
-		return m_columnEdits.toArray(new ColumnNodeEdit[] {});
+		return m_columnEdits.toArray(new ColumnNodeEdit[m_columnEdits.size()]);
 	}	
 
 	public AttributeNodeEdit[] getAttributeNodeEdits() {
-		return m_attributeEdits.toArray(new AttributeNodeEdit[] {});
+		return m_attributeEdits.toArray(new AttributeNodeEdit[m_attributeEdits.size()]);
 	}
 	
 	public HdfDataType[] getColumnInputTypes() {
@@ -333,18 +341,24 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	void disconsiderColumnNodeEdit(ColumnNodeEdit edit) {
 		if (edit.getEditAction() != EditAction.DELETE) {
-			// TODO find better algorithm here
-			for (HdfDataType possibleInputType : HdfDataType.values()) {
-				boolean convertible = true;
-				for (HdfDataType inputType : getColumnInputTypes()) {
-					if (!inputType.getPossiblyConvertibleHdfTypes().contains(possibleInputType)) {
-						convertible = false;
+			HdfDataType prevoiusInputType = m_inputType;
+			m_inputType = null;
+			
+			Set<HdfDataType> uniqueColumnInputTypes = new HashSet<>(Arrays.asList(getColumnInputTypes()));
+			if (!uniqueColumnInputTypes.contains(prevoiusInputType)) {
+				for (HdfDataType possibleInputType : uniqueColumnInputTypes) {
+					boolean convertible = false;
+					for (HdfDataType inputType : uniqueColumnInputTypes) {
+						convertible = true;
+						if (!inputType.getAlwaysConvertibleHdfTypes().contains(possibleInputType)) {
+							convertible = false;
+							break;
+						}
+					}
+					if (convertible) {
+						m_inputType = possibleInputType;
 						break;
 					}
-				}
-				if (convertible) {
-					m_inputType = possibleInputType;
-					break;
 				}
 			}
 			
@@ -395,10 +409,12 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		return editCount <= 1;
 	}
 	
-	void integrate(DataSetNodeEdit copyEdit, long inputRowCount) {
+	void integrate(DataSetNodeEdit copyEdit, long inputRowCount, boolean removeOldColumns) {
 		// (maybe) TODO only supported for dataSets if the dataSet has the correct amount of columns (the same amount as the config was created)
-		for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
-			columnEdit.removeFromParent();
+		if (removeOldColumns) {
+			for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
+				columnEdit.removeFromParent();
+			}
 		}
 		
 		for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
@@ -426,7 +442,17 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	public String getToolTipText() {
-		return (isSupported() ? "(" + m_editDataType.getOutputType().toString() + ") " : "") + super.getToolTipText();
+		return (isSupported() ? "(" + getDataTypeInfo() + ") " : "") + super.getToolTipText();
+	}
+	
+	private String getDataTypeInfo() {
+		String info = "";
+		
+		if (m_inputType != null && m_inputType != m_editDataType.getOutputType()) {
+			info += m_inputType.toString() + " -> ";
+		}
+		
+		return info + m_editDataType.getOutputType().toString();
 	}
 	
 	@Override
@@ -547,7 +573,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
     		for (String attributeName : dataSet.loadAttributeNames()) {
     			AttributeNodeEdit childEdit = null;
     			try {
-        			Hdf5Attribute<?> child = dataSet.updateAttribute(attributeName);
+        			Hdf5Attribute<?> child = dataSet.getAttribute(attributeName);
         			childEdit = new AttributeNodeEdit(this, child);
         			childEdit.addEditToParentNodeIfPossible();
         			

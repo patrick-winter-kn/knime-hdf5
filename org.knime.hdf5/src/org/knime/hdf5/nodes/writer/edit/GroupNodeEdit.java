@@ -250,7 +250,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 					if (copyDataSetEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
 						dataSetEdit.copyPropertiesFrom(copyDataSetEdit);
 					}
-					dataSetEdit.integrate(copyDataSetEdit, inputRowCount);
+					dataSetEdit.integrate(copyDataSetEdit, inputRowCount, true);
 					
 				} else {
 					copyDataSetEdit.copyDataSetEditTo(this, false, dataSetEdit == null);
@@ -383,7 +383,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
     		for (String dataSetName : group.loadDataSetNames()) {
     			DataSetNodeEdit childEdit = null;
     			try {
-        			Hdf5DataSet<?> child = group.updateDataSet(dataSetName);
+        			Hdf5DataSet<?> child = group.getDataSet(dataSetName);
         			if (child.getDimensions().length <= 2) {
             			childEdit = new DataSetNodeEdit(this, child);
             			childEdit.addEditToParentNodeIfPossible();
@@ -408,7 +408,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
     		for (String attributeName : group.loadAttributeNames()) {
     			AttributeNodeEdit childEdit = null;
     			try {
-        			Hdf5Attribute<?> child = group.updateAttribute(attributeName);
+        			Hdf5Attribute<?> child = group.getAttribute(attributeName);
         			childEdit = new AttributeNodeEdit(this, child);
         			childEdit.addEditToParentNodeIfPossible();
         			

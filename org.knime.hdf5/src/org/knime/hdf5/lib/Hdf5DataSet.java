@@ -30,7 +30,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	private long m_chunkRowSize;
 	
-	private final Hdf5DataType m_type;
+	private Hdf5DataType m_type;
 	
 	private Hdf5DataSet(final String name, final Hdf5DataType type) 
 			throws NullPointerException, IllegalArgumentException {
@@ -106,6 +106,10 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         }
 		
 		return dataSet;
+	}
+	
+	void updateDataSet() throws UnsupportedDataTypeException, IOException {
+		m_type = getParent().findDataSetType(getName());
 	}
 
 	private long getDataspaceId() {
@@ -303,6 +307,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	private boolean writeHdf(Object[] dataWrite, long[] offset, long[] count) throws IOException, HDF5DataspaceInterfaceException {
     	long memSpaceId = -1;
     	try {
+    		lockReadOpen();
     		checkOpen();
     		checkDimensions(offset, count);
     	
@@ -319,11 +324,15 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			
 			return true;
     			
+	    } catch (HDF5DataspaceInterfaceException hdie) {
+	    	throw hdie;
+	    	
 	    } catch (HDF5Exception | IOException | NullPointerException hnpe) {
 	    	throw new IOException("DataSet \"" + getPathFromFileWithName()
 	    			+ "\" could not be written: " + hnpe.getMessage(), hnpe);
 	    	
 	    } finally {
+	    	unlockReadOpen();
 			unselectChunk(memSpaceId);
 	    }
 	}
@@ -341,8 +350,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				value = value == null ? standardValue : value;
 				
 				Class knimeClass = m_type.getKnimeClass();
-				Class hdfClass = m_type.getHdfClass();
-				dataWrite[i] = m_type.knimeToHdf(knimeClass, knimeClass.cast(value), hdfClass, rounding);
+				dataWrite[i] = m_type.knimeToHdf(knimeClass, knimeClass.cast(value), outputClass, rounding);
 				
 			} else {
 				Hdf5DataSet<?> dataSet = dataSets[dataSetIndex];
@@ -361,11 +369,11 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 					Arrays.fill(count, 1);
 				}
 
-				Object[] value = dataSet.readHdf(offset, count);
+				Object value = dataSet.readHdf(offset, count)[0];
 
 	            Hdf5DataType type = dataSet.getType();
 				Class inputClass = type.getHdfClass();
-				dataWrite[i] = type.hdfToHdf(inputClass, inputClass.cast(value[0]), outputClass, m_type, rounding);
+				dataWrite[i] = type.hdfToHdf(inputClass, inputClass.cast(value), outputClass, m_type, rounding);
 				dataSetIndex++;
 			}
 		}
@@ -387,7 +395,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			success = true;
 			Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfColumns());
 			Arrays.fill(dataIn, (Type) m_type.getKnimeType().getMissingValue());
-			for (int i = 0; i < numberOfRows(); i++) {
+			for (long i = 0; i < numberOfRows(); i++) {
 				success &= writeRow(dataIn, i, Rounding.DOWN);
 			}
 		} catch (HDF5DataspaceInterfaceException | UnsupportedDataTypeException hdiudte) {
@@ -452,6 +460,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	private Object[] readHdf(long[] offset, long[] count) throws IOException, HDF5DataspaceInterfaceException {
         long memSpaceId = -1;
 		try {
+			lockReadOpen();
 			checkOpen();
 			int numberOfValues = checkDimensions(offset, count);
 		
@@ -476,30 +485,38 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			
 			return dataRead;
 			
+	    } catch (HDF5DataspaceInterfaceException hdie) {
+	    	throw hdie;
+	    	
 	    } catch (HDF5Exception | IOException | NullPointerException hionpe) {
             throw new IOException("DataSet \"" + getPathFromFileWithName()
 					+ "\" could not be read: " + hionpe.getMessage(), hionpe);
             
         } finally {
+        	unlockReadOpen();
 			unselectChunk(memSpaceId);
         }
 	}
 	
 	private int checkDimensions(long[] offset, long[] count) throws HDF5DataspaceInterfaceException {
 		if (m_dimensions.length != offset.length || offset.length != count.length) {
-			throw new HDF5DataspaceInterfaceException("offset or count has wrong number of dimensions");
+			throw new HDF5DataspaceInterfaceException("Offset or count has wrong number of dimensions");
 		}
 		
 		long numberOfValues = 1;
 		for (int i = 0; i < m_dimensions.length; i++) {
-			if (offset[i] < 0 || count[i] < 0 || offset[i] + count[i] > m_dimensions[i]) {
-				throw new HDF5DataspaceInterfaceException("offset or count is out of range");
+			if (offset[i] < 0) {
+				throw new HDF5DataspaceInterfaceException("Cannot select a negative index of dimension " + i);
+			} else if (count[i] < 0) {
+				throw new HDF5DataspaceInterfaceException("Cannot select a negative number of dimension " + i);
+			} else if (offset[i] + count[i] > m_dimensions[i]) {
+				throw new HDF5DataspaceInterfaceException("Maximum selected index of dimension " + i + " (size: " + m_dimensions[i] + ") is out of bounds: " + (offset[i] + count[i] - 1));
 			}
 			numberOfValues *= count[i];
 		}
 
 		if (numberOfValues > Integer.MAX_VALUE) {
-			throw new HDF5DataspaceInterfaceException("Number of values to read in dataSet \"" + getPathFromFileWithName()
+			throw new HDF5DataspaceInterfaceException("Number of values to read/write in dataSet \"" + getPathFromFileWithName()
 					+ "\" has overflown the Integer values.");
 		}
 		
@@ -531,12 +548,14 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	@Override
 	public boolean open() throws IOException {
 		try {
-			checkExists();
+			lockWriteOpen();
 			
 			if (!isOpen()) {
 				if (!getParent().isOpen()) {
 					getParent().open();
 				}
+				
+				checkExists();
 				
 				setElementId(H5.H5Dopen(getParent().getElementId(), getName(),
 						HDF5Constants.H5P_DEFAULT));
@@ -550,6 +569,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 			
 		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
 			throw new IOException("DataSet could not be opened: " + hlionpe.getMessage(), hlionpe);
+			
+        } finally {
+        	unlockWriteOpen();
         }
 	}
 	
@@ -650,6 +672,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	public boolean close() throws IOException {
 		// End access to the dataSet and release resources used by it.
         try {
+        	lockWriteOpen();
         	checkExists();
         	
         	boolean success = true;
@@ -673,6 +696,9 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
             
         } catch (HDF5LibraryException | IOException hlioe) {
             throw new IOException("DataSet could not be closed: " + hlioe.getMessage(), hlioe);
+            
+        } finally {
+        	unlockWriteOpen();
         }
 	}
 }

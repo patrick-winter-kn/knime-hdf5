@@ -51,7 +51,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 
 	@Override
 	protected BufferedDataTable[] execute(BufferedDataTable[] inData, ExecutionContext exec) throws Exception {
-		checkForErrors(m_editTreeConfig, inData[0]);
+		checkForErrors(m_editTreeConfig, inData[0], true);
 
 		boolean success = false;
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
@@ -95,9 +95,13 @@ public class HDF5WriterNodeModel extends NodeModel {
 	
 	@Override
 	protected DataTableSpec[] configure(DataTableSpec[] inSpecs) throws InvalidSettingsException {
-		checkForErrors(m_editTreeConfig, null);
+		checkForErrors(m_editTreeConfig);
 		return null;
     }
+	
+	private static void checkForErrors(EditTreeConfiguration editTreeConfig) throws InvalidSettingsException {
+		checkForErrors(editTreeConfig, null, false);
+	}
 	
 	/**
 	 * Checks if there are errors in the configuration {@code editTreeConfig}.
@@ -107,7 +111,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 	 * @param inputTable
 	 * @throws InvalidSettingsException
 	 */
-	private static void checkForErrors(EditTreeConfiguration editTreeConfig, BufferedDataTable inputTable) throws InvalidSettingsException {
+	private static void checkForErrors(EditTreeConfiguration editTreeConfig, BufferedDataTable inputTable, boolean lastValidationBeforeExecution) throws InvalidSettingsException {
 		FileNodeEdit fileEdit = editTreeConfig.getFileNodeEdit();
 		if (fileEdit == null) {
 			throw new InvalidSettingsException("No file selected");
@@ -125,7 +129,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 				oldFileEdit.loadChildrenOfHdfObject();
 			}
 			
-			boolean valid = inputTable == null ? oldFileEdit.integrateAndValidate(fileEdit) : oldFileEdit.doLastValidationBeforeExecution(fileEdit, inputTable);
+			boolean valid = lastValidationBeforeExecution ? oldFileEdit.doLastValidationBeforeExecution(fileEdit, inputTable) : oldFileEdit.integrateAndValidate(fileEdit);
 			if (!valid) {
 				// TODO change after testing
 				// System.out.println(inputTable == null ? "1." : "2.");
@@ -199,7 +203,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 		
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 		editTreeConfig.loadConfiguration(settings, null, policy);
-		checkForErrors(editTreeConfig, null);
+		checkForErrors(editTreeConfig);
 	}
 
 	@Override

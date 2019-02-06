@@ -70,17 +70,11 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		this(parent, attribute.getPathFromFile() + attribute.getName().replaceAll("/", "\\\\/"), attribute.getName(), EditOverwritePolicy.NONE,
 				attribute.getType().getHdfType().getType(), EditAction.NO_ACTION);
 
-		Object[] values = attribute.getValue() == null ? attribute.read() : attribute.getValue();
-		if (attribute.getType().isHdfType(HdfDataType.STRING)) {
-			m_itemStringLength = (int) attribute.getType().getHdfType().getStringLength();
-		} else {
-			for (Object value : values) {
-				int newStringLength = value.toString().length();
-				m_itemStringLength = newStringLength > m_itemStringLength ? newStringLength : m_itemStringLength;
-			}
-		}
+		m_itemStringLength = (int) attribute.getStringLength();
 		m_editDataType.setValues(m_inputType, attribute.getType().getHdfType().getEndian(), Rounding.DOWN, false, m_itemStringLength);
 		m_totalStringLength = (int) Math.max(attribute.getDimension(), 1) * m_itemStringLength;
+		
+		Object[] values = attribute.getValue() == null ? attribute.read() : attribute.getValue();
 		m_possibleOutputTypes = HdfDataType.getConvertibleTypes(m_inputType, values);
 		
 		setHdfObject(attribute);
@@ -167,17 +161,9 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	public int getItemStringLength() {
 		return m_itemStringLength;
 	}
-
-	private void setItemStringLength(int itemStringLength) {
-		m_itemStringLength = itemStringLength;
-	}
 	
 	private boolean isFlowVariableArrayPossible() {
 		return m_flowVariableArrayPossible;
-	}
-	
-	private void setFlowVariableArrayPossible(boolean flowVariableArrayPossible) {
-		m_flowVariableArrayPossible = flowVariableArrayPossible;
 	}
 
 	public boolean isFlowVariableArrayUsed() {
@@ -219,7 +205,17 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	public String getToolTipText() {
-		return (isSupported() ? "(" + m_editDataType.getOutputType().toString() + ") " : "") + super.getToolTipText();
+		return (isSupported() ? "(" + getDataTypeInfo() + ") " : "") + super.getToolTipText();
+	}
+	
+	private String getDataTypeInfo() {
+		String info = "";
+		
+		if (m_inputType != null && m_inputType != m_editDataType.getOutputType()) {
+			info += m_inputType.toString() + " -> ";
+		}
+		
+		return info + m_editDataType.getOutputType().toString();
 	}
 	
 	@Override
@@ -289,8 +285,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		
 		m_editDataType.loadSettingsFrom(settings);
 		m_totalStringLength = settings.getInt(SettingsKey.TOTAL_STRING_LENGTH.getKey());
-		setItemStringLength(settings.getInt(SettingsKey.ITEM_STRING_LENGTH.getKey()));
-		setFlowVariableArrayPossible(settings.getBoolean(SettingsKey.FLOW_VARIABLE_ARRAY_POSSIBLE.getKey()));
+		m_itemStringLength = settings.getInt(SettingsKey.ITEM_STRING_LENGTH.getKey());
+		m_flowVariableArrayPossible = settings.getBoolean(SettingsKey.FLOW_VARIABLE_ARRAY_POSSIBLE.getKey());
 		setFlowVariableArrayUsed(settings.getBoolean(SettingsKey.FLOW_VARIABLE_ARRAY_USED.getKey()));
 	}
 	

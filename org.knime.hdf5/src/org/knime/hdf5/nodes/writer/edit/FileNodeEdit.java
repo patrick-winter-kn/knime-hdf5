@@ -134,7 +134,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 
 	public boolean doLastValidationBeforeExecution(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
 		useOverwritePolicyForFile(copyEdit);
-		super.integrate(copyEdit, inputTable.size());
+		super.integrate(copyEdit, inputTable != null ? inputTable.size() : ColumnNodeEdit.UNKNOWN_ROW_COUNT);
 		updateCopySources();
 		doLastValidation(copyEdit, inputTable);
 		return isValid() && copyEdit.isValid();
@@ -403,7 +403,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 				if (!edit.getEditState().isExecutedState()) {
 					rollbackEdits.remove(edit);
 				} else if (edit.getEditState() == EditState.SUCCESS && edit.getEditAction() == EditAction.MODIFY_CHILDREN_ONLY
-						|| edit.getEditState() == EditState.FAIL && edit.getEditAction().isCreateOrCopyAction() && edit.getHdfObject() == null) {
+						|| edit.getEditState() == EditState.FAIL && edit.getEditAction().isCreateOrCopyAction() /*&& edit.getHdfObject() == null*/) {
 					edit.setEditState(EditState.ROLLBACK_NOTHING_TODO);
 				} else if (edit.getEditAction() == EditAction.MODIFY || edit.getEditAction() == EditAction.DELETE) {
 					(edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).add(edit.getInputPathFromFileWithName());
@@ -411,19 +411,26 @@ public class FileNodeEdit extends GroupNodeEdit {
 			}
 
 			for (TreeNodeEdit edit : rollbackEdits.toArray(new TreeNodeEdit[rollbackEdits.size()])) {
-				if (edit.getHdfBackup() == null && !edit.getEditAction().isCreateOrCopyAction()
-						&& (edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).contains(edit.getOutputPathFromFileWithName(true))) {
-					success &= edit.createBackup();
-				}
 				// in case hdfObject was created/edited before the fail, delete it so that it can be substituted by hdfBackup
-				if (edit.getHdfBackup() != null && edit.getHdfObject() != null) {
-					try {
-						success &= edit.deleteAction();
-					} catch (IOException ioe) {
-						success = false;
+				if (edit.getHdfObject() != null && edit.getEditState() != EditState.ROLLBACK_NOTHING_TODO
+						&& (edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).contains(edit.getOutputPathFromFileWithName(true))) {
+					if (!edit.getEditAction().isCreateOrCopyAction()) {
+						if (edit.getHdfBackup() == null) {
+							success &= edit.createBackup();
+						}
+						
+						try {
+							success &= edit.deleteAction();
+							
+						} catch (IOException ioe) {
+							success = false;
+							rollbackEdits.remove(edit);
+							edit.setEditState(EditState.ROLLBACK_FAIL);
+							NodeLogger.getLogger(getClass()).error("Fail in rollback of \"" + edit.getOutputPathFromFileWithName() + "\": " + ioe.getMessage(), ioe);
+						}
+					} else {
 						rollbackEdits.remove(edit);
-						edit.setEditState(EditState.ROLLBACK_FAIL);
-						NodeLogger.getLogger(getClass()).error("Fail in rollback of \"" + edit.getOutputPathFromFileWithName() + "\": " + ioe.getMessage(), ioe);
+						rollbackEdits.add(0, edit);
 					}
 				}
 			}
