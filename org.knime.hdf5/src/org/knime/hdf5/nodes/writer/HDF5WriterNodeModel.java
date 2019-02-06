@@ -61,14 +61,14 @@ public class HDF5WriterNodeModel extends NodeModel {
 		} finally {
 			// TODO change after testing
 			NodeLogger.getLogger(getClass()).warn("Success: " + success);
-			NodeLogger.getLogger(getClass()).warn("States of all edits during fail:\n" + fileEdit.getSummaryOfEditStates(false));
+			NodeLogger.getLogger(getClass()).warn("States of all edits after execution:\n" + fileEdit.getSummaryOfEditStates(false));
 			
 			if (success) {
 				try {
 					fileEdit.deleteAllBackups();
 					
 				} catch (Exception e) {
-					NodeLogger.getLogger(getClass()).error("Deletion of backups failed: " + e.getMessage(), e);
+					NodeLogger.getLogger(getClass()).warn("Deletion of backups failed: " + e.getMessage(), e);
 				}
 			} else {
 				boolean rollbackSuccess = false;

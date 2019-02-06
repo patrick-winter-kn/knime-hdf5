@@ -586,7 +586,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 	    		}
             }
             
-	        // TODO should only be true if all descendants are closed
             return success;
             
         } catch (HDF5LibraryException | IOException hlioe) {

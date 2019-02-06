@@ -31,7 +31,6 @@ public class Hdf5DataType {
 	
 	private Hdf5DataType(Hdf5HdfDataType hdfType, Hdf5KnimeDataType knimeType, 
 			boolean vlen, boolean fromDS) {
-		// TODO throw exception if hdfType and knimeType do not fit together
 		m_hdfType = hdfType;
 		m_knimeType = knimeType;
 		m_vlen = vlen;
