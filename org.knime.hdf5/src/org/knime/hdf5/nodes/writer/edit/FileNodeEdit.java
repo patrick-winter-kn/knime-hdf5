@@ -20,7 +20,10 @@ import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.workflow.FlowVariable;
+import org.knime.hdf5.lib.Hdf5Attribute;
+import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
+import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 
 public class FileNodeEdit extends GroupNodeEdit {
@@ -185,7 +188,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 			loadHdfObjectOf(edit);
 		}
 	}
-	
+
 	private void loadHdfObjectOf(TreeNodeEdit edit) throws IOException {
 		if (edit.getEditAction() != EditAction.CREATE && edit.getInputPathFromFileWithName() != null) {
 			if (edit instanceof GroupNodeEdit) {
@@ -230,11 +233,65 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 	
-	public void removeInvalidsWithCause(InvalidCause cause) {
-		for (TreeNodeEdit edit : getInvalidsWithCause(cause)) {
-			edit.removeFromParent();
+	public void resetEdits(List<TreeNodeEdit> resetEdits) {
+		Hdf5File file = null;
+		try {
+			file = Hdf5File.openFile(m_filePath, Hdf5File.READ_WRITE_ACCESS);
+			
+		} catch (IOException ioe) {
+			// file is not needed then
+		}
+		
+		for (TreeNodeEdit edit : resetEdits) {
+			resetEdit(edit);
+			if (edit.getParent() != null && edit.getParent().getEditAction() == EditAction.DELETE) {
+				edit.setDeletion(true);
+			}
 		}
 		reloadTree();
+
+		if (file != null) {
+			try {
+				file.close();
+			} catch (IOException ioe) {
+				NodeLogger.getLogger(getClass()).error("Error while resetting TreeNodeEdits: " + ioe);
+			}
+		}
+	}
+	
+	private void resetEdit(TreeNodeEdit edit) {
+		Object hdfObject = null;
+		if (!edit.getEditAction().isCreateOrCopyAction()) {
+			try {
+				loadHdfObjectOf(edit);
+				hdfObject = edit.getHdfObject();
+			} catch (IOException ioe) {
+				// hdfObject stays null
+			}
+		}
+		
+		if (hdfObject != null) {
+			TreeNodeEdit newEdit = null;
+			if (edit instanceof GroupNodeEdit) {
+				newEdit = new GroupNodeEdit((GroupNodeEdit) edit.getParent(), (Hdf5Group) hdfObject);
+			} else if (edit instanceof DataSetNodeEdit || edit instanceof ColumnNodeEdit) {
+				newEdit = new DataSetNodeEdit((GroupNodeEdit) edit.getParent(), (Hdf5DataSet<?>) hdfObject);
+			} else if (edit instanceof AttributeNodeEdit) {
+				try {
+					newEdit = new AttributeNodeEdit(edit.getParent(), (Hdf5Attribute<?>) hdfObject);
+				} catch (IOException ioe) {
+					NodeLogger.getLogger(getClass()).error("Could not reset AttributeNodeEdit: " + ioe);
+					newEdit = null;
+				}
+			}
+			if (newEdit != null) {
+				newEdit.addEditToParentNodeIfPossible();
+				edit.copyPropertiesFrom(newEdit);
+				newEdit.removeFromParent();
+			}
+		} else {
+			edit.setDeletion(true);
+		}
 	}
 
 	private void validate() {

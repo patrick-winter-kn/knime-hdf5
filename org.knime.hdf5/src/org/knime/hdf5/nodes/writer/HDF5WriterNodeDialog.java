@@ -4,14 +4,19 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Frame;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.TreeMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -21,14 +26,19 @@ import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.Icon;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComponent;
+import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
+import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
+import javax.swing.WindowConstants;
 import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
 import javax.swing.event.ChangeEvent;
@@ -57,6 +67,8 @@ import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
 import org.knime.hdf5.nodes.writer.edit.EditOverwritePolicy;
 import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit;
+import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.InvalidCause;
 
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 
@@ -174,12 +186,133 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		});
 		buttonPanel.add(resetConfigButton);
 		
-		JButton removeInvalidsButton = new JButton("Remove invalids without source");
+		JButton removeInvalidsButton = new JButton("Reset invalid edits");
 		removeInvalidsButton.addActionListener(new ActionListener() {
 			
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				m_editTreePanel.removeEditsWithoutSource();
+				showRemoveInvalidsDialog();
+			}
+			
+			private void showRemoveInvalidsDialog() {
+				TreeMap<TreeNodeEdit, InvalidCause> removableEdits = m_editTreePanel.getInvalidEdits();
+				RemoveDialog removeDialog = new RemoveDialog(buttonPanel, "Reset invalid edits", removableEdits);
+				removeDialog.setVisible(true);
+			}
+
+			class RemoveDialog extends JDialog {
+				
+				private static final long serialVersionUID = -4327493810031381994L;
+				
+				private int m_selectedCount;
+
+				protected RemoveDialog(Component comp, String title, TreeMap<TreeNodeEdit, InvalidCause> removableEdits) {
+					super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, comp), title, true);
+					setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
+					setLocation(400, 400);
+					
+					JPanel panel = new JPanel(new BorderLayout());
+					add(panel, BorderLayout.CENTER);
+					panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+					
+					JPanel listPanel = new JPanel(new BorderLayout());
+					panel.add(listPanel, BorderLayout.CENTER);
+					
+					DefaultListModel<JCheckBox> listModel = new DefaultListModel<>();
+					for (TreeNodeEdit edit : removableEdits.keySet()) {
+						InvalidCause cause = removableEdits.get(edit);
+						JCheckBox checkBox = new JCheckBox(edit.getSummary() + " - " + cause.getMessage());
+						listModel.addElement(checkBox);
+					}
+					
+					JList<JCheckBox> checkList = new JList<>(listModel);
+					checkList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+					checkList.setCellRenderer(new DefaultListCellRenderer() {
+
+						private static final long serialVersionUID = 8312711495625029011L;
+
+						@Override
+						public Component getListCellRendererComponent(JList<?> list,
+								Object value, int index, boolean isSelected,
+								boolean cellHasFocus) {
+							super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+							
+							return (JCheckBox) value;
+						}
+					});
+
+					JCheckBox selectAllBox = new JCheckBox("select all");
+					listPanel.add(selectAllBox, BorderLayout.PAGE_START);
+					selectAllBox.addMouseListener(new MouseAdapter() {
+						
+						@Override
+						public void mousePressed(MouseEvent e) {
+							boolean clickedSelected = !selectAllBox.isSelected();
+							for (int i = 0; i < listModel.getSize(); i++) {
+								listModel.getElementAt(i).setSelected(clickedSelected);
+							}
+				        	m_selectedCount = clickedSelected ? listModel.getSize() : 0;
+				        	
+							checkList.repaint();
+						}
+					});
+					
+					checkList.addMouseListener(new MouseAdapter() {
+						
+						@Override
+						public void mousePressed(MouseEvent e) {
+							int index = checkList.locationToIndex(e.getPoint());
+					        if (index != -1) {
+					        	JCheckBox checkBox = listModel.getElementAt(index);
+					        	checkBox.setSelected(!checkBox.isSelected());
+					        	m_selectedCount += checkBox.isSelected() ? 1 : -1;
+					        	selectAllBox.setSelected(m_selectedCount == listModel.getSize());
+					        	
+								checkList.repaint();
+					        }
+						}
+					});
+					
+					final JScrollPane jsp = new JScrollPane(checkList);
+					jsp.setPreferredSize(new Dimension(500, 300));
+					listPanel.add(jsp, BorderLayout.CENTER);
+					
+					JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+					panel.add(buttonPanel, BorderLayout.PAGE_END);
+					JButton okButton = new JButton("OK");
+					okButton.addActionListener(new ActionListener() {
+						
+						@Override
+						public void actionPerformed(ActionEvent e) {
+							List<TreeNodeEdit> resetEdits = new ArrayList<>();
+
+							List<TreeNodeEdit> listEdits = new ArrayList<>(removableEdits.keySet());
+							for (int i = 0; i < listModel.getSize(); i++) {
+								JCheckBox checkBox = listModel.getElementAt(i);
+								TreeNodeEdit edit = listEdits.get(i);
+								if (checkBox.isSelected()) {
+									resetEdits.add(edit);
+								}
+							}
+							
+							m_editTreePanel.resetEdits(resetEdits);
+							setVisible(false);
+						}
+					});
+					buttonPanel.add(okButton);
+					
+					JButton cancelButton = new JButton("Cancel");
+					cancelButton.addActionListener(new ActionListener() {
+						
+						@Override
+						public void actionPerformed(ActionEvent e) {
+							setVisible(false);
+						}
+					});
+					buttonPanel.add(cancelButton);
+					
+					pack();
+				}
 			}
 		});
 		buttonPanel.add(removeInvalidsButton);

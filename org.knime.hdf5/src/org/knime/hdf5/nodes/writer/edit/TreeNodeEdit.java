@@ -9,6 +9,7 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -18,6 +19,7 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -159,7 +161,7 @@ public abstract class TreeNodeEdit {
 			m_message = message;
 		}
 		
-		protected String getMessage() {
+		public String getMessage() {
 			return m_message;
 		}
 	}
@@ -263,7 +265,7 @@ public abstract class TreeNodeEdit {
 	protected void setTreeNodeMenu(TreeNodeMenu treeNodeMenu) {
 		m_treeNodeMenu = treeNodeMenu;
 		if (m_treeNodeMenu != null) {
-			m_treeNodeMenu.updateDeleteItemText();
+			m_treeNodeMenu.updateMenuItems();
 		}
 	}
 	
@@ -401,7 +403,7 @@ public abstract class TreeNodeEdit {
 		m_name = copyEdit.getName();
 		m_editOverwritePolicy = copyEdit.getEditOverwritePolicy();
 		setEditAction(copyEdit.getEditAction());
-		m_treeNodeMenu.updateDeleteItemText();
+		m_treeNodeMenu.updateMenuItems();
 		if (m_editAction == EditAction.COPY) {
 			setCopyEdit(copyEdit.getCopyEdit());
 		}
@@ -505,7 +507,7 @@ public abstract class TreeNodeEdit {
 				copySource = ((Hdf5File) fileEdit.getHdfObject()).getAttributeByPath(m_inputPathFromFileWithName);
 			}
 		}
-		
+
 		return copySource;
 	}
 	
@@ -602,14 +604,17 @@ public abstract class TreeNodeEdit {
 		}
 	}
 	
-	protected TreeNodeEdit[] getInvalidsWithCause(InvalidCause cause) {
-		List<TreeNodeEdit> edits = new ArrayList<>();
+	public TreeMap<TreeNodeEdit, InvalidCause> getInvalidEdits() {
+		TreeMap<TreeNodeEdit, InvalidCause> removableEdits = new TreeMap<>(new TreeNodeEditComparator());
 		for (TreeNodeEdit edit : m_invalidEdits.keySet()) {
-			if (cause == m_invalidEdits.get(edit)) {
-				edits.add(edit);
+			InvalidCause cause = m_invalidEdits.get(edit);
+			if (cause != InvalidCause.NAME_DUPLICATE || edit.isOverwriteApplicable()) {
+				removableEdits.put(edit, cause);
 			}
 		}
-		return edits.toArray(new TreeNodeEdit[edits.size()]);
+		// TODO later this should be enough (if the map can handle several items with same path/name):
+		// removableEdits.putAll(m_invalidEdits);
+		return removableEdits;
 	}
 	
 	/**
@@ -653,7 +658,7 @@ public abstract class TreeNodeEdit {
 					}
 				}
 			}
-			messageBuilder.append(count > 1 ? " (" + count + ")" : "");
+			messageBuilder.append(count > 1 ? " (count: " + count + ")" : "");
 			messageBuilder.append(found > maxMessageCountPerCause ? "\n- and "
 					+ (found - maxMessageCountPerCause) + " more\n" : found > 0 ? "\n" : "");
 		}
@@ -710,7 +715,7 @@ public abstract class TreeNodeEdit {
 		return summaryBuilder.toString();
 	}
 	
-	private String getSummary() {
+	public String getSummary() {
 		return getHdfObjectType() + " " + getOutputPathFromFileWithName(true) + " (" + m_editAction + ")";
 	}
 	
@@ -823,7 +828,7 @@ public abstract class TreeNodeEdit {
 	    	} else {
 	    		m_editAction = isDelete ? EditAction.DELETE : (this instanceof ColumnNodeEdit ? EditAction.NO_ACTION : EditAction.MODIFY);
 	    		updateParentEditAction();
-	    		m_treeNodeMenu.updateDeleteItemText();
+	    		m_treeNodeMenu.updateMenuItems();
 	    	}
 	    	
 	    	for (TreeNodeEdit edit : getAllChildren()) {
@@ -1262,42 +1267,48 @@ public abstract class TreeNodeEdit {
 		private static final long serialVersionUID = 4973286624577483071L;
 
     	private PropertiesDialog m_propertiesDialog;
-		
+
+    	private JMenuItem m_itemEdit;
+    	
+    	private JMenuItem m_itemCreateGroup;
+    	
     	private JMenuItem m_itemDelete;
 		
 		protected TreeNodeMenu(boolean editable, boolean groupCreatable, boolean deletable) {
 			if (editable) {
-				JMenuItem itemEdit = new JMenuItem("Edit properties");
-	    		itemEdit.addActionListener(new ActionListener() {
+				m_itemEdit = new JMenuItem("Edit properties");
+				m_itemEdit.addActionListener(new ActionListener() {
 					
 					@Override
 					public void actionPerformed(ActionEvent e) {
-						if (m_propertiesDialog == null) {
-							m_propertiesDialog = getPropertiesDialog();
+						if (m_editAction != EditAction.DELETE) {
+							if (m_propertiesDialog == null) {
+								m_propertiesDialog = getPropertiesDialog();
+							}
+							
+							m_propertiesDialog.loadFromEdit();
+							m_propertiesDialog.setVisible(true);
 						}
-						
-						m_propertiesDialog.loadFromEdit();
-						m_propertiesDialog.setVisible(true);
 					}
 				});
-	    		add(itemEdit);
+	    		add(m_itemEdit);
 			}
 			
     		if (groupCreatable) {
-	    		JMenuItem itemCreateGroup = new JMenuItem("Create new group");
-	    		itemCreateGroup.addActionListener(new ActionListener() {
+    			m_itemCreateGroup = new JMenuItem("Create new group");
+    			m_itemCreateGroup.addActionListener(new ActionListener() {
 					
 					@Override
 					public void actionPerformed(ActionEvent e) {
 						onCreateGroup();
 					}
 				});
-	    		add(itemCreateGroup);
+	    		add(m_itemCreateGroup);
     		}
 
     		if (deletable) {
     			m_itemDelete = new JMenuItem();
-    			updateDeleteItemText();
+    			updateMenuItems();
     			m_itemDelete.addActionListener(new ActionListener() {
 					
 					@Override
@@ -1313,7 +1324,13 @@ public abstract class TreeNodeEdit {
     		}
     	}
 		
-		private void updateDeleteItemText() {
+		private void updateMenuItems() {
+			if (m_itemEdit != null) {
+				m_itemEdit.setEnabled(m_editAction != EditAction.DELETE);
+			}
+			if (m_itemCreateGroup != null) {
+				m_itemCreateGroup.setEnabled(m_editAction != EditAction.DELETE);
+			}
 			if (m_itemDelete != null) {
 				m_itemDelete.setText(m_editAction != EditAction.DELETE ? "Delete" : "Remove deletion");
 			}
@@ -1371,6 +1388,8 @@ public abstract class TreeNodeEdit {
 					setVisible(false);
 				}
 			});
+	        getRootPane().setDefaultButton(okButton);
+	        okButton.setMnemonic(KeyEvent.VK_ENTER);
 			buttonPanel.add(okButton);
 			
 			JButton cancelButton = new JButton("Cancel");

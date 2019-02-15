@@ -12,6 +12,7 @@ import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeMap;
 
 import javax.swing.BorderFactory;
 import javax.swing.DropMode;
@@ -460,11 +461,19 @@ public class EditTreePanel extends JPanel {
 		m_editTreeConfig.initConfigOfFile(filePath, overwriteFile, keepConfig, m_tree);
 	}
 	
-	void removeEditsWithoutSource() {
+	TreeMap<TreeNodeEdit, InvalidCause> getInvalidEdits() {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
 		if (fileEdit != null) {
-			fileEdit.removeInvalidsWithCause(InvalidCause.NO_HDF_SOURCE);
-			fileEdit.removeInvalidsWithCause(InvalidCause.NO_COPY_SOURCE);
+			return fileEdit.getInvalidEdits();
+		}
+		
+		return null;
+	}
+	
+	void resetEdits(List<TreeNodeEdit> removeEdits) {
+		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
+		if (fileEdit != null) {
+			fileEdit.resetEdits(removeEdits);
 		}
 	}
 
