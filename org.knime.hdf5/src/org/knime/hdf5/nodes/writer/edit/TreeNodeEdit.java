@@ -1307,6 +1307,7 @@ public abstract class TreeNodeEdit {
 							}
 							
 							m_propertiesDialog.loadFromEdit();
+							m_propertiesDialog.setLocationRelativeTo((Frame) SwingUtilities.getAncestorOfClass(Frame.class, getInvoker()));
 							m_propertiesDialog.setVisible(true);
 						}
 					}
@@ -1381,11 +1382,11 @@ public abstract class TreeNodeEdit {
 		private final JPanel m_contentPanel = new JPanel();
 		
 		private final GridBagConstraints m_constraints = new GridBagConstraints();
-		
+
 		protected PropertiesDialog(TreeNodeMenu menu, String title) {
 			super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, menu.getInvoker()), title, true);
 			setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
-			setLocation(400, 400);
+			// setLocation(400, 400);
 			
 			JPanel panel = new JPanel(new BorderLayout());
 			add(panel, BorderLayout.CENTER);

@@ -522,7 +522,6 @@ public class FileNodeEdit extends GroupNodeEdit {
 				if (edit.getEditAction() == EditAction.CREATE) {
 					specIndices[i][specIndicesIndex] = tableSpec.findColumnIndex(edit.getName());
 					specIndicesIndex++;
-					// TODO check if it's already set to this value: edit.setInputRowCount(inputRowCount);
 					
 				} else if (edit.getEditAction() != EditAction.DELETE) {
 					specIndices[i][specIndicesIndex] = -1;
