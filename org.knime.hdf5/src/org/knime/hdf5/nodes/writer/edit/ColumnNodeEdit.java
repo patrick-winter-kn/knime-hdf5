@@ -3,14 +3,7 @@ package org.knime.hdf5.nodes.writer.edit;
 import java.io.IOException;
 import java.util.Map;
 
-import javax.activation.UnsupportedDataTypeException;
-
 import org.knime.core.data.DataColumnSpec;
-import org.knime.core.data.DataRow;
-import org.knime.core.data.DataTableSpec;
-import org.knime.core.data.container.CloseableRowIterator;
-import org.knime.core.node.BufferedDataTable;
-import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
@@ -19,7 +12,6 @@ import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
-import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
 
@@ -183,7 +175,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
+	protected InvalidCause validateEditInternal() {
 		DataSetNodeEdit parent = (DataSetNodeEdit) getParent();
 		
 		InvalidCause cause = getEditAction() != EditAction.DELETE && m_inputRowCount != UNKNOWN_ROW_COUNT
@@ -200,66 +192,34 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 			}
 		}
 		
-		if (cause == null) {
-			if (getEditAction() != EditAction.CREATE || inputTable != null) {
-				Object[] values = null;
-
-				EditDataType parentDataType = parent.getEditDataType();
-				if (getEditAction() == EditAction.CREATE) {
-					try {
-						DataTableSpec tableSpec = inputTable.getDataTableSpec();
-						int columnIndex = tableSpec.findColumnIndex(getInputPathFromFileWithName());
-						Hdf5KnimeDataType knimeType = Hdf5KnimeDataType.getKnimeDataType(parentDataType.getOutputType(), true);
-						values = knimeType.createArray((int) inputTable.size());
-						Object standardValue = parentDataType.getStandardValue();
-						CloseableRowIterator iter = inputTable.iterator();
-						int rowIndex = 0;
-						while (iter.hasNext()) {
-							DataRow row = iter.next();
-							Object value = knimeType.getValueFromDataCell(row.getCell(columnIndex));
-							if (value == null) {
-								if (standardValue != null) {
-									value = standardValue;
-								} else {
-									cause = cause == null ? InvalidCause.MISSING_VALUES : cause;
-									break;
-								}
-							}
-							values[rowIndex] = value;
-							rowIndex++;
-						}
-					} catch (UnsupportedDataTypeException udte) {
-						NodeLogger.getLogger(getClass()).error("Validation of dataType of new column \""
-								+ getOutputPathFromFileWithName() +  "\" could not be checked: " + udte.getMessage(), udte);
-						values = null;
-					}
-				} else if (inputTable == null && getEditAction() != EditAction.DELETE) {
-					try {
-						// TODO maybe check this when the columns loaded for the first time
-						TreeNodeEdit copyEdit = getEditAction() == EditAction.COPY ? getCopyEdit() : this;
-						Hdf5DataSet<?> dataSet = copyEdit != null ? (Hdf5DataSet<?>) copyEdit.getHdfSource() : null;
-						if (dataSet != null) {
-							dataSet.open();
-							
-							// only supported for dataSets with max. 2 dimensions
-							if (m_inputRowCount == dataSet.numberOfRows()) {
-								values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
-							} else {
-								cause = InvalidCause.INPUT_ROW_SIZE;
-							}
-						}
-					} catch (IOException ioe) {
-						NodeLogger.getLogger(getClass()).error("Validation of dataType of new column \""
-								+ getOutputPathFromFileWithName() +  "\" could not be checked: " + ioe.getMessage(), ioe);
-						
-					} catch (HDF5DataspaceInterfaceException ioe) {
-						cause = cause == null ? InvalidCause.COLUMN_INDEX : cause;
+		if (cause == null && getEditAction() != EditAction.CREATE && getEditAction() != EditAction.DELETE) {
+			Object[] values = null;
+			EditDataType parentDataType = parent.getEditDataType();
+			
+			try {
+				// TODO maybe check this when the columns loaded for the first time
+				TreeNodeEdit copyEdit = getEditAction() == EditAction.COPY ? getCopyEdit() : this;
+				Hdf5DataSet<?> dataSet = copyEdit != null ? (Hdf5DataSet<?>) copyEdit.getHdfSource() : null;
+				if (dataSet != null) {
+					dataSet.open();
+					
+					// only supported for dataSets with max. 2 dimensions
+					if (m_inputRowCount == dataSet.numberOfRows()) {
+						values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
+					} else {
+						cause = InvalidCause.INPUT_ROW_SIZE;
 					}
 				}
+			} catch (IOException ioe) {
+				NodeLogger.getLogger(getClass()).error("Validation of dataType of new column \""
+						+ getOutputPathFromFileWithName() +  "\" could not be checked: " + ioe.getMessage(), ioe);
 				
-				if (values != null && cause == null) {
-					cause = !parentDataType.getOutputType().areValuesConvertible(values, m_inputType, parentDataType) ? InvalidCause.OUTPUT_DATA_TYPE : cause;
-				}
+			} catch (HDF5DataspaceInterfaceException ioe) {
+				cause = cause == null ? InvalidCause.COLUMN_INDEX : cause;
+			}
+			
+			if (values != null && cause == null) {
+				cause = !parentDataType.getOutputType().areValuesConvertible(values, m_inputType, parentDataType) ? InvalidCause.OUTPUT_DATA_TYPE : cause;
 			}
 		}
 		
@@ -290,24 +250,23 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) {
-		return false;
+	protected EditSuccess createAction(Map<String, FlowVariable> flowVariables) {
+		return null;
 	}
 	
 	@Override
-	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) {
-		return false;
+	protected EditSuccess copyAction() {
+		return null;
 	}
 
 	@Override
-	protected boolean deleteAction() {
-		return false;
+	protected EditSuccess deleteAction() {
+		return null;
 	}
 
 	@Override
-	protected boolean modifyAction(BufferedDataTable inputTable, boolean saveColumnProperties,
-			ExecutionContext exec, long totalProgressToDo) {
-		return false;
+	protected EditSuccess modifyAction() {
+		return null;
 	}
 	
 	public class ColumnNodeMenu extends TreeNodeMenu {

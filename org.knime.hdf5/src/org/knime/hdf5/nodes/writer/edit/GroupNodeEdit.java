@@ -11,8 +11,6 @@ import javax.activation.UnsupportedDataTypeException;
 import javax.swing.JComboBox;
 import javax.swing.JTextField;
 
-import org.knime.core.node.BufferedDataTable;
-import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
@@ -424,7 +422,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
+	protected InvalidCause validateEditInternal() {
 		return getName().contains("/") ? InvalidCause.NAME_CHARS :
 			getName().startsWith(BACKUP_PREFIX) && !getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName())
 					? InvalidCause.NAME_BACKUP_PREFIX : null;
@@ -439,35 +437,33 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables,
-			boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException {
+	protected EditSuccess createAction(Map<String, FlowVariable> flowVariables) throws IOException {
 		setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).createGroup(getName()));
 		
-		return getHdfObject() != null;
+		return EditSuccess.getSuccess(getHdfObject() != null);
 	}
 	
 	@Override
-	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
+	protected EditSuccess copyAction() throws IOException {
 		/*Hdf5Group copyGroup = (Hdf5Group) findCopySource();
 		setHdfObject((Hdf5Group) copyGroup.getParent().copyObject(copyGroup.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
 		
 		return getHdfObject() != null;*/
-		return createAction(null, null, false, exec, totalProgressToDo);
+		return createAction(null);
 	}
 
 	@Override
-	protected boolean deleteAction() throws IOException {
+	protected EditSuccess deleteAction() throws IOException {
 		Hdf5Group group = (Hdf5Group) getHdfObject();
 		if (((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(group.getName())) {
 			setHdfObject((Hdf5Group) null);
 		}
 		
-		return getHdfObject() == null;
+		return EditSuccess.getSuccess(getHdfObject() == null);
 	}
 
 	@Override
-	protected boolean modifyAction(BufferedDataTable inputTable, boolean saveColumnProperties,
-			ExecutionContext exec, long totalProgressToDo) throws IOException {
+	protected EditSuccess modifyAction() throws IOException {
 		Hdf5Group oldGroup = (Hdf5Group) getHdfSource();
 		if (!oldGroup.getName().equals(getName())) {
 			if (oldGroup == getHdfBackup()) {
@@ -477,7 +473,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			}
 		}
 		
-		return getHdfObject() != null;
+		return EditSuccess.getSuccess(getHdfObject() != null);
 	}
 	
 	public class GroupNodeMenu extends TreeNodeMenu {

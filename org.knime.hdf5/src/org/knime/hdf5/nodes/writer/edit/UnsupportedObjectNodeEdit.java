@@ -2,9 +2,6 @@ package org.knime.hdf5.nodes.writer.edit;
 
 import java.util.Map;
 
-import org.knime.core.node.BufferedDataTable;
-import org.knime.core.node.CanceledExecutionException;
-import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.workflow.FlowVariable;
@@ -50,7 +47,7 @@ public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
+	protected InvalidCause validateEditInternal() {
 		return null;
 	}
 
@@ -61,25 +58,22 @@ public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables,
-			boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo)
-			throws CanceledExecutionException {
-		return false;
+	protected EditSuccess createAction(Map<String, FlowVariable> flowVariables) {
+		return null;
 	}
 
 	@Override
-	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) {
-		return false;
+	protected EditSuccess copyAction() {
+		return null;
 	}
 
 	@Override
-	protected boolean deleteAction() {
-		return false;
+	protected EditSuccess deleteAction() {
+		return null;
 	}
 
 	@Override
-	protected boolean modifyAction(BufferedDataTable inputTable, boolean saveColumnProperties,
-			ExecutionContext exec, long totalProgressToDo) {
-		return false;
+	protected EditSuccess modifyAction() {
+		return null;
 	}
 }

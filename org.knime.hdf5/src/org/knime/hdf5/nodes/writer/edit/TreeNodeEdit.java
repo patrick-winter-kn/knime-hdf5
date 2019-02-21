@@ -1,7 +1,6 @@
 package org.knime.hdf5.nodes.writer.edit;
 
 import java.awt.BorderLayout;
-import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.Frame;
 import java.awt.GridBagConstraints;
@@ -167,7 +166,7 @@ public abstract class TreeNodeEdit {
 	}
 	
 	static enum EditState {
-		TODO, IN_PROGRESS, SUCCESS, FAIL, ROLLBACK_SUCCESS, ROLLBACK_FAIL, ROLLBACK_NOTHING_TODO;
+		TODO, IN_PROGRESS, POSTPONED, SUCCESS, FAIL, ROLLBACK_SUCCESS, ROLLBACK_FAIL, ROLLBACK_NOTHING_TODO;
 		
 		boolean isRollbackState() {
 			return this == ROLLBACK_SUCCESS || this == ROLLBACK_FAIL || this == ROLLBACK_NOTHING_TODO;
@@ -175,6 +174,22 @@ public abstract class TreeNodeEdit {
 		
 		boolean isExecutedState() {
 			return this == SUCCESS || this == FAIL || isRollbackState();
+		}
+	}
+	
+	static enum EditSuccess {
+		TRUE, FALSE, POSTPONED;
+		
+		static EditSuccess getSuccess(boolean success) {
+			return success ? TRUE : FALSE;
+		}
+
+		boolean isSuccessDecided() {
+			return this == TRUE || this == FALSE;
+		}
+		
+		boolean didNotFail() {
+			return this == TRUE || this == POSTPONED;
 		}
 	}
 	
@@ -593,6 +608,10 @@ public abstract class TreeNodeEdit {
 		return m_invalidEdits.isEmpty();
 	}
 	
+	void updateInvalidMap(InvalidCause cause) {
+		updateInvalidMap(this, cause);
+	}
+	
 	private void updateInvalidMap(TreeNodeEdit edit, InvalidCause cause) {
 		if (cause != null) {
 			m_invalidEdits.put(edit, cause);
@@ -985,6 +1004,7 @@ public abstract class TreeNodeEdit {
 							integrateEdit = ((GroupNodeEdit) oldEdit).copyGroupEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
 							if (editToOverwrite != null) {
 								((GroupNodeEdit) integrateEdit).integrate((GroupNodeEdit) editToOverwrite, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+								integrateEdit.copyPropertiesFrom(editToOverwrite);
 							}
 							for (TreeNodeEdit edit : newEdit.getAllChildren()) {
 								integrateEdit.useOverwritePolicy(edit);
@@ -994,8 +1014,8 @@ public abstract class TreeNodeEdit {
 						} else if (oldEdit instanceof DataSetNodeEdit) {
 							integrateEdit = ((DataSetNodeEdit) oldEdit).copyDataSetEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
 							if (editToOverwrite != null) {
-								((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) editToOverwrite, ColumnNodeEdit.UNKNOWN_ROW_COUNT, false);
-								
+								((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) editToOverwrite, ColumnNodeEdit.UNKNOWN_ROW_COUNT, true);
+								integrateEdit.copyPropertiesFrom(editToOverwrite);
 							}
 							for (TreeNodeEdit edit : newEdit.getAllChildren()) {
 								integrateEdit.useOverwritePolicy(edit);
@@ -1025,7 +1045,7 @@ public abstract class TreeNodeEdit {
 				|| m_editAction == EditAction.MODIFY && !getOutputPathFromFileWithName(true).equals(m_inputPathFromFileWithName);
 	}
 	
-	protected void validate(BufferedDataTable inputTable, boolean internalCheck, boolean externalCheck) {
+	protected void validate(boolean internalCheck, boolean externalCheck) {
 		InvalidCause cause = null;
 		
 		if (externalCheck && cause == null) {
@@ -1054,16 +1074,16 @@ public abstract class TreeNodeEdit {
 			}
 		}
 		
-		cause = cause == null && internalCheck ? validateEditInternal(inputTable) : cause;
+		cause = cause == null && internalCheck ? validateEditInternal() : cause;
 		
-		updateInvalidMap(this, cause);
+		updateInvalidMap(cause);
 
 		for (TreeNodeEdit edit : getAllChildren()) {
-	        edit.validate(inputTable, internalCheck, externalCheck);
+	        edit.validate(internalCheck, externalCheck);
 		}
 	}
 	
-	protected abstract InvalidCause validateEditInternal(BufferedDataTable inputTable);
+	protected abstract InvalidCause validateEditInternal();
 	
 	protected abstract boolean isInConflict(TreeNodeEdit edit);
 	
@@ -1072,26 +1092,26 @@ public abstract class TreeNodeEdit {
 		
 		setEditState(EditState.IN_PROGRESS);
 		
-		boolean success = false;
+		EditSuccess success = null;
 		boolean successOfOther = true;
 
 		try {
 			switch (m_editAction) {
 			case CREATE:
-				success = createAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
+				success = createAction(flowVariables);
 				break;
 			case COPY:
-				success = copyAction(exec, totalProgressToDo);
+				success = copyAction();
 				break;
 			case NO_ACTION:
 			case MODIFY_CHILDREN_ONLY:
-				success = true;
+				success = EditSuccess.TRUE;
 				break;
 			default:
 				break;
 			}
 			
-			if (success) {
+			if (success == EditSuccess.TRUE) {
 				setSuccess(true, exec, totalProgressToDo);
 			}
 			
@@ -1102,16 +1122,18 @@ public abstract class TreeNodeEdit {
 				success = deleteAction();
 				break;
 			case MODIFY:
-				success = modifyAction(inputTable, saveColumnProperties, exec, totalProgressToDo);
+				success = modifyAction();
 				break;
 			default:
 				break;
 			}
 		} finally {
-			setSuccess(success, exec, totalProgressToDo);
+			if (success.isSuccessDecided()) {
+				setSuccess(success == EditSuccess.TRUE, exec, totalProgressToDo);
+			}
 		}
 		
-		return success && successOfOther;
+		return success.didNotFail() && successOfOther;
 	}
 
 	private boolean doChildActionsInOrder(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException, IOException {
@@ -1172,22 +1194,20 @@ public abstract class TreeNodeEdit {
 		return backupNeeded;
 	}
 
-	protected abstract boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables,
-			boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException;
-	protected abstract boolean copyAction(ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException;
-	protected abstract boolean deleteAction() throws IOException;
-	protected abstract boolean modifyAction(BufferedDataTable inputTable, boolean saveColumnProperties,
-			ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException;
+	protected abstract EditSuccess createAction(Map<String, FlowVariable> flowVariables) throws IOException;
+	protected abstract EditSuccess copyAction() throws IOException;
+	protected abstract EditSuccess deleteAction() throws IOException;
+	protected abstract EditSuccess modifyAction() throws IOException;
 	
 	protected boolean rollbackAction() throws IOException {
-		boolean success = false;
+		EditSuccess success = null;
 		
 		try {
 			if (m_editState == EditState.ROLLBACK_NOTHING_TODO
 					|| m_parent.getEditState() == EditState.ROLLBACK_SUCCESS
 					&& (m_parent.getEditAction() == EditAction.DELETE || m_parent.getEditAction() == EditAction.MODIFY && m_parent.getHdfBackup() != null)) {
 					// this edit's rollback has already been done successfully in the parent's rollback
-				success = true;
+				success = EditSuccess.TRUE;
 				
 			} else {
 				switch (m_editAction) {
@@ -1205,24 +1225,24 @@ public abstract class TreeNodeEdit {
 						Hdf5TreeElement treeElement = (Hdf5TreeElement) getHdfSource();
 						setHdfObject(treeElement.getParent().moveObject(treeElement.getName(), treeElement.getParent(), newName));
 					}
-					success = m_hdfObject != null;
+					success = EditSuccess.getSuccess(m_hdfObject != null);
 					/* 
 					 * do not set m_hdfBackup to null here because '!=null' check is needed for children
 					 * (at the beginning of this try-finally-block)
 					 */
 					break;
 				default:
-					success = true;
+					success = EditSuccess.TRUE;
 					break;
 				}
 			}
 		} finally {
 			if (m_editState != EditState.ROLLBACK_NOTHING_TODO) {
-				setEditState(success ? EditState.ROLLBACK_SUCCESS : EditState.ROLLBACK_FAIL);
+				setEditState(success == EditSuccess.TRUE ? EditState.ROLLBACK_SUCCESS : EditState.ROLLBACK_FAIL);
 			}
 		}
 		
-		return success;
+		return success == EditSuccess.TRUE;
 	}
 	
 	private static class TreeNodeEditComparator implements Comparator<TreeNodeEdit> {
@@ -1362,8 +1382,8 @@ public abstract class TreeNodeEdit {
 		
 		private final GridBagConstraints m_constraints = new GridBagConstraints();
 		
-		protected PropertiesDialog(Component comp, String title) {
-			super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, comp), title, true);
+		protected PropertiesDialog(TreeNodeMenu menu, String title) {
+			super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, menu.getInvoker()), title, true);
 			setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
 			setLocation(400, 400);
 			

@@ -1,8 +1,9 @@
 package org.knime.hdf5.lib.types;
 
+import java.io.IOException;
+
 import javax.activation.UnsupportedDataTypeException;
 
-import org.knime.core.node.NodeLogger;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.Endian;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
@@ -66,30 +67,22 @@ public class Hdf5DataType {
 	}
 	
 	public static Hdf5DataType createDataType(Hdf5HdfDataType hdfType, Hdf5KnimeDataType knimeType, 
-			boolean vlen, boolean fromDS, long stringLength) {
-		Hdf5DataType dataType = null;
-		
-		try {
-			dataType = new Hdf5DataType(hdfType, knimeType, vlen, fromDS);
-			dataType.getHdfType().createHdfDataTypeString(stringLength);
-    		
-		} catch (NullPointerException | IllegalArgumentException npiae) {
-            NodeLogger.getLogger("HDF5 Files").error("DataType could not be created: " + npiae.getMessage(), npiae);
-			/* dataType stays null */
-        }
+			boolean vlen, boolean fromDS, long stringLength) throws IOException {
+		Hdf5DataType dataType = new Hdf5DataType(hdfType, knimeType, vlen, fromDS);
+		dataType.getHdfType().createHdfDataTypeString(stringLength);
 		
 		return dataType;
 	}
 	
-	public static Hdf5DataType createCopyFrom(Hdf5DataType copyDataType) {
+	public static Hdf5DataType createCopyFrom(Hdf5DataType copyDataType) throws IOException {
 		return createDataType(Hdf5HdfDataType.createCopyFrom(copyDataType.getHdfType()),
 				copyDataType.getKnimeType(), copyDataType.isVlen(), copyDataType.isFromDS(), copyDataType.getHdfType().getStringLength());
 	}
 	
-	public static Hdf5DataType openDataType(long elementId) throws HDF5LibraryException, UnsupportedDataTypeException, IllegalArgumentException {
+	public static Hdf5DataType openDataType(long elementId) throws HDF5LibraryException, IllegalArgumentException, IOException, UnsupportedDataTypeException {
 		int elementTypeId = H5.H5Iget_type(elementId);
 		if (elementTypeId != HDF5Constants.H5I_DATASET && elementTypeId != HDF5Constants.H5I_ATTR) {
-			throw new IllegalArgumentException("DataType can only be for a DataSet or Attribute");
+			throw new IllegalArgumentException("DataType can only be opened for a DataSet or Attribute");
 		}
 		
 		boolean fromDS = elementTypeId == HDF5Constants.H5I_DATASET;

@@ -1,5 +1,6 @@
 package org.knime.hdf5.lib.types;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -11,7 +12,6 @@ import org.knime.core.data.DataType;
 import org.knime.core.data.def.DoubleCell;
 import org.knime.core.data.def.IntCell;
 import org.knime.core.data.def.LongCell;
-import org.knime.core.node.NodeLogger;
 import org.knime.core.node.workflow.FlowVariable.Type;
 import org.knime.hdf5.nodes.writer.edit.EditDataType;
 
@@ -34,8 +34,6 @@ public class Hdf5HdfDataType {
 		FLOAT64(820),
 		STRING(2);
 		private static final Map<Integer, HdfDataType> LOOKUP = new HashMap<>();
-		
-		public static final int AUTO_STRING_LENGTH = -1;
 
 		static {
 			for (HdfDataType hdfType : HdfDataType.values()) {
@@ -255,7 +253,7 @@ public class Hdf5HdfDataType {
 						}
 					}
 				} else {
-					int stringLength = AUTO_STRING_LENGTH;
+					int stringLength = editDataType.getStringLength();
 					for (Object value : values) {
 						int newStringLength = value.toString().length();
 						stringLength = newStringLength > stringLength ? newStringLength : stringLength;
@@ -373,7 +371,7 @@ public class Hdf5HdfDataType {
 		return getInstance(copyHdfType.getType(), copyHdfType.getEndian());
 	}
 	
-	void createHdfDataTypeString(final long stringLength) {
+	void createHdfDataTypeString(final long stringLength) throws IOException {
 		if (m_type == HdfDataType.STRING) {
 			try {
 				// Create file and memory dataTypes. For this example we will save
@@ -393,12 +391,12 @@ public class Hdf5HdfDataType {
 				m_stringLength = stringLength;
 				
 			} catch (HDF5LibraryException hle) {
-				NodeLogger.getLogger("HDF Files").error("String dataType could not be created", hle);
+				throw new IOException("String dataType could not be created: " + hle.getMessage(), hle);
 			}
 		}
 	}
 	
-	void openHdfDataTypeString(final long elementId) {
+	void openHdfDataTypeString(final long elementId) throws IOException {
 		if (m_type == HdfDataType.STRING) {
 			try {
 				long fileTypeId = H5.H5Iget_type(elementId) == HDF5Constants.H5I_DATASET ? H5.H5Dget_type(elementId) : H5.H5Aget_type(elementId);
@@ -415,7 +413,7 @@ public class Hdf5HdfDataType {
 				m_stringLength = stringLength;
 				
 			} catch (HDF5LibraryException hle) {
-				NodeLogger.getLogger("HDF Files").error("String dataType could not be opened", hle);
+				throw new IOException("String dataType could not be opened: " + hle.getMessage(), hle);
 			}
 		}
 	}

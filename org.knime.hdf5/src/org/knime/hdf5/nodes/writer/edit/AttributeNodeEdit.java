@@ -12,8 +12,6 @@ import javax.swing.JTextField;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import org.knime.core.node.BufferedDataTable;
-import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
@@ -291,7 +289,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 	
 	@Override
-	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
+	protected InvalidCause validateEditInternal() {
 		return getName().startsWith(BACKUP_PREFIX) && !getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName())
 				? InvalidCause.NAME_BACKUP_PREFIX : null;
 	}
@@ -329,15 +327,15 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException {
+	protected EditSuccess createAction(Map<String, FlowVariable> flowVariables) throws IOException {
 		FlowVariable var = flowVariables.get(getInputPathFromFileWithName());
 		setHdfObject(getOpenedHdfObjectOfParent().createAndWriteAttribute(this, var));
 		
-		return getHdfObject() != null;
+		return EditSuccess.getSuccess(getHdfObject() != null);
 	}
 
 	@Override
-	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
+	protected EditSuccess copyAction() throws IOException {
 		Hdf5Attribute<?> copyAttribute = (Hdf5Attribute<?>) findCopySource();
 		Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
 		if (havePropertiesChanged(copyAttribute)) {
@@ -346,22 +344,21 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			setHdfObject(copyAttribute.getParent().copyAttribute(copyAttribute, parent, getName()));
 		}
 		
-		return getHdfObject() != null;
+		return EditSuccess.getSuccess(getHdfObject() != null);
 	}
 
 	@Override
-	protected boolean deleteAction() throws IOException {
+	protected EditSuccess deleteAction() throws IOException {
 		Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfObject();
 		if (getOpenedHdfObjectOfParent().deleteAttribute(attribute.getName())) {
 			setHdfObject((Hdf5Attribute<?>) null);
 		}
 		
-		return getHdfObject() == null;
+		return EditSuccess.getSuccess(getHdfObject() == null);
 	}
 
 	@Override
-	protected boolean modifyAction(BufferedDataTable inputTable, boolean saveColumnProperties,
-			ExecutionContext exec, long totalProgressToDo) throws IOException {
+	protected EditSuccess modifyAction() throws IOException {
 		Hdf5Attribute<?> oldAttribute = (Hdf5Attribute<?>) getHdfSource();
 		Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
 		if (havePropertiesChanged(oldAttribute)) {
@@ -380,7 +377,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			}
 		}
 		
-		return getHdfObject() != null;
+		return EditSuccess.getSuccess(getHdfObject() != null);
 	}
 	
 	public class AttributeNodeMenu extends TreeNodeMenu {

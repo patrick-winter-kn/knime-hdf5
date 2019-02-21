@@ -6,12 +6,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import javax.activation.UnsupportedDataTypeException;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 
 import org.knime.core.data.DataColumnSpec;
+import org.knime.core.data.DataRow;
+import org.knime.core.data.DataTableSpec;
+import org.knime.core.data.container.CloseableRowIterator;
 import org.knime.core.node.BufferedDataTable;
 import org.knime.core.node.CanceledExecutionException;
 import org.knime.core.node.ExecutionContext;
@@ -25,8 +29,15 @@ import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.Hdf5TreeElement;
+import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
+
+import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
 
 public class FileNodeEdit extends GroupNodeEdit {
+
+	private static final String COLUMN_PROPERTY_NAMES = "knime.columnnames";
+	
+	private static final String COLUMN_PROPERTY_TYPES = "knime.columntypes";
 	
 	private final String m_filePath;
 	
@@ -271,10 +282,14 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 		
 		if (hdfObject != null) {
+			if (edit instanceof ColumnNodeEdit) {
+				edit = edit.getParent();
+			}
+			
 			TreeNodeEdit newEdit = null;
 			if (edit instanceof GroupNodeEdit) {
 				newEdit = new GroupNodeEdit((GroupNodeEdit) edit.getParent(), (Hdf5Group) hdfObject);
-			} else if (edit instanceof DataSetNodeEdit || edit instanceof ColumnNodeEdit) {
+			} else if (edit instanceof DataSetNodeEdit) {
 				newEdit = new DataSetNodeEdit((GroupNodeEdit) edit.getParent(), (Hdf5DataSet<?>) hdfObject);
 			} else if (edit instanceof AttributeNodeEdit) {
 				try {
@@ -305,7 +320,6 @@ public class FileNodeEdit extends GroupNodeEdit {
 		copyEdit.validate(inputTable, true, false);
 	}
 	
-	@Override
 	protected void validate(BufferedDataTable inputTable, boolean internalCheck, boolean externalCheck) {
 		Hdf5File file = null;
 		try {
@@ -313,8 +327,11 @@ public class FileNodeEdit extends GroupNodeEdit {
 			if (file != null) {
 				file.open(Hdf5File.READ_ONLY_ACCESS);
 			}
-			super.validate(inputTable, internalCheck, externalCheck);
 			
+			validate(internalCheck, externalCheck);
+			if (internalCheck && inputTable != null) {
+				lastValidationOfColumnEdits(inputTable);
+			}
 		} catch (Exception e) {
 			NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
 			
@@ -330,7 +347,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	@Override
-	protected InvalidCause validateEditInternal(BufferedDataTable inputTable) {
+	protected InvalidCause validateEditInternal() {
 		InvalidCause cause = m_filePath.endsWith(".h5") || m_filePath.endsWith(".hdf5") ? null : InvalidCause.FILE_EXTENSION;
 		
 		cause = cause == null && getName().contains("/") ? InvalidCause.NAME_CHARS : cause;
@@ -360,8 +377,54 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 	
-	// continue here: manage EditStates of FileNodeEdit
-	// see error in Hdf5File.isOpenAnywhere(): Bad value in H5.H5Fget_obj_count()
+	private void lastValidationOfColumnEdits(BufferedDataTable inputTable) {
+		List<ColumnNodeEdit> validateEdits = new ArrayList<>();
+		for (TreeNodeEdit edit : getAllDecendants()) {
+			if (edit.getEditAction() == EditAction.CREATE) {
+				if (edit instanceof ColumnNodeEdit) {
+					validateEdits.add((ColumnNodeEdit) edit);
+				}
+			}
+		}
+
+		DataTableSpec tableSpec = inputTable.getDataTableSpec();
+		CloseableRowIterator iter = inputTable.iterator();
+		while (iter.hasNext()) {
+			DataRow row = iter.next();
+			InvalidCause[] causes = new InvalidCause[validateEdits.size()];
+			for (int i = 0; i < validateEdits.size(); i++) {
+				ColumnNodeEdit edit = validateEdits.get(i);
+				EditDataType parentDataType = ((DataSetNodeEdit) edit.getParent()).getEditDataType();
+				Hdf5KnimeDataType knimeType = Hdf5KnimeDataType.getKnimeDataType(parentDataType.getOutputType(), true);
+				Object standardValue = parentDataType.getStandardValue();
+				int columnIndex = tableSpec.findColumnIndex(edit.getInputPathFromFileWithName());
+				
+				try {
+					Object value = knimeType.getValueFromDataCell(row.getCell(columnIndex));
+					if (value == null) {
+						if (standardValue != null) {
+							value = standardValue;
+						} else {
+							causes[i] = InvalidCause.MISSING_VALUES;
+						}
+					}
+					if (value != null) {
+						causes[i] = !parentDataType.getOutputType().areValuesConvertible(new Object[]{ value }, edit.getInputType(), parentDataType) ? InvalidCause.OUTPUT_DATA_TYPE : null;
+					}
+				} catch (UnsupportedDataTypeException udte) {
+					NodeLogger.getLogger(getClass()).error("Validation of dataType of new column \""
+							+ edit.getOutputPathFromFileWithName() +  "\" could not be checked: " + udte.getMessage(), udte);
+				}
+			}
+			for (int i = causes.length-1; i >= 0; i--) {
+				if (causes[i] != null) {
+					ColumnNodeEdit edit = validateEdits.remove(i);
+					edit.updateInvalidMap(causes[i]);
+				}
+			}
+		}
+	}
+	
 	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec) throws IOException, CanceledExecutionException {
 		boolean preparationSuccess = false;
 		setEditState(EditState.IN_PROGRESS);
@@ -375,7 +438,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 			} else if (m_overwriteHdfFile && Hdf5File.existsHdfFile(m_filePath)) {
 				setHdfObject(Hdf5File.openFile(m_filePath, Hdf5File.READ_WRITE_ACCESS));
 				createBackup();
-				preparationSuccess = deleteAction();
+				preparationSuccess = deleteAction() == EditSuccess.TRUE;
 			} else {
 				preparationSuccess = true;
 			}
@@ -388,37 +451,170 @@ public class FileNodeEdit extends GroupNodeEdit {
 		exec.setProgress(0.0);
 		// TODO change after testing
 		long pTD = getTotalProgressToDo();
-		boolean success = preparationSuccess && doAction(inputTable, flowVariables, saveColumnProperties, exec, pTD);
+		boolean success = preparationSuccess && doAction(inputTable, flowVariables, saveColumnProperties, exec, pTD)
+				&& doPostponedDataSetActions(inputTable, saveColumnProperties, exec, pTD);
 		System.out.println("TotalProgressToDo: " + pTD);
 		return success;
 	}
-
+	
 	@Override
-	protected boolean createAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables,
-			boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException {
+	protected EditSuccess createAction(Map<String, FlowVariable> flowVariables) throws IOException {
 		setHdfObject(Hdf5File.createFile(m_filePath));
-		return getHdfObject() != null;
+		return EditSuccess.getSuccess(getHdfObject() != null);
 	}
 
 	@Override
-	protected boolean copyAction(ExecutionContext exec, long totalProgressToDo) {
-		return false;
+	protected EditSuccess copyAction() {
+		return null;
 	}
 
 	@Override
-	protected boolean deleteAction() throws IOException {
+	protected EditSuccess deleteAction() throws IOException {
 		Hdf5File file = (Hdf5File) getHdfObject();
 		if (file.deleteFile()) {
 			setHdfObject((Hdf5File) null);
 		}
 		
-		return getHdfObject() == null;
+		return EditSuccess.getSuccess(getHdfObject() == null);
 	}
 
 	@Override
-	protected boolean modifyAction(BufferedDataTable inputTable, boolean saveColumnProperties,
-			ExecutionContext exec, long totalProgressToDo) {
-		return false;
+	protected EditSuccess modifyAction() {
+		return null;
+	}
+	
+	@SuppressWarnings("unchecked")
+	private boolean doPostponedDataSetActions(BufferedDataTable inputTable, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException, NullPointerException {
+		List<DataSetNodeEdit> dataSetEditList = new ArrayList<>();
+		for (TreeNodeEdit edit : getAllDecendants()) {
+			if (edit.getEditState() == EditState.POSTPONED) {
+				if (edit instanceof DataSetNodeEdit) {
+					dataSetEditList.add((DataSetNodeEdit) edit);
+				}
+			}
+		}
+		DataSetNodeEdit[] dataSetEdits = dataSetEditList.toArray(new DataSetNodeEdit[dataSetEditList.size()]);
+		
+		if (inputTable == null) {
+			if (dataSetEdits.length == 0) {
+				return true;
+			}
+			throw new NullPointerException("inputTable cannot be null when creating dataSets");
+		}
+		
+		DataTableSpec tableSpec = inputTable.getDataTableSpec();
+		
+		List<ColumnNodeEdit>[] copyColumnEditLists = (List<ColumnNodeEdit>[]) new ArrayList<?>[dataSetEdits.length];
+		int[][] specIndices = new int[dataSetEdits.length][];
+		ColumnNodeEdit[][] copyColumnEdits = new ColumnNodeEdit[dataSetEdits.length][];
+		Hdf5DataSet<?>[][] copyDataSets = new Hdf5DataSet<?>[dataSetEdits.length][];
+		long[][] dataSetColumnIndices = new long[dataSetEdits.length][];
+		Hdf5DataSet<Object>[] outputDataSets = (Hdf5DataSet<Object>[]) new Hdf5DataSet<?>[dataSetEdits.length];
+		
+		for (int i = 0; i < dataSetEdits.length; i++) {
+			copyColumnEditLists[i] = new ArrayList<>();
+			specIndices[i] = new int[dataSetEdits[i].getColumnInputTypes().length];
+			
+			int specIndicesIndex = 0;
+			ColumnNodeEdit[] columnEdits = dataSetEdits[i].getColumnNodeEdits();
+			for (int j = 0; j < columnEdits.length; j++) {
+				ColumnNodeEdit edit = columnEdits[j];
+				if (edit.getEditAction() == EditAction.CREATE) {
+					specIndices[i][specIndicesIndex] = tableSpec.findColumnIndex(edit.getName());
+					specIndicesIndex++;
+					// TODO check if it's already set to this value: edit.setInputRowCount(inputRowCount);
+					
+				} else if (edit.getEditAction() != EditAction.DELETE) {
+					specIndices[i][specIndicesIndex] = -1;
+					specIndicesIndex++;
+					copyColumnEditLists[i].add(edit);
+				}
+			}
+			
+			copyColumnEdits[i] = copyColumnEditLists[i].toArray(new ColumnNodeEdit[copyColumnEditLists[i].size()]);
+			copyDataSets[i] = new Hdf5DataSet<?>[copyColumnEdits[i].length];
+			dataSetColumnIndices[i] = new long[copyColumnEdits[i].length];
+			for (int j = 0; j < copyColumnEdits[i].length; j++) {
+				copyDataSets[i][j] = (Hdf5DataSet<?>) copyColumnEdits[i][j].findCopySource();
+				dataSetColumnIndices[i][j] = copyColumnEdits[i][j].getInputColumnIndex();
+				copyDataSets[i][j].open();
+			}
+			
+			outputDataSets[i] = (Hdf5DataSet<Object>) ((Hdf5Group) dataSetEdits[i].getOpenedHdfObjectOfParent()).createDataSetFromEdit(dataSetEdits[i]);
+			addProgress(331, exec, totalProgressToDo, true);
+		}
+		
+		boolean success = false;
+		CloseableRowIterator iter = inputTable.iterator();
+		try {
+			boolean withoutFail = true;
+			long rowIndex = 0;
+			while (iter.hasNext()) {
+				exec.checkCanceled();
+			
+				DataRow row = iter.next();
+				
+				for (int i = 0; i < dataSetEdits.length; i++) {
+					try {
+						withoutFail &= outputDataSets[i].copyValuesToRow(rowIndex, row, specIndices[i], copyDataSets[i], dataSetColumnIndices[i],
+								dataSetEdits[i].getEditDataType().getStandardValue(), dataSetEdits[i].getEditDataType().getRounding());
+						if (withoutFail) {
+							addProgress(dataSetEdits[i].getProgressToDoPerRow(), exec, totalProgressToDo, false);
+						}
+					} catch (HDF5DataspaceInterfaceException hdie) {
+						throw new IOException("Fail for writing dataSet \"" + outputDataSets[i].getPathFromFileWithName() + "\": " + hdie.getMessage(), hdie);
+					}
+				}
+				
+				rowIndex++;
+			}
+
+			if (withoutFail && saveColumnProperties) {
+				for (int i = 0; i < dataSetEdits.length; i++) {
+					String[] columnNames = new String[specIndices[i].length];
+					String[] columnTypes = new String[specIndices[i].length];
+					for (int j = 0; j < columnNames.length; j++) {
+						exec.checkCanceled();
+						
+						DataColumnSpec spec = tableSpec.getColumnSpec(specIndices[i][j]);
+						columnNames[j] = spec.getName();
+						columnTypes[j] = spec.getType().getName();
+					}
+	
+					try {
+						withoutFail &= outputDataSets[i].createAndWriteAttribute(COLUMN_PROPERTY_NAMES, columnNames, false) != null;
+						withoutFail &= outputDataSets[i].createAndWriteAttribute(COLUMN_PROPERTY_TYPES, columnTypes, false) != null;
+					} catch (IOException ioe) {
+						throw new IOException("Property attributes of dataSet \"" + outputDataSets[i].getPathFromFileWithName()
+								+ "\" could not be written completely: " + ioe.getMessage(), ioe);
+					}
+				}
+			}
+			
+			success = withoutFail;
+			
+		} finally {
+			iter.close();
+			
+			for (int i = 0; i < dataSetEdits.length; i++) {
+				if (success) {
+					if (dataSetEdits[i].getEditAction() == EditAction.MODIFY) {
+						Hdf5DataSet<?> oldDataSet = (Hdf5DataSet<?>) dataSetEdits[i].getHdfSource();
+						for (String attrName : oldDataSet.loadAttributeNames()) {
+							oldDataSet.copyAttribute(oldDataSet.getAttribute(attrName), outputDataSets[i], attrName);
+						}
+					}
+					
+					dataSetEdits[i].setEditState(EditState.SUCCESS);
+					dataSetEdits[i].setHdfObject(outputDataSets[i]);
+					
+				} else {
+					((Hdf5Group) dataSetEdits[i].getOpenedHdfObjectOfParent()).deleteObject(dataSetEdits[i].getName());
+				}
+			}
+		}
+		
+		return success;
 	}
 	
 	public boolean deleteAllBackups() {
@@ -437,7 +633,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 		if (getEditAction().isCreateOrCopyAction()) {
 			if (Hdf5File.existsHdfFile(m_filePath)) {
 				try {
-					success &= deleteAction();
+					success &= deleteAction() == EditSuccess.TRUE;
 					if (getHdfBackup() != null) {
 						setHdfObject(((Hdf5File) getHdfBackup()).copyFile(m_filePath));
 						success &= getHdfObject() != null;
@@ -477,7 +673,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 						}
 						
 						try {
-							success &= edit.deleteAction();
+							success &= edit.deleteAction() == EditSuccess.TRUE;
 							
 						} catch (IOException ioe) {
 							success = false;
