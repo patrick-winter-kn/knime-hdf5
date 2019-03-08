@@ -195,7 +195,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			}
 			
 			private void showRemoveInvalidsDialog() {
-				TreeMap<TreeNodeEdit, InvalidCause> removableEdits = m_editTreePanel.getInvalidEdits();
+				TreeMap<TreeNodeEdit, InvalidCause> removableEdits = m_editTreePanel.getResettableEdits();
 				RemoveDialog removeDialog = new RemoveDialog(buttonPanel, "Reset invalid edits", removableEdits);
 				removeDialog.setLocationRelativeTo((Frame) SwingUtilities.getAncestorOfClass(Frame.class, buttonPanel));
 				removeDialog.setVisible(true);

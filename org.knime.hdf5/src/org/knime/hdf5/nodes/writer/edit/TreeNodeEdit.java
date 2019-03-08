@@ -623,17 +623,21 @@ public abstract class TreeNodeEdit {
 		}
 	}
 	
-	public TreeMap<TreeNodeEdit, InvalidCause> getInvalidEdits() {
-		TreeMap<TreeNodeEdit, InvalidCause> removableEdits = new TreeMap<>(new TreeNodeEditComparator());
+	public TreeMap<TreeNodeEdit, InvalidCause> getResettableEdits() {
+		TreeMap<TreeNodeEdit, InvalidCause> resettableEdits = new TreeMap<>(new TreeNodeEditComparator());
 		for (TreeNodeEdit edit : m_invalidEdits.keySet()) {
 			InvalidCause cause = m_invalidEdits.get(edit);
-			if (cause != InvalidCause.NAME_DUPLICATE || edit.isOverwriteApplicable()) {
-				removableEdits.put(edit, cause);
+			if (edit instanceof ColumnNodeEdit) {
+				edit = edit.getParent();
+				if (!edit.isValid()) {
+					continue;
+				}
+			}
+			if (!resettableEdits.containsKey(edit) && (cause != InvalidCause.NAME_DUPLICATE || edit.isOverwriteApplicable())) {
+				resettableEdits.put(edit, cause);
 			}
 		}
-		// TODO later this should be enough (if the map can handle several items with same path/name):
-		// removableEdits.putAll(m_invalidEdits);
-		return removableEdits;
+		return resettableEdits;
 	}
 	
 	/**
@@ -842,7 +846,7 @@ public abstract class TreeNodeEdit {
 	void setDeletion(boolean isDelete) {
 		if (isDelete != (getEditAction() == EditAction.DELETE)) {
 	    	if (isDelete && getEditAction().isCreateOrCopyAction() || !isDelete && m_invalidEdits.get(this) == InvalidCause.NO_HDF_SOURCE && getEditAction() == EditAction.DELETE) {
-	    		removeFromParent();
+	    		removeFromParentCascade();
 	    		
 	    	} else {
 	    		m_editAction = isDelete ? EditAction.DELETE : (this instanceof ColumnNodeEdit ? EditAction.NO_ACTION : EditAction.MODIFY);
@@ -914,6 +918,14 @@ public abstract class TreeNodeEdit {
 	}
 	
 	protected abstract TreeNodeEdit[] getAllChildren();
+	
+	protected void removeFromParentCascade() {
+		for (TreeNodeEdit edit : getAllChildren()) {
+			edit.removeFromParentCascade();
+		}
+		
+		removeFromParent();
+	}
 	
 	protected abstract void removeFromParent();
 	

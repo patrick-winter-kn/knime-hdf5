@@ -461,10 +461,10 @@ public class EditTreePanel extends JPanel {
 		m_editTreeConfig.initConfigOfFile(filePath, overwriteFile, keepConfig, m_tree);
 	}
 	
-	TreeMap<TreeNodeEdit, InvalidCause> getInvalidEdits() {
+	TreeMap<TreeNodeEdit, InvalidCause> getResettableEdits() {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
 		if (fileEdit != null) {
-			return fileEdit.getInvalidEdits();
+			return fileEdit.getResettableEdits();
 		}
 		
 		return null;

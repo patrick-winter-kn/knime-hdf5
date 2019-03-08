@@ -302,7 +302,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 			if (newEdit != null) {
 				newEdit.addEditToParentNodeIfPossible();
 				edit.copyPropertiesFrom(newEdit);
-				newEdit.removeFromParent();
+				newEdit.removeFromParentCascade();
 			}
 		} else {
 			edit.setDeletion(true);
