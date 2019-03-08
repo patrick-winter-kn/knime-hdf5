@@ -1,5 +1,5 @@
 # knime-hdf5
-KNIME HDF5 Nodes
+KNIME HDF5 Nodes (alpha)
 
 ## Installation
 1. Download the [Update-Site](https://github.com/patrick-winter-knime/knime-hdf5/raw/master/org.knime.hdf5.update/org.knime.hdf5.update.zip).
