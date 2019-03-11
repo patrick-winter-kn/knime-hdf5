@@ -99,7 +99,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 		return null;
     }
 	
-	private static void checkForErrors(EditTreeConfiguration editTreeConfig) throws InvalidSettingsException {
+	static void checkForErrors(EditTreeConfiguration editTreeConfig) throws InvalidSettingsException {
 		checkForErrors(editTreeConfig, null, false);
 	}
 	

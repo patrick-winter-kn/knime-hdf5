@@ -29,6 +29,7 @@ import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.TreePath;
 
 import org.knime.core.data.DataColumnSpec;
+import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.workflow.FlowVariable;
 import org.knime.hdf5.nodes.writer.SettingsFactory.SpecInfo;
@@ -375,7 +376,7 @@ public class EditTreePanel extends JPanel {
             		try {
         				newEdit.reloadTreeWithEditVisible();
             		} catch (Exception e) {
-            			e.printStackTrace();
+                		NodeLogger.getLogger(getClass()).warn(e.getMessage());
             		}
     				for (TreeNodeEdit copyEdit : m_copyEdits) {
     					m_tree.makeVisible(new TreePath(copyEdit.getTreeNode().getPath()));
@@ -387,7 +388,6 @@ public class EditTreePanel extends JPanel {
 			
 			@Override
 			protected void exportDone(JComponent source, Transferable data, int action) {
-				System.out.println("exportDone, action: " + action);
 				super.exportDone(source, data, action);
 				m_copyEdits.clear();
 			}
@@ -478,6 +478,10 @@ public class EditTreePanel extends JPanel {
 		if (fileEdit != null) {
 			fileEdit.resetEdits(removeEdits);
 		}
+	}
+	
+	void checkConfiguration() throws InvalidSettingsException {
+		m_editTreeConfig.checkConfiguration();
 	}
 
 	void saveConfiguration(EditTreeConfiguration editTreeConfig) {

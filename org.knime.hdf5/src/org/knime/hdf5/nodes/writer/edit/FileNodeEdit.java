@@ -60,6 +60,29 @@ public class FileNodeEdit extends GroupNodeEdit {
 		m_overwriteHdfFile = overwriteFile;
 	}
 	
+	public FileNodeEdit copyWithoutNoActionEdits() throws IOException {
+		FileNodeEdit copyFileEdit = null;
+		if (getEditAction().isCreateOrCopyAction()) {
+			copyFileEdit = new FileNodeEdit(m_filePath, m_overwriteHdfFile);
+		} else {
+			copyFileEdit = new FileNodeEdit(Hdf5File.openFile(m_filePath, Hdf5File.READ_ONLY_ACCESS));
+		}
+		
+		for (TreeNodeEdit edit : getAllChildren()) {
+			if (edit.getEditAction() != EditAction.NO_ACTION) {
+				edit.copyWithoutCopySourceTo(copyFileEdit);
+			}
+		}
+		
+		for (TreeNodeEdit edit : copyFileEdit.getAllDecendants()) {
+			if (edit != copyFileEdit && !(edit instanceof ColumnNodeEdit) && edit.getEditAction() == EditAction.NO_ACTION) {
+				edit.removeFromParent();
+			}
+		}
+		
+		return copyFileEdit;
+	}
+	
 	public String getFilePath() {
 		return m_filePath;
 	}

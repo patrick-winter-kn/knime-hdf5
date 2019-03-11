@@ -32,8 +32,10 @@ import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
@@ -307,7 +309,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 
         DialogComponentButton selectDataButton = new DialogComponentButton("Select data");
 		
-        createNewGroup("Select data:");
+        createNewGroup("Selected data:");
 		addDialogComponent(selectDataButton);
         closeCurrentGroup();
         
@@ -333,14 +335,10 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 					setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
 					// setLocation(400, 400);
 					
-					JPanel panel = new JPanel();
-					add(panel, BorderLayout.CENTER);
-					panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-					panel.setMinimumSize(new Dimension(800, 500));
-					panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
-					
-					panel.add(inputPanel);
-					panel.add(outputPanel);
+					JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true, inputPanel, outputPanel);
+					add(splitPane, BorderLayout.CENTER);
+					splitPane.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+					// splitPane.setMinimumSize(new Dimension(900, 600));
 
 					JPanel selectDataButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
 					add(selectDataButtonPanel, BorderLayout.PAGE_END);
@@ -349,7 +347,14 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 						
 						@Override
 						public void actionPerformed(ActionEvent e) {
-							setVisible(false);
+							try {
+								m_editTreePanel.checkConfiguration();
+								setVisible(false);
+								
+							} catch (InvalidSettingsException ise) {
+								JOptionPane.showMessageDialog(okButton, ise.getMessage(),
+										"Warning: invalid settings", JOptionPane.WARNING_MESSAGE);
+							}
 						}
 					});
 					selectDataButtonPanel.add(okButton);

@@ -28,6 +28,18 @@ public class EditTreeConfiguration {
 	public void setFileNodeEdit(FileNodeEdit fileEdit) {
 		m_fileEdit = fileEdit;
 	}
+
+	void checkConfiguration() throws InvalidSettingsException {
+		EditTreeConfiguration checkConfig = new EditTreeConfiguration(m_configRootName + "_check");
+		
+		try {
+			checkConfig.setFileNodeEdit(m_fileEdit.copyWithoutNoActionEdits());
+			HDF5WriterNodeModel.checkForErrors(checkConfig);
+			
+		} catch (IOException ioe) {
+			throw new InvalidSettingsException(ioe.getMessage(), ioe);
+		}
+	}
 	
 	void saveConfiguration(NodeSettingsWO settings) {
         if (m_fileEdit != null) {

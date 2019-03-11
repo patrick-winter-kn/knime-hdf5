@@ -405,6 +405,25 @@ public abstract class TreeNodeEdit {
 		}
 	}
 	
+	TreeNodeEdit copyWithoutCopySourceTo(TreeNodeEdit parent) {
+		TreeNodeEdit copyEdit = null;
+		
+		if (this instanceof GroupNodeEdit) {
+			((GroupNodeEdit) this).copyGroupEditTo((GroupNodeEdit) parent, false, true);
+			
+		} else if (this instanceof DataSetNodeEdit) {
+			((DataSetNodeEdit) this).copyDataSetEditTo((GroupNodeEdit) parent, false, true);
+			
+		} else if (this instanceof ColumnNodeEdit) {
+			((ColumnNodeEdit) this).copyColumnEditTo((DataSetNodeEdit) parent, false);
+			
+		} else if (this instanceof AttributeNodeEdit) {
+			((AttributeNodeEdit) this).copyAttributeEditTo(parent, false);
+		}
+		
+		return copyEdit;
+	}
+	
 	protected abstract boolean havePropertiesChanged(Object hdfSource);
 	
 	protected void copyPropertiesFrom(TreeNodeEdit copyEdit) {
