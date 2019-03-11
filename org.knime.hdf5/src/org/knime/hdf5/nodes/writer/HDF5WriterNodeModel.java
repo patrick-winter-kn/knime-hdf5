@@ -120,13 +120,13 @@ public class HDF5WriterNodeModel extends NodeModel {
 		Hdf5File file = null;
 		try {
 			FileNodeEdit oldFileEdit = null;
-			if (fileEdit.getEditAction().isCreateOrCopyAction()) {
-				oldFileEdit = new FileNodeEdit(fileEdit.getFilePath(), fileEdit.isOverwriteHdfFile());
-				
-			} else {
+			if (!fileEdit.isOverwriteHdfFile() && Hdf5File.existsHdfFile(fileEdit.getFilePath())) {
 				file = Hdf5File.openFile(fileEdit.getFilePath(), Hdf5File.READ_ONLY_ACCESS);
 				oldFileEdit = new FileNodeEdit(file);
 				oldFileEdit.loadChildrenOfHdfObject();
+				
+			} else {
+				oldFileEdit = new FileNodeEdit(fileEdit.getFilePath(), fileEdit.isOverwriteHdfFile());
 			}
 			
 			boolean valid = lastValidationBeforeExecution ? oldFileEdit.doLastValidationBeforeExecution(fileEdit, inputTable) : oldFileEdit.integrateAndValidate(fileEdit);

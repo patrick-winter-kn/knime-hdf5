@@ -56,6 +56,7 @@ import org.knime.core.node.NodeSettingsWO;
 import org.knime.core.node.NotConfigurableException;
 import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
 import org.knime.core.node.defaultnodesettings.DialogComponentBoolean;
+import org.knime.core.node.defaultnodesettings.DialogComponentButton;
 import org.knime.core.node.defaultnodesettings.DialogComponentButtonGroup;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
 import org.knime.core.node.defaultnodesettings.DialogComponentLabel;
@@ -124,32 +125,15 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		addDialogComponent(fileInfoLabel);
 		addDialogComponent(fileOverwritePolicy);
         closeCurrentGroup();
-        
-        
-		m_saveColumnPropertiesSettings = SettingsFactory.createSaveColumnPropertiesSettings();
-		DialogComponentBoolean saveColumnProperties = new DialogComponentBoolean(m_saveColumnPropertiesSettings,
-				"Save column properties");
 		
 		
-        createNewGroup("Advanced settings:");
-		addDialogComponent(saveColumnProperties);
-        closeCurrentGroup();
-		
-        
-		JPanel dataPanel = new JPanel();
-		addTab("Data", dataPanel);
-		dataPanel.setMinimumSize(new Dimension(800, 500));
-		dataPanel.setLayout(new BoxLayout(dataPanel, BoxLayout.X_AXIS));
-
 		JPanel inputPanel = new JPanel();
-		dataPanel.add(inputPanel);
 		inputPanel.setLayout(new BoxLayout(inputPanel, BoxLayout.Y_AXIS));
 		inputPanel.setBorder(BorderFactory.createTitledBorder(" Input "));
 		addListToPanel(SpecInfo.COLUMN_SPECS, inputPanel);
 		addListToPanel(SpecInfo.FLOW_VARIABLE_SPECS, inputPanel);
     	
     	JPanel outputPanel = new JPanel();
-		dataPanel.add(outputPanel);
 		outputPanel.setLayout(new BoxLayout(outputPanel, BoxLayout.Y_AXIS));
 		outputPanel.setBorder(BorderFactory.createTitledBorder(" Output "));
 		
@@ -319,6 +303,70 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		buttonPanel.add(removeInvalidsButton);
 		
 		outputPanel.add(m_editTreePanel);
+		
+
+        DialogComponentButton selectDataButton = new DialogComponentButton("Select data");
+		
+        createNewGroup("Select data:");
+		addDialogComponent(selectDataButton);
+        closeCurrentGroup();
+        
+        selectDataButton.addActionListener(new ActionListener() {
+			
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				showDataDialog();
+			}
+			
+			private void showDataDialog() {
+				DataDialog dataDialog = new DataDialog(getPanel(), "Select data");
+				dataDialog.setLocationRelativeTo((Frame) SwingUtilities.getAncestorOfClass(Frame.class, getPanel()));
+				dataDialog.setVisible(true);
+			}
+
+			class DataDialog extends JDialog {
+
+				private static final long serialVersionUID = 5449228141905592744L;
+
+				protected DataDialog(Component comp, String title) {
+					super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, comp), title, true);
+					setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
+					// setLocation(400, 400);
+					
+					JPanel panel = new JPanel();
+					add(panel, BorderLayout.CENTER);
+					panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+					panel.setMinimumSize(new Dimension(800, 500));
+					panel.setLayout(new BoxLayout(panel, BoxLayout.X_AXIS));
+					
+					panel.add(inputPanel);
+					panel.add(outputPanel);
+
+					JPanel selectDataButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+					add(selectDataButtonPanel, BorderLayout.PAGE_END);
+					JButton okButton = new JButton("OK");
+					okButton.addActionListener(new ActionListener() {
+						
+						@Override
+						public void actionPerformed(ActionEvent e) {
+							setVisible(false);
+						}
+					});
+					selectDataButtonPanel.add(okButton);
+					
+					pack();
+				}
+			}
+		});
+        
+
+		m_saveColumnPropertiesSettings = SettingsFactory.createSaveColumnPropertiesSettings();
+		DialogComponentBoolean saveColumnProperties = new DialogComponentBoolean(m_saveColumnPropertiesSettings,
+				"Save column properties");
+		
+        createNewGroup("Advanced settings:");
+		addDialogComponent(saveColumnProperties);
+        closeCurrentGroup();
 	}
     
     private String getFilePathFromSettings() throws IOException, InvalidSettingsException {

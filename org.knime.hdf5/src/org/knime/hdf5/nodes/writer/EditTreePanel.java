@@ -226,10 +226,12 @@ public class EditTreePanel extends JPanel {
                     	}
             		}
             		
-            		Class editClass = m_copyEdits.get(0).getClass();
             		boolean allEqual = true;
-            		for (int i = 1; i < m_copyEdits.size(); i++) {
-            			allEqual &= editClass == m_copyEdits.get(i).getClass();
+            		if (!m_copyEdits.isEmpty()) {
+                		Class editClass = m_copyEdits.get(0).getClass();
+                		for (int i = 1; i < m_copyEdits.size(); i++) {
+                			allEqual &= editClass == m_copyEdits.get(i).getClass();
+                		}
             		}
             		
             		if (!allEqual) {
@@ -385,6 +387,7 @@ public class EditTreePanel extends JPanel {
 			
 			@Override
 			protected void exportDone(JComponent source, Transferable data, int action) {
+				System.out.println("exportDone, action: " + action);
 				super.exportDone(source, data, action);
 				m_copyEdits.clear();
 			}
