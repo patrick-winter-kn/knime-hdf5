@@ -450,12 +450,17 @@ public class FileNodeEdit extends GroupNodeEdit {
 				}
 			}
 			for (int i = causes.length-1; i >= 0; i--) {
-				ColumnNodeEdit edit = validateEdits.remove(i);
-				if (edit.isValid()) {
+				ColumnNodeEdit edit = validateEdits.get(i);
+				boolean valid = edit.isValid();
+				if (valid) {
 					InvalidCause cause = causes[i] != null ? causes[i] : edit.validateEditInternal();
 					if (cause != null) {
 						edit.updateInvalidMap(cause);
+						valid = false;
 					}
+				}
+				if (!valid) {
+					validateEdits.remove(i);
 				}
 			}
 		}
