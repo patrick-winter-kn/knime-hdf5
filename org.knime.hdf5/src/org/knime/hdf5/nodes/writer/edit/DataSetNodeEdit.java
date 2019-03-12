@@ -398,7 +398,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		return editCount <= 1;
 	}
 	
-	void integrate(DataSetNodeEdit copyEdit, long inputRowCount, boolean removeOldColumns) {
+	void integrate(DataSetNodeEdit copyEdit, boolean removeOldColumns) {
 		// (maybe) TODO only supported for dataSets if the dataSet has the correct amount of columns (the same amount as the config was created)
 		if (removeOldColumns) {
 			for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
@@ -407,9 +407,6 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		}
 		
 		for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
-			if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
-				copyColumnEdit.setInputRowCount(inputRowCount);
-			}
 			copyColumnEdit.copyColumnEditTo(this, false).setHdfObject((Hdf5DataSet<?>) getHdfObject());
 		}
 		

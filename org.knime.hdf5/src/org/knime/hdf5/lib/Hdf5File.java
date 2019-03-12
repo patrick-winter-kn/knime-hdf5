@@ -231,7 +231,7 @@ public class Hdf5File extends Hdf5Group {
 			
 			long fileId = H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDONLY, HDF5Constants.H5P_DEFAULT);
 			
-			boolean openSomewhereElse = H5.H5Fget_obj_count(getElementId(), HDF5Constants.H5F_OBJ_FILE) > 1;
+			boolean openSomewhereElse = H5.H5Fget_obj_count(fileId, HDF5Constants.H5F_OBJ_FILE) > 1;
 			
 			H5.H5Fclose(fileId);
 			

@@ -66,7 +66,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	public GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent) throws IllegalArgumentException {
 		return copyGroupEditTo(parent, true, true);
 	}
-		
+	
 	/**
 	 * Copies this {@code GroupNodeEdit} to {@code parent}.
 	 * 
@@ -207,7 +207,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		edit.setParent(null);
 	}
 	
-	void integrate(GroupNodeEdit copyEdit, long inputRowCount) {
+	void integrate(GroupNodeEdit copyEdit) {
 		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
 			if (copyGroupEdit.getEditAction() != EditAction.NO_ACTION) {
 				GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
@@ -224,7 +224,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 					if (copyGroupEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
 						groupEdit.copyPropertiesFrom(copyGroupEdit);
 					}
-					groupEdit.integrate(copyGroupEdit, inputRowCount);
+					groupEdit.integrate(copyGroupEdit);
 					
 				} else {
 					copyGroupEdit.copyGroupEditTo(this, false, groupEdit == null);
@@ -248,15 +248,10 @@ public class GroupNodeEdit extends TreeNodeEdit {
 					if (copyDataSetEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
 						dataSetEdit.copyPropertiesFrom(copyDataSetEdit);
 					}
-					dataSetEdit.integrate(copyDataSetEdit, inputRowCount, true);
+					dataSetEdit.integrate(copyDataSetEdit, true);
 					
 				} else {
 					copyDataSetEdit.copyDataSetEditTo(this, false, dataSetEdit == null);
-					for (ColumnNodeEdit copyColumnEdit : copyDataSetEdit.getColumnNodeEdits()) {
-						if (copyColumnEdit.getEditAction() == EditAction.CREATE) {
-							copyColumnEdit.setInputRowCount(inputRowCount);
-						}
-					}
 				}
 			}
 		}

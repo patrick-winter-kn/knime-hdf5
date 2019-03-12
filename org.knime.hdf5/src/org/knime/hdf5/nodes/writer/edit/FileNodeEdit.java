@@ -65,7 +65,16 @@ public class FileNodeEdit extends GroupNodeEdit {
 		if (getEditAction().isCreateOrCopyAction()) {
 			copyFileEdit = new FileNodeEdit(m_filePath, m_overwriteHdfFile);
 		} else {
-			copyFileEdit = new FileNodeEdit(Hdf5File.openFile(m_filePath, Hdf5File.READ_ONLY_ACCESS));
+			Hdf5File file = null;
+			try {
+				file = Hdf5File.openFile(m_filePath, Hdf5File.READ_ONLY_ACCESS);
+				copyFileEdit = new FileNodeEdit(file);
+				
+			} finally {
+				if (file != null) {
+					file.close();
+				}
+			}
 		}
 		
 		for (TreeNodeEdit edit : getAllChildren()) {
@@ -171,7 +180,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 
 	public boolean doLastValidationBeforeExecution(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
 		useOverwritePolicyForFile(copyEdit);
-		super.integrate(copyEdit, inputTable != null ? inputTable.size() : ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+		integrate(copyEdit);
 		updateCopySources();
 		doLastValidation(copyEdit, inputTable);
 		return isValid() && copyEdit.isValid();
@@ -198,7 +207,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	public void integrate(FileNodeEdit copyEdit) {
-		super.integrate(copyEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+		super.integrate(copyEdit);
 	}
 
 	@Override
@@ -401,12 +410,13 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	private void lastValidationOfColumnEdits(BufferedDataTable inputTable) {
+		long inputRowCount = inputTable.size();
 		List<ColumnNodeEdit> validateEdits = new ArrayList<>();
 		for (TreeNodeEdit edit : getAllDecendants()) {
-			if (edit.getEditAction() == EditAction.CREATE) {
-				if (edit instanceof ColumnNodeEdit) {
-					validateEdits.add((ColumnNodeEdit) edit);
-				}
+			if (edit instanceof ColumnNodeEdit && edit.getEditAction() == EditAction.CREATE) {
+				ColumnNodeEdit columnEdit = (ColumnNodeEdit) edit;
+				validateEdits.add(columnEdit);
+				columnEdit.setInputRowCount(inputRowCount);
 			}
 		}
 
@@ -440,9 +450,12 @@ public class FileNodeEdit extends GroupNodeEdit {
 				}
 			}
 			for (int i = causes.length-1; i >= 0; i--) {
-				if (causes[i] != null) {
-					ColumnNodeEdit edit = validateEdits.remove(i);
-					edit.updateInvalidMap(causes[i]);
+				ColumnNodeEdit edit = validateEdits.remove(i);
+				if (edit.isValid()) {
+					InvalidCause cause = causes[i] != null ? causes[i] : edit.validateEditInternal();
+					if (cause != null) {
+						edit.updateInvalidMap(cause);
+					}
 				}
 			}
 		}
@@ -526,6 +539,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 		
 		DataTableSpec tableSpec = inputTable.getDataTableSpec();
+		long inputRowCount = inputTable.size();
 		
 		List<ColumnNodeEdit>[] copyColumnEditLists = (List<ColumnNodeEdit>[]) new ArrayList<?>[dataSetEdits.length];
 		int[][] specIndices = new int[dataSetEdits.length][];
@@ -535,35 +549,42 @@ public class FileNodeEdit extends GroupNodeEdit {
 		Hdf5DataSet<Object>[] outputDataSets = (Hdf5DataSet<Object>[]) new Hdf5DataSet<?>[dataSetEdits.length];
 		
 		for (int i = 0; i < dataSetEdits.length; i++) {
-			copyColumnEditLists[i] = new ArrayList<>();
-			specIndices[i] = new int[dataSetEdits[i].getColumnInputTypes().length];
-			
-			int specIndicesIndex = 0;
-			ColumnNodeEdit[] columnEdits = dataSetEdits[i].getColumnNodeEdits();
-			for (int j = 0; j < columnEdits.length; j++) {
-				ColumnNodeEdit edit = columnEdits[j];
-				if (edit.getEditAction() == EditAction.CREATE) {
-					specIndices[i][specIndicesIndex] = tableSpec.findColumnIndex(edit.getName());
-					specIndicesIndex++;
-					
-				} else if (edit.getEditAction() != EditAction.DELETE) {
-					specIndices[i][specIndicesIndex] = -1;
-					specIndicesIndex++;
-					copyColumnEditLists[i].add(edit);
+			try {
+				copyColumnEditLists[i] = new ArrayList<>();
+				specIndices[i] = new int[dataSetEdits[i].getColumnInputTypes().length];
+				
+				int specIndicesIndex = 0;
+				ColumnNodeEdit[] columnEdits = dataSetEdits[i].getColumnNodeEdits();
+				for (int j = 0; j < columnEdits.length; j++) {
+					ColumnNodeEdit edit = columnEdits[j];
+					if (edit.getEditAction() == EditAction.CREATE) {
+						specIndices[i][specIndicesIndex] = tableSpec.findColumnIndex(edit.getName());
+						specIndicesIndex++;
+						edit.setInputRowCount(inputRowCount);
+						
+					} else if (edit.getEditAction() != EditAction.DELETE) {
+						specIndices[i][specIndicesIndex] = -1;
+						specIndicesIndex++;
+						copyColumnEditLists[i].add(edit);
+					}
 				}
+				
+				copyColumnEdits[i] = copyColumnEditLists[i].toArray(new ColumnNodeEdit[copyColumnEditLists[i].size()]);
+				copyDataSets[i] = new Hdf5DataSet<?>[copyColumnEdits[i].length];
+				dataSetColumnIndices[i] = new long[copyColumnEdits[i].length];
+				for (int j = 0; j < copyColumnEdits[i].length; j++) {
+					copyDataSets[i][j] = (Hdf5DataSet<?>) copyColumnEdits[i][j].findCopySource();
+					dataSetColumnIndices[i][j] = copyColumnEdits[i][j].getInputColumnIndex();
+					copyDataSets[i][j].open();
+				}
+				
+				outputDataSets[i] = (Hdf5DataSet<Object>) ((Hdf5Group) dataSetEdits[i].getOpenedHdfObjectOfParent()).createDataSetFromEdit(dataSetEdits[i]);
+				addProgress(331, exec, totalProgressToDo, true);
+				
+			} catch (Exception e) {
+				dataSetEdits[i].setEditState(EditState.FAIL);
+				throw e;
 			}
-			
-			copyColumnEdits[i] = copyColumnEditLists[i].toArray(new ColumnNodeEdit[copyColumnEditLists[i].size()]);
-			copyDataSets[i] = new Hdf5DataSet<?>[copyColumnEdits[i].length];
-			dataSetColumnIndices[i] = new long[copyColumnEdits[i].length];
-			for (int j = 0; j < copyColumnEdits[i].length; j++) {
-				copyDataSets[i][j] = (Hdf5DataSet<?>) copyColumnEdits[i][j].findCopySource();
-				dataSetColumnIndices[i][j] = copyColumnEdits[i][j].getInputColumnIndex();
-				copyDataSets[i][j].open();
-			}
-			
-			outputDataSets[i] = (Hdf5DataSet<Object>) ((Hdf5Group) dataSetEdits[i].getOpenedHdfObjectOfParent()).createDataSetFromEdit(dataSetEdits[i]);
-			addProgress(331, exec, totalProgressToDo, true);
 		}
 		
 		boolean success = false;
@@ -584,6 +605,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 							addProgress(dataSetEdits[i].getProgressToDoPerRow(), exec, totalProgressToDo, false);
 						}
 					} catch (HDF5DataspaceInterfaceException hdie) {
+						dataSetEdits[i].setEditState(EditState.FAIL);
 						throw new IOException("Fail for writing dataSet \"" + outputDataSets[i].getPathFromFileWithName() + "\": " + hdie.getMessage(), hdie);
 					}
 				}
@@ -607,6 +629,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 						withoutFail &= outputDataSets[i].createAndWriteAttribute(COLUMN_PROPERTY_NAMES, columnNames, false) != null;
 						withoutFail &= outputDataSets[i].createAndWriteAttribute(COLUMN_PROPERTY_TYPES, columnTypes, false) != null;
 					} catch (IOException ioe) {
+						dataSetEdits[i].setEditState(EditState.FAIL);
 						throw new IOException("Property attributes of dataSet \"" + outputDataSets[i].getPathFromFileWithName()
 								+ "\" could not be written completely: " + ioe.getMessage(), ioe);
 					}

@@ -1034,24 +1034,24 @@ public abstract class TreeNodeEdit {
 						if (oldEdit instanceof GroupNodeEdit) {
 							integrateEdit = ((GroupNodeEdit) oldEdit).copyGroupEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
 							if (editToOverwrite != null) {
-								((GroupNodeEdit) integrateEdit).integrate((GroupNodeEdit) editToOverwrite, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+								((GroupNodeEdit) integrateEdit).integrate((GroupNodeEdit) editToOverwrite);
 								integrateEdit.copyPropertiesFrom(editToOverwrite);
 							}
 							for (TreeNodeEdit edit : newEdit.getAllChildren()) {
 								integrateEdit.useOverwritePolicy(edit);
 							}
-							((GroupNodeEdit) integrateEdit).integrate((GroupNodeEdit) newEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT);
+							((GroupNodeEdit) integrateEdit).integrate((GroupNodeEdit) newEdit);
 							
 						} else if (oldEdit instanceof DataSetNodeEdit) {
 							integrateEdit = ((DataSetNodeEdit) oldEdit).copyDataSetEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
 							if (editToOverwrite != null) {
-								((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) editToOverwrite, ColumnNodeEdit.UNKNOWN_ROW_COUNT, true);
+								((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) editToOverwrite, true);
 								integrateEdit.copyPropertiesFrom(editToOverwrite);
 							}
 							for (TreeNodeEdit edit : newEdit.getAllChildren()) {
 								integrateEdit.useOverwritePolicy(edit);
 							}
-							((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) newEdit, ColumnNodeEdit.UNKNOWN_ROW_COUNT, false);
+							((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) newEdit, false);
 						}
 					}
 					break;
