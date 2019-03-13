@@ -20,12 +20,18 @@
 				Select the path to the input file.
 			</option>
 			<br />
-			<option name="Fail if rowSize differs">
-				Specifies if the node fails for missing values. Missing values
-				appear if the first dimension of the dataSet, which is the
-				rowSize of the columns in the output, is not equal for every
-				column. So the node fails at the first difference in the
-				rowSize.
+			<option name="Advanced settings">
+				<ul>
+					<li>
+						<b>Fail if rowSize differs:</b>
+						<br />
+						Specifies if the node fails for missing values. Missing values
+						appear if the first dimension of the dataSet, which is the
+						rowSize of the columns in the output, is not equal for every
+						column. So the node fails at the first difference in the
+						rowSize.
+					</li>
+				</ul>
 			</option>
 		</tab>
 		<tab name="DataSet Selector">

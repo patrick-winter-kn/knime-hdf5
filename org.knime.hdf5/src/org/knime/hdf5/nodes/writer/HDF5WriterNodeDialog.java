@@ -307,13 +307,13 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		outputPanel.add(m_editTreePanel);
 		
 
-        DialogComponentButton selectDataButton = new DialogComponentButton("Select data");
+        DialogComponentButton selectDataConfigButton = new DialogComponentButton("Select data configuration");
 		
-        createNewGroup("Selected data:");
-		addDialogComponent(selectDataButton);
+        createNewGroup("Data configuration:");
+		addDialogComponent(selectDataConfigButton);
         closeCurrentGroup();
         
-        selectDataButton.addActionListener(new ActionListener() {
+        selectDataConfigButton.addActionListener(new ActionListener() {
 			
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -321,7 +321,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			}
 			
 			private void showDataDialog() {
-				DataDialog dataDialog = new DataDialog(getPanel(), "Select data");
+				DataDialog dataDialog = new DataDialog(getPanel(), "Select data configuration");
 				dataDialog.setLocationRelativeTo((Frame) SwingUtilities.getAncestorOfClass(Frame.class, getPanel()));
 				dataDialog.setVisible(true);
 			}

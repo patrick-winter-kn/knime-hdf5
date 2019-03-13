@@ -470,7 +470,7 @@ public abstract class TreeNodeEdit {
 	}
 	
 	protected boolean willModifyActionBeAbortedOnEdit(TreeNodeEdit edit) {
-		if (edit.getEditAction() == EditAction.MODIFY && edit.getEditOverwritePolicy() == EditOverwritePolicy.ABORT
+		if (edit.getEditAction() == EditAction.MODIFY && edit.getEditOverwritePolicy() == EditOverwritePolicy.IGNORE
 				&& getName().equals(Hdf5TreeElement.getPathAndName(edit.getInputPathFromFileWithName())[1])) {
 			List<TreeNodeEdit> conflictEdits = new ArrayList<>();
 			TreeNodeEdit conflictEdit = edit;
@@ -478,7 +478,7 @@ public abstract class TreeNodeEdit {
 				conflictEdits.add(conflictEdit);
 				conflictEdit = conflictEdit.willBeAbortedOnEdit();
 			} while (conflictEdit != null && !conflictEdits.contains(conflictEdit)
-					&& conflictEdit.getEditAction() == EditAction.MODIFY && conflictEdit.getEditOverwritePolicy() == EditOverwritePolicy.ABORT);
+					&& conflictEdit.getEditAction() == EditAction.MODIFY && conflictEdit.getEditOverwritePolicy() == EditOverwritePolicy.IGNORE);
 			
 			return conflictEdit != null;
 		}
@@ -489,7 +489,7 @@ public abstract class TreeNodeEdit {
 	private TreeNodeEdit willBeAbortedOnEdit() {
 		for (TreeNodeEdit edit : m_parent.getAllChildren()) {
 			if (getName().equals(Hdf5TreeElement.getPathAndName(edit.getInputPathFromFileWithName())[1])
-					&& edit.getEditAction() == EditAction.MODIFY && edit.getEditOverwritePolicy() == EditOverwritePolicy.ABORT
+					&& edit.getEditAction() == EditAction.MODIFY && edit.getEditOverwritePolicy() == EditOverwritePolicy.IGNORE
 					|| getName().equals(edit.getName()) && this != edit && edit.getEditAction() != EditAction.DELETE) {
 				return edit;
 			}
@@ -1000,7 +1000,7 @@ public abstract class TreeNodeEdit {
 		if (editToOverwrite != null || oldEdit != null) {
 			if (newEdit.isOverwriteApplicable()) {
 				switch(newEdit.getEditOverwritePolicy()) {
-				case ABORT:
+				case IGNORE:
 					newEdit.removeFromParent();
 					break;
 				case OVERWRITE:

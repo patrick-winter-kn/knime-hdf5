@@ -230,14 +230,23 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		return m_attributeEdits.toArray(new AttributeNodeEdit[m_attributeEdits.size()]);
 	}
 	
-	public HdfDataType[] getColumnInputTypes() {
-		List<HdfDataType> hdfTypes = new ArrayList<>();
+	ColumnNodeEdit[] getNotDeletedColumnNodeEdits() {
+		List<ColumnNodeEdit> columnEdits = new ArrayList<>();
 		for (ColumnNodeEdit edit : m_columnEdits) {
 			if (edit.getEditAction() != EditAction.DELETE) {
-				hdfTypes.add(edit.getInputType());
+				columnEdits.add(edit);
 			}
 		}
-		return hdfTypes.toArray(new HdfDataType[] {});
+		return columnEdits.toArray(new ColumnNodeEdit[] {});
+	}
+	
+	public HdfDataType[] getColumnInputTypes() {
+		ColumnNodeEdit[] columnEdits = getNotDeletedColumnNodeEdits();
+		HdfDataType[] hdfTypes = new HdfDataType[columnEdits.length];
+		for (int i = 0; i < hdfTypes.length; i++) {
+			hdfTypes[i] = columnEdits[i].getInputType();
+		}
+		return hdfTypes;
 	}
 	
 	int getRequiredColumnCountForExecution() {

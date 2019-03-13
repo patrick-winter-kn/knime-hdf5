@@ -13,12 +13,12 @@ public enum EditOverwritePolicy {
     NONE("none"),
 
     /**
-     * Abort if a TreeNodeEdit exists.
+     * Ignore the new TreeNodeEdit if an old one exists.
      */
-    ABORT("abort"),
+    IGNORE("ignore"),
     
     /**
-     * Overwrite old TreeNodeEdit.
+     * Overwrite the old TreeNodeEdit.
      */
     OVERWRITE("overwrite"),
 	
@@ -58,7 +58,7 @@ public enum EditOverwritePolicy {
 		
 		if (edit instanceof GroupNodeEdit || edit instanceof DataSetNodeEdit || edit instanceof AttributeNodeEdit) {
 			values.add(NONE);
-			values.add(ABORT);
+			values.add(IGNORE);
 			values.add(OVERWRITE);
 			if (edit.getEditAction().isCreateOrCopyAction()) {
 				values.add(RENAME);

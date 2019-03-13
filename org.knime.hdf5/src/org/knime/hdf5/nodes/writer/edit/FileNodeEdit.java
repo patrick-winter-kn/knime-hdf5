@@ -546,8 +546,8 @@ public class FileNodeEdit extends GroupNodeEdit {
 		DataTableSpec tableSpec = inputTable.getDataTableSpec();
 		long inputRowCount = inputTable.size();
 		
-		List<ColumnNodeEdit>[] copyColumnEditLists = (List<ColumnNodeEdit>[]) new ArrayList<?>[dataSetEdits.length];
 		int[][] specIndices = new int[dataSetEdits.length][];
+		List<ColumnNodeEdit>[] copyColumnEditLists = (List<ColumnNodeEdit>[]) new ArrayList<?>[dataSetEdits.length];
 		ColumnNodeEdit[][] copyColumnEdits = new ColumnNodeEdit[dataSetEdits.length][];
 		Hdf5DataSet<?>[][] copyDataSets = new Hdf5DataSet<?>[dataSetEdits.length][];
 		long[][] dataSetColumnIndices = new long[dataSetEdits.length][];
@@ -555,21 +555,17 @@ public class FileNodeEdit extends GroupNodeEdit {
 		
 		for (int i = 0; i < dataSetEdits.length; i++) {
 			try {
+				ColumnNodeEdit[] columnEdits = dataSetEdits[i].getNotDeletedColumnNodeEdits();
+				specIndices[i] = new int[columnEdits.length];
 				copyColumnEditLists[i] = new ArrayList<>();
-				specIndices[i] = new int[dataSetEdits[i].getColumnInputTypes().length];
-				
-				int specIndicesIndex = 0;
-				ColumnNodeEdit[] columnEdits = dataSetEdits[i].getColumnNodeEdits();
 				for (int j = 0; j < columnEdits.length; j++) {
 					ColumnNodeEdit edit = columnEdits[j];
 					if (edit.getEditAction() == EditAction.CREATE) {
-						specIndices[i][specIndicesIndex] = tableSpec.findColumnIndex(edit.getName());
-						specIndicesIndex++;
+						specIndices[i][j] = tableSpec.findColumnIndex(edit.getName());
 						edit.setInputRowCount(inputRowCount);
 						
-					} else if (edit.getEditAction() != EditAction.DELETE) {
-						specIndices[i][specIndicesIndex] = -1;
-						specIndicesIndex++;
+					} else {
+						specIndices[i][j] = -1;
 						copyColumnEditLists[i].add(edit);
 					}
 				}
@@ -612,6 +608,10 @@ public class FileNodeEdit extends GroupNodeEdit {
 					} catch (HDF5DataspaceInterfaceException hdie) {
 						dataSetEdits[i].setEditState(EditState.FAIL);
 						throw new IOException("Fail for writing dataSet \"" + outputDataSets[i].getPathFromFileWithName() + "\": " + hdie.getMessage(), hdie);
+					
+					} catch (Exception e) {
+						dataSetEdits[i].setEditState(EditState.FAIL);
+						throw e;
 					}
 				}
 				
@@ -620,23 +620,32 @@ public class FileNodeEdit extends GroupNodeEdit {
 
 			if (withoutFail && saveColumnProperties) {
 				for (int i = 0; i < dataSetEdits.length; i++) {
-					String[] columnNames = new String[specIndices[i].length];
-					String[] columnTypes = new String[specIndices[i].length];
-					for (int j = 0; j < columnNames.length; j++) {
+					ColumnNodeEdit[] columnEdits = dataSetEdits[i].getNotDeletedColumnNodeEdits();
+					String[] columnNames = new String[columnEdits.length];
+					String[] columnTypes = new String[columnEdits.length];
+					for (int j = 0; j < columnEdits.length; j++) {
 						exec.checkCanceled();
 						
-						DataColumnSpec spec = tableSpec.getColumnSpec(specIndices[i][j]);
-						columnNames[j] = spec.getName();
-						columnTypes[j] = spec.getType().getName();
+						ColumnNodeEdit edit = columnEdits[j];
+						if (edit.getEditAction() == EditAction.CREATE) {
+							DataColumnSpec spec = tableSpec.getColumnSpec(specIndices[i][j]);
+							columnNames[j] = spec.getName();
+							columnTypes[j] = spec.getType().getName();
+							
+						} else {
+							// TODO use here property attributes which already exist
+							columnNames[j] = edit.getName();
+							columnTypes[j] = edit.getInputType().toString();
+						}
 					}
 	
 					try {
 						withoutFail &= outputDataSets[i].createAndWriteAttribute(COLUMN_PROPERTY_NAMES, columnNames, false) != null;
 						withoutFail &= outputDataSets[i].createAndWriteAttribute(COLUMN_PROPERTY_TYPES, columnTypes, false) != null;
-					} catch (IOException ioe) {
+					} catch (Exception e) {
 						dataSetEdits[i].setEditState(EditState.FAIL);
 						throw new IOException("Property attributes of dataSet \"" + outputDataSets[i].getPathFromFileWithName()
-								+ "\" could not be written completely: " + ioe.getMessage(), ioe);
+								+ "\" could not be written completely: " + e.getMessage(), e);
 					}
 				}
 			}

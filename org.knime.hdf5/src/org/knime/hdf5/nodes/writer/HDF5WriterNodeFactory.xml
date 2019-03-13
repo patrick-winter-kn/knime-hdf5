@@ -4,19 +4,65 @@
 	<name>HDF5 Writer</name>
 
 	<shortDescription>
-		Writes dataSets and attributes in an HDF5 File.
+		Writes groups, dataSets and attributes in an HDF5 File.
 	</shortDescription>
 
 	<fullDescription>
 		<intro>
-			This node writes dataSets and attributes in an HDF5 File.
+			This node writes groups, dataSets and attributes in an HDF5 File.
 			...
 		</intro>
+		
+		<tab name="Options">
+			<option name="Output file">
+				<ul>
+					<li>
+						<b>Selected file:</b>
+						<br />
+						Select the path to the output file.
+					</li>
+					<li>
+						<b>Overwrite file:</b>
+						<br />
+						The option <b>integrate</b> manipulates an existing file.
+						<br />
+						The option <b>overwrite</b> overwrites an existing file.
+						<br />
+						The option <b>rename</b> creates a new file with an unused
+						name if the file name is already assigned.
+					</li>
+				</ul>
+			</option>
+			<br />
+			<option name="Data configuration">
+				Specifies the configuration of the edits which the node should
+				apply on the output file.
+				<br />
+				...
+			</option>
+			<br />
+			<option name="Advanced settings">
+				<ul>
+					<li>
+						<b>Save column properties:</b>
+						<br />
+						Specifies if the node creates 2 additional attributes
+						in each dataSet where some columns are modified.
+						<br />
+						One attribute, named 'knime.columnnames', contains the
+						names of the columns in the input table.
+						<br />
+						The other attribute, named 'knime.columntypes', contains the
+						original data types of the columns in the input table.
+					</li>
+				</ul>
+			</option>
+		</tab>
 	</fullDescription>
 
 	<ports>
 		<inPort index="0" name="Input table">
-			Input table.
+			Optional input table. May not be used if the node should only write attributes.
 		</inPort>
 	</ports>
 </knimeNode>
