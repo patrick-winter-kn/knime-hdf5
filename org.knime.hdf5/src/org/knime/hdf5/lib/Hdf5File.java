@@ -1,7 +1,9 @@
 package org.knime.hdf5.lib;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -13,6 +15,7 @@ import java.util.Map;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import org.eclipse.core.runtime.Platform;
 import org.knime.core.node.NodeLogger;
 
 import hdf.hdf5lib.H5;
@@ -20,6 +23,8 @@ import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 public class Hdf5File extends Hdf5Group {
+	
+	private static final int FILE_CLOSE_DEGREE = HDF5Constants.H5F_CLOSE_STRONG;
 
 	public static final int NOT_ACCESSED = -1;
 	
@@ -117,7 +122,14 @@ public class Hdf5File extends Hdf5Group {
 		}
 	}
 
-	public static boolean existsHdfFile(final String filePath) {
+	private static long getAccessPropertyList() throws HDF5LibraryException {
+		long pid = H5.H5Pcreate(HDF5Constants.H5P_FILE_ACCESS);
+		H5.H5Pset_fclose_degree(pid, FILE_CLOSE_DEGREE);
+		
+		return pid;
+	}
+	
+	public static boolean existsHdf5File(final String filePath) {
 		try {
 			GLOBAL_R.lock();
 			return hasHdf5FileEnding(filePath) && new File(filePath).exists();
@@ -127,7 +139,7 @@ public class Hdf5File extends Hdf5Group {
 		}
 	}
 	
-	public static boolean isHdfFileCreatable(final String filePath, final boolean overwriteHdfFile) {
+	public static boolean isHdf5FileCreatable(final String filePath, final boolean overwriteHdfFile) {
 		// TODO maybe use org.knime.core.node.util.CheckUtils, but without possibility for url
 		try {
 			GLOBAL_R.lock();
@@ -136,6 +148,29 @@ public class Hdf5File extends Hdf5Group {
 			
 		} finally {
 			GLOBAL_R.unlock();
+		}
+	}
+
+	/**
+	 * Should check if the file is writable. It is not writable if it is opened somewhere else.
+	 * TODO this method is only supported for Windows and Linux so far
+	 * 
+	 * @return
+	 * @throws IOException
+	 */
+	public static void checkHdf5FileWritable(final String filePath) throws IOException {
+		try {
+			if (existsHdf5File(filePath)) {
+				Hdf5File file = Hdf5File.openFile(filePath, READ_WRITE_ACCESS);
+				file.close();
+				if (file.isOpenAnywhere()) {
+					throw new IOException("File is opened somewhere else.");
+				}
+			} else if (!isHdf5FileCreatable(filePath, false)) {
+				throw new IOException("File cannot be created");
+			}
+		} catch (Exception e) {
+			throw new IOException("Hdf5File \"" + filePath + "\" is not writable: " + e.getMessage(), e);
 		}
 	}
 	
@@ -183,7 +218,7 @@ public class Hdf5File extends Hdf5Group {
 	
 	@Override
 	public boolean exists() {
-		return Hdf5File.existsHdfFile(m_filePath);
+		return Hdf5File.existsHdf5File(m_filePath);
 	}
 	
 	private boolean isOpenInThisThread() {
@@ -224,24 +259,59 @@ public class Hdf5File extends Hdf5Group {
 		return !m_accessors.isEmpty();
 	}
 	
-	public boolean isOpenAnywhere() throws IOException {
-		try {
-			GLOBAL_W.lock();
-			checkExists();
-			
-			long fileId = H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDONLY, HDF5Constants.H5P_DEFAULT);
-			
-			boolean openSomewhereElse = H5.H5Fget_obj_count(fileId, HDF5Constants.H5F_OBJ_FILE) > 1;
-			
-			H5.H5Fclose(fileId);
-			
-			return openSomewhereElse;
-			
-		} catch (HDF5LibraryException hle) {
-			throw new IOException(hle.getMessage(), hle);
-			
-		} finally {
-			GLOBAL_W.unlock();
+	private boolean isOpenAnywhere() {
+		return PlatformOS.get().isFileOpened(new File(getFilePath()));
+	}
+	
+	private static enum PlatformOS {
+		WINDOWS, LINUX, OTHER;
+		
+		private static PlatformOS get() {
+			String os = Platform.getOS();
+			if (os.equals(Platform.OS_WIN32)) {
+				return WINDOWS;
+			} else if (os.equals(Platform.OS_LINUX)) {
+				return LINUX;
+			} else {
+				return OTHER;
+			}
+		}
+		
+		private boolean isFileOpened(File file) {
+			switch (this) {
+			case WINDOWS:
+				return !file.renameTo(new File(file.getPath()));
+				
+			case LINUX:
+				Process plsof = null;
+		        BufferedReader reader = null;
+		        
+			    try {
+			        plsof = new ProcessBuilder(new String[]{"lsof", "|", "grep", file.getAbsolutePath()}).start();
+			        reader = new BufferedReader(new InputStreamReader(plsof.getInputStream()));
+			        String line;
+			        while ((line=reader.readLine()) != null) {
+			            if (line.contains(file.getAbsolutePath())) {   
+			                return true;
+			            }
+			        }
+			    } catch(Exception e) {
+					NodeLogger.getLogger(Hdf5File.class).error(e.getMessage(), e);
+					
+			    } finally {
+				    try {
+						reader.close();
+					} catch (IOException ioe) {
+						NodeLogger.getLogger(Hdf5File.class).error(ioe.getMessage(), ioe);
+					}
+				    plsof.destroy();
+			    }
+			    
+			    return false;
+			    
+			default:
+				return false;
+			}
 		}
 	}
 	
@@ -273,8 +343,7 @@ public class Hdf5File extends Hdf5Group {
 	public void open(final int access) throws IOException {
 		try {
 			if (!isOpenInThisThread()) {
-    			long pid = H5.H5Pcreate(HDF5Constants.H5P_FILE_ACCESS);
-    			H5.H5Pset_fclose_degree(pid, HDF5Constants.H5F_CLOSE_STRONG);
+    			long pid = Hdf5File.getAccessPropertyList();
     			
 				if (access == READ_ONLY_ACCESS) {
 					// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tLOCK \tREAD \t\"" + getName() + "\" ...");

@@ -10,7 +10,17 @@
 	<fullDescription>
 		<intro>
 			This node writes groups, dataSets and attributes in an HDF5 File.
-			...
+			Groups can be created independently from the input.
+			DataSets can be created by using columns of the input table.
+			Attributes can be created by using flow variables.
+			All objects can also be created by copying or modifying existing
+			objects in the output HDF5 File.
+			<br />
+			<b>
+				Be careful that the output HDF5 File may not be opened somewhere
+				else on the machine while executing this node!
+				It is only checked in Windows and Linux so far!
+			</b>
 		</intro>
 		
 		<tab name="Options">
@@ -19,7 +29,7 @@
 					<li>
 						<b>Selected file:</b>
 						<br />
-						Select the path to the output file.
+						Select the path to the output HDF5 File (file extensions .h5, .hdf5).
 					</li>
 					<li>
 						<b>Overwrite file:</b>
@@ -29,7 +39,7 @@
 						The option <b>overwrite</b> overwrites an existing file.
 						<br />
 						The option <b>rename</b> creates a new file with an unused
-						name if the file name is already assigned.
+						name if the file already exists.
 					</li>
 				</ul>
 			</option>
@@ -38,7 +48,105 @@
 				Specifies the configuration of the edits which the node should
 				apply on the output file.
 				<br />
-				...
+				<br />
+				The button <b>Update file path</b> allows to take over the settings from the
+				option 'Output file' (selected file, overwrite file) to the data
+				configuration.
+				<br />
+				The button <b>Reset config</b> resets the data configuration, i.e. it
+				removes all edits from the data configuration such that no manipulations
+				would be done to the file on an execution (except creating the file itself).
+				<br />
+				The button <b>Reset invalid edits</b> resets invalid edits in the data configuration.
+				Note that dataSetEdits with invalid columnEdits can only be reset as whole. 
+				<br />
+				<br />
+				The columns from the input table and the flow variables can be
+				copied by <b>drag-and-drop</b> in the output file tree. Similarly,
+				the items of the output file tree can be copied by drag-and-drop.
+				<br />
+				More options for manipulation of those items can be reached by a
+				<b>right mouse click</b>.
+				<br />
+				The <b>tooltip</b> of each item shows some information about this item:
+				<ul>
+					<li>
+						<b>data type</b> (if available)
+					</li>
+					<li>
+						<b>reference to the copy source</b>, i.e. the name of the original
+						column/flow variable or the path of the original item where this
+						item was copied from
+					</li>
+					<li>
+						<b>invalid cause</b> (if it is invalid)
+					</li>
+				</ul>
+				<br />
+				The edits for groups, dataSets and attributes allow to modify their
+				<b>properties</b> which always include:
+				<ul>
+					<li>
+						<b>name</b>
+					</li>
+					<li>
+						<b>overwrite</b> policy with the options NONE, IGNORE,
+						OVERWRITE, RENAME, INTEGRATE
+					</li>
+				</ul>
+				Properties for data types (of dataSets/attributes):
+				<ul>
+					<li>
+						<b>type</b>
+					</li>
+					<li>
+						<b>unsigned</b>
+					</li>
+					<li>
+						<b>endian</b>
+					</li>
+					<li>
+						<b>rounding</b> (from double to int)
+					</li>
+					<li>
+						<b>string length</b> with the options 'auto' (sets the string length
+						to the max. string length in the data) and 'fixed'
+					</li>
+				</ul>
+				Properties only for dataSets:
+				<ul>
+					<li>
+						<b>overwrite policy for new columns</b> with the options 'insert'
+						and 'overwrite' (new columns overwrite their predecessor based
+						on the order of the columns)
+					</li>
+					<li>
+						(optional) <b>standard value for missing values</b> (or let the
+						column be invalid if this option is not used)
+					</li>
+					<li>
+						<b>create a dataSet with one dimension:</b> option only available
+						if the dataSet only has one column, otherwise it has two dimensions
+					</li>
+					<li>
+						(optional) <b>compression</b>
+					</li>
+					<li>
+						(optional) <b>chunk row size:</b> option only available if option
+						'compression' is enabled
+					</li>
+					<li>
+						<b>columns:</b> a list to order the columns using drag-and-drop
+					</li>
+				</ul>
+				Properties only for attributes:
+				<ul>
+					<li>
+						<b>Use values from flowVariable array:</b> option to recover
+						the values of a String flow variable representing an array
+						(imported by the node 'HDF5 Reader')
+					</li>
+				</ul>
 			</option>
 			<br />
 			<option name="Advanced settings">
@@ -46,14 +154,17 @@
 					<li>
 						<b>Save column properties:</b>
 						<br />
-						Specifies if the node creates 2 additional attributes
-						in each dataSet where some columns are modified.
-						<br />
-						One attribute, named 'knime.columnnames', contains the
-						names of the columns in the input table.
-						<br />
-						The other attribute, named 'knime.columntypes', contains the
-						original data types of the columns in the input table.
+						Specifies if the node creates for each dataSet, where some
+						columns are modified, two additional attributes with information
+						about the original columns of the input table:
+						<ul>
+							<li>
+								'knime.columnnames' for the names of the columns
+							</li>
+							<li>
+								'knime.columntypes' for the original data types of the columns
+							</li>
+						</ul>
 					</li>
 				</ul>
 			</option>
@@ -62,7 +173,7 @@
 
 	<ports>
 		<inPort index="0" name="Input table">
-			Optional input table. May not be used if the node should only write attributes.
+			Optional input table (is not needed for writing attributes).
 		</inPort>
 	</ports>
 </knimeNode>

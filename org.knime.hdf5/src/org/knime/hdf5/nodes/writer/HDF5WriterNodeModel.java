@@ -120,7 +120,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 		Hdf5File file = null;
 		try {
 			FileNodeEdit oldFileEdit = null;
-			if (!fileEdit.isOverwriteHdfFile() && Hdf5File.existsHdfFile(fileEdit.getFilePath())) {
+			if (!fileEdit.isOverwriteHdfFile() && Hdf5File.existsHdf5File(fileEdit.getFilePath())) {
 				file = Hdf5File.openFile(fileEdit.getFilePath(), Hdf5File.READ_ONLY_ACCESS);
 				oldFileEdit = new FileNodeEdit(file);
 				oldFileEdit.loadChildrenOfHdfObject();

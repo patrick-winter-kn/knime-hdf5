@@ -79,7 +79,7 @@ public class EditTreeConfiguration {
 			}
 			
 			boolean overwriteFile = policy == EditOverwritePolicy.OVERWRITE;
-			if (!overwriteFile && Hdf5File.existsHdfFile(filePath)) {
+			if (!overwriteFile && Hdf5File.existsHdf5File(filePath)) {
 				Hdf5File file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
 				m_fileEdit = new FileNodeEdit(file);
 				file.close();
@@ -96,7 +96,7 @@ public class EditTreeConfiguration {
 		
 		try {
 			FileNodeEdit oldFileEdit = m_fileEdit;
-			if (!overwriteFile && Hdf5File.existsHdfFile(filePath)) {
+			if (!overwriteFile && Hdf5File.existsHdf5File(filePath)) {
 				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
 				m_fileEdit = new FileNodeEdit(file);
 			} else {

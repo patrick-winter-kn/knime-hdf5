@@ -17,7 +17,7 @@
 
 		<tab name="File Chooser">
 			<option name="Input file">
-				Select the path to the input file.
+				Select the path to the input HDF5 File (file extensions .h5, .hdf5).
 			</option>
 			<br />
 			<option name="Advanced settings">
@@ -52,6 +52,12 @@
 		<tab name="Attribute Selector">
 			Specifies the included and excluded attributes of the file.
 			So these are converted to the flow variables of the output.
+			<br />
+			<br />
+			Attributes with array length >1 will be converted to String flow
+			variables with the String representation of the array including
+			its data type which would the flow variable have if it was converted
+			from a scalar attribute.
 			<br />
 			<br />
 			The usage is also based on the Column Filter.

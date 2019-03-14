@@ -648,7 +648,7 @@ public abstract class TreeNodeEdit {
 			InvalidCause cause = m_invalidEdits.get(edit);
 			if (edit instanceof ColumnNodeEdit) {
 				edit = edit.getParent();
-				if (!edit.isValid()) {
+				if (m_invalidEdits.containsKey(edit)) {
 					continue;
 				}
 			}

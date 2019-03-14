@@ -384,9 +384,9 @@ public class FileNodeEdit extends GroupNodeEdit {
 		
 		cause = cause == null && getName().contains("/") ? InvalidCause.NAME_CHARS : cause;
 		
-		cause = cause == null && getEditAction() == EditAction.CREATE && Hdf5File.existsHdfFile(m_filePath) && !m_overwriteHdfFile ? InvalidCause.FILE_ALREADY_EXISTS : cause;
+		cause = cause == null && getEditAction() == EditAction.CREATE && Hdf5File.existsHdf5File(m_filePath) && !m_overwriteHdfFile ? InvalidCause.FILE_ALREADY_EXISTS : cause;
 		
-		cause = cause == null && getEditAction() == EditAction.CREATE && !Hdf5File.isHdfFileCreatable(m_filePath, m_overwriteHdfFile) ? InvalidCause.NO_DIR_FOR_FILE : cause;
+		cause = cause == null && getEditAction() == EditAction.CREATE && !Hdf5File.isHdf5FileCreatable(m_filePath, m_overwriteHdfFile) ? InvalidCause.NO_DIR_FOR_FILE : cause;
 		
 		return cause;
 	}
@@ -470,13 +470,16 @@ public class FileNodeEdit extends GroupNodeEdit {
 		boolean preparationSuccess = false;
 		setEditState(EditState.IN_PROGRESS);
 		try {
+			// TODO there might still be race conditions
+			Hdf5File.checkHdf5FileWritable(m_filePath);
+			
 			if (!getEditAction().isCreateOrCopyAction()) {
 				setHdfObject(Hdf5File.openFile(m_filePath, Hdf5File.READ_WRITE_ACCESS));
 				preparationSuccess = getHdfObject() != null;
 				if (preparationSuccess) {
 					loadAllHdfObjectsOfFile();
 				}
-			} else if (m_overwriteHdfFile && Hdf5File.existsHdfFile(m_filePath)) {
+			} else if (m_overwriteHdfFile && Hdf5File.existsHdf5File(m_filePath)) {
 				setHdfObject(Hdf5File.openFile(m_filePath, Hdf5File.READ_WRITE_ACCESS));
 				createBackup();
 				preparationSuccess = deleteAction() == EditSuccess.TRUE;
@@ -690,7 +693,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 		boolean success = true;
 		
 		if (getEditAction().isCreateOrCopyAction()) {
-			if (Hdf5File.existsHdfFile(m_filePath)) {
+			if (Hdf5File.existsHdf5File(m_filePath)) {
 				try {
 					success &= deleteAction() == EditSuccess.TRUE;
 					if (getHdfBackup() != null) {
