@@ -470,7 +470,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 		boolean preparationSuccess = false;
 		setEditState(EditState.IN_PROGRESS);
 		try {
-			// TODO there might still be race conditions
+			// TODO there might still be race conditions from outside the program
 			Hdf5File.checkHdf5FileWritable(m_filePath);
 			
 			if (!getEditAction().isCreateOrCopyAction()) {

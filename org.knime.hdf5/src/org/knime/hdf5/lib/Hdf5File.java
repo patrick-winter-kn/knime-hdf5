@@ -152,7 +152,7 @@ public class Hdf5File extends Hdf5Group {
 	}
 
 	/**
-	 * Should check if the file is writable. It is not writable if it is opened somewhere else.
+	 * Checks if the file is writable. It is not writable if it is opened somewhere else.
 	 * TODO this method is only supported for Windows and Linux so far
 	 * 
 	 * @return
@@ -162,9 +162,14 @@ public class Hdf5File extends Hdf5Group {
 		try {
 			if (existsHdf5File(filePath)) {
 				Hdf5File file = Hdf5File.openFile(filePath, READ_WRITE_ACCESS);
-				file.close();
-				if (file.isOpenAnywhere()) {
-					throw new IOException("File is opened somewhere else.");
+				try {
+					file.m_w.lock();
+					file.close();
+					if (file.isOpenAnywhere()) {
+						throw new IOException("File is opened somewhere else.");
+					}
+				} finally {
+					file.m_w.unlock();
 				}
 			} else if (!isHdf5FileCreatable(filePath, false)) {
 				throw new IOException("File cannot be created");
@@ -283,19 +288,19 @@ public class Hdf5File extends Hdf5Group {
 				return !file.renameTo(new File(file.getPath()));
 				
 			case LINUX:
-				Process plsof = null;
+				Process process = null;
 		        BufferedReader reader = null;
 		        
 			    try {
-			        plsof = new ProcessBuilder(new String[]{"lsof", "|", "grep", file.getAbsolutePath()}).start();
-			        reader = new BufferedReader(new InputStreamReader(plsof.getInputStream()));
-			        String line;
-			        while ((line=reader.readLine()) != null) {
+			        process = new ProcessBuilder(new String[] {"/bin/sh", "-c", "lsof | grep ' " + file.getAbsolutePath() + "$'"}).start();
+			        reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+			        String line = null;
+			        while ((line = reader.readLine()) != null) {
 			            if (line.contains(file.getAbsolutePath())) {   
 			                return true;
 			            }
 			        }
-			    } catch(Exception e) {
+			    } catch (Exception e) {
 					NodeLogger.getLogger(Hdf5File.class).error(e.getMessage(), e);
 					
 			    } finally {
@@ -304,7 +309,7 @@ public class Hdf5File extends Hdf5Group {
 					} catch (IOException ioe) {
 						NodeLogger.getLogger(Hdf5File.class).error(ioe.getMessage(), ioe);
 					}
-				    plsof.destroy();
+				    process.destroy();
 			    }
 			    
 			    return false;
