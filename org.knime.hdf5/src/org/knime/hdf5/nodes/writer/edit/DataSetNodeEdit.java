@@ -39,6 +39,7 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 
+import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeLogger;
 import org.knime.core.node.NodeSettingsRO;
@@ -618,52 +619,66 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected EditSuccess createAction(Map<String, FlowVariable> flowVariables) {
-		setEditState(EditState.POSTPONED);
-		return EditSuccess.POSTPONED;
-	}
-
-	@Override
-	protected EditSuccess copyAction() throws IOException {
-		Hdf5DataSet<?> copyDataSet = (Hdf5DataSet<?>) findCopySource();
-		
-		if (havePropertiesChanged(copyDataSet)) {
-			setEditState(EditState.POSTPONED);
-			return EditSuccess.POSTPONED;
-		}
-		
-		setHdfObject((Hdf5DataSet<?>) copyDataSet.getParent().copyObject(copyDataSet.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
-		return EditSuccess.getSuccess(getHdfObject() != null);
-	}
-
-	@Override
-	protected EditSuccess deleteAction() throws IOException {
-		Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) getHdfObject();
-		if (((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(dataSet.getName())) {
-			setHdfObject((Hdf5DataSet<?>) null);
-		}
-		
-		return EditSuccess.getSuccess(getHdfObject() == null);
-	}
-
-	@Override
-	protected EditSuccess modifyAction() throws IOException {
-		Hdf5DataSet<?> oldDataSet = (Hdf5DataSet<?>) getHdfSource();
-		if (havePropertiesChanged(oldDataSet)) {
-			setEditState(EditState.POSTPONED);
-			return EditSuccess.POSTPONED;
+	protected void createAction(Map<String, FlowVariable> flowVariables, ExecutionContext exec, long totalProgressToDo) throws IOException {
+		try {
+			setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).createDataSetFromEdit(this));
+			addProgress(331, exec, totalProgressToDo, true);
 			
-		} else {
-			if (!oldDataSet.getName().equals(getName())) {
-				if (oldDataSet == getHdfBackup()) {
-					setHdfObject(oldDataSet.getParent().copyObject(oldDataSet.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
-				} else {
-					setHdfObject(oldDataSet.getParent().moveObject(oldDataSet.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
-				}
+		} finally {
+			if (getHdfObject() != null) {
+				setEditState(EditState.CREATE_SUCCESS_WRITE_POSTPONED);
+			} else {
+				setEditSuccess(false);
 			}
 		}
-		
-		return EditSuccess.getSuccess(getHdfObject() != null);
+	}
+
+	@Override
+	protected void copyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
+		try {
+			Hdf5DataSet<?> copyDataSet = (Hdf5DataSet<?>) findCopySource();
+			
+			if (havePropertiesChanged(copyDataSet)) {
+				createAction(null, exec, totalProgressToDo);
+			} else {
+				setHdfObject((Hdf5DataSet<?>) copyDataSet.getParent().copyObject(copyDataSet.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
+			}
+		} finally {
+			setEditSuccess(getHdfObject() != null);
+		}
+	}
+
+	@Override
+	protected void deleteAction() throws IOException {
+		try {
+			Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) getHdfObject();
+			if (((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(dataSet.getName())) {
+				setHdfObject((Hdf5DataSet<?>) null);
+			}
+		} finally {
+			setEditSuccess(getHdfObject() == null);
+		}
+	}
+
+	@Override
+	protected void modifyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
+		try {
+			Hdf5DataSet<?> oldDataSet = (Hdf5DataSet<?>) getHdfSource();
+			if (havePropertiesChanged(oldDataSet)) {
+				createAction(null, exec, totalProgressToDo);
+				
+			} else {
+				if (!oldDataSet.getName().equals(getName())) {
+					if (oldDataSet == getHdfBackup()) {
+						setHdfObject(oldDataSet.getParent().copyObject(oldDataSet.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
+					} else {
+						setHdfObject(oldDataSet.getParent().moveObject(oldDataSet.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
+					}
+				}
+			}
+		} finally {
+			setEditSuccess(getHdfObject() != null);
+		}
 	}
 	
 	public class DataSetNodeMenu extends TreeNodeMenu {
@@ -699,7 +714,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			private DataTypeChooser m_dataTypeChooser = m_editDataType.new DataTypeChooser(true);
 			private JCheckBox m_useOneDimensionField = new JCheckBox();
 			private JCheckBox m_compressionCheckBox;
-			private JSpinner m_compressionField = new JSpinner(new SpinnerNumberModel(0, 0, 9, 1));
+			private JSpinner m_compressionField = new JSpinner(new SpinnerNumberModel(9, 0, 9, 1));
 			private JSpinner m_chunkField = new JSpinner(new SpinnerNumberModel((Long) 1L, (Long) 1L, (Long) Long.MAX_VALUE, (Long) 1L));
 			private JList<ColumnNodeEdit> m_columnList = new JList<>(new DefaultListModel<>());
 	    	
@@ -875,9 +890,13 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				boolean oneDimensionPossible = isOneDimensionPossible();
 				m_useOneDimensionField.setEnabled(oneDimensionPossible);
 				m_useOneDimensionField.setSelected(oneDimensionPossible && edit.getNumberOfDimensions() == 1);
-				m_compressionCheckBox.setSelected(edit.getCompressionLevel() > 0);
-				m_compressionField.setValue(edit.getCompressionLevel());
-				m_chunkField.setValue(edit.getChunkRowSize());
+				
+				boolean useCompression = edit.getCompressionLevel() > 0;
+				m_compressionCheckBox.setSelected(useCompression);
+				if (useCompression) {
+					m_compressionField.setValue(edit.getCompressionLevel());
+					m_chunkField.setValue(edit.getChunkRowSize());
+				}
 				
 				DefaultListModel<ColumnNodeEdit> columnModel = (DefaultListModel<ColumnNodeEdit>) m_columnList.getModel();
 				columnModel.clear();
@@ -896,8 +915,10 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				edit.setOverwriteWithNewColumns(m_overwriteWithNewColumnsField.getSelectedValue().equals(OVERWRITE_WITH_NEW_COLUMNS));
 				m_dataTypeChooser.saveToDataType();
 				edit.setNumberOfDimensions(m_useOneDimensionField.isSelected() ? 1 : 2);
-				edit.setCompressionLevel(m_compressionField.isEnabled() ? (Integer) m_compressionField.getValue() : 0);
-				edit.setChunkRowSize(m_compressionField.isEnabled() ? (Long) m_chunkField.getValue() : 1);
+				
+				boolean useCompression = m_compressionField.isEnabled();
+				edit.setCompressionLevel(useCompression ? (Integer) m_compressionField.getValue() : 0);
+				edit.setChunkRowSize(useCompression ? (Long) m_chunkField.getValue() : 1);
 				
 				reorderColumnEdits(Collections.list(((DefaultListModel<ColumnNodeEdit>) m_columnList.getModel()).elements()));
 				

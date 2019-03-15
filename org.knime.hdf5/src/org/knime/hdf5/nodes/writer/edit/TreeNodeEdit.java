@@ -166,20 +166,26 @@ public abstract class TreeNodeEdit {
 	}
 	
 	static enum EditState {
-		TODO, IN_PROGRESS, POSTPONED, SUCCESS, FAIL, ROLLBACK_SUCCESS, ROLLBACK_FAIL, ROLLBACK_NOTHING_TODO;
+		TODO, IN_PROGRESS, CREATE_SUCCESS_WRITE_POSTPONED, SUCCESS, FAIL, ROLLBACK_SUCCESS, ROLLBACK_FAIL, ROLLBACK_NOTHING_TODO;
 		
 		boolean isRollbackState() {
 			return this == ROLLBACK_SUCCESS || this == ROLLBACK_FAIL || this == ROLLBACK_NOTHING_TODO;
 		}
 		
 		boolean isExecutedState() {
-			return this == SUCCESS || this == FAIL || isRollbackState();
+			return this == CREATE_SUCCESS_WRITE_POSTPONED || this == SUCCESS || this == FAIL || isRollbackState();
 		}
 	}
 	
 	static enum EditSuccess {
-		TRUE, FALSE, POSTPONED;
+		UNDECIDED, TRUE, FALSE;
 		
+		/**
+		 * This method should be called in a try-finally block such that the decision between TRUE and FALSE is not missed.
+		 * 
+		 * @param success
+		 * @return
+		 */
 		static EditSuccess getSuccess(boolean success) {
 			return success ? TRUE : FALSE;
 		}
@@ -189,7 +195,7 @@ public abstract class TreeNodeEdit {
 		}
 		
 		boolean didNotFail() {
-			return this == TRUE || this == POSTPONED;
+			return this != FALSE;
 		}
 	}
 	
@@ -222,6 +228,8 @@ public abstract class TreeNodeEdit {
 	private String m_unsupportedCause = null;
 	
 	private EditState m_editState = EditState.TODO;
+	
+	private EditSuccess m_editSuccess = EditSuccess.UNDECIDED;
 
 	TreeNodeEdit(String inputPathFromFileWithName, String outputPathFromFile, String name, EditOverwritePolicy editOverwritePolicy, EditAction editAction) {
 		m_inputPathFromFileWithName = inputPathFromFileWithName;
@@ -382,6 +390,14 @@ public abstract class TreeNodeEdit {
 	
 	protected void setEditState(EditState editState) {
 		m_editState = editState;
+	}
+	
+	protected void setEditSuccess(boolean success) {
+		m_editSuccess = EditSuccess.getSuccess(success);
+	}
+	
+	private void resetSuccess() {
+		m_editSuccess = EditSuccess.UNDECIDED;
 	}
 
 	protected void integrateAttributeEdits(TreeNodeEdit copyEdit) {
@@ -714,9 +730,9 @@ public abstract class TreeNodeEdit {
 				+ (isValid() ? "" : " (invalid" + (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : " children") + ")");
 	}
 	
-	private void setSuccess(boolean success, ExecutionContext exec, long totalProgressToDo) throws IOException {
-		if (m_editState == EditState.IN_PROGRESS) {
-			if (success) {
+	private void updateStateAndProgress(ExecutionContext exec, long totalProgressToDo) throws IOException {
+		if (m_editState == EditState.IN_PROGRESS && m_editSuccess.isSuccessDecided()) {
+			if (m_editSuccess == EditSuccess.TRUE) {
 				addProgress(getProgressToDoInEdit(), exec, totalProgressToDo, true);
 				setEditState(EditState.SUCCESS);
 				
@@ -1083,7 +1099,8 @@ public abstract class TreeNodeEdit {
 			if (m_editAction == EditAction.COPY) {
 				cause = m_copyEdit == null ? InvalidCause.NO_COPY_SOURCE : null;
 			} else if (m_editAction == EditAction.CREATE) {
-				cause = this instanceof ColumnNodeEdit ? ((ColumnNodeEdit) this).getInputInvalidCause() :
+				cause = this instanceof FileNodeEdit ? ((FileNodeEdit) this).validateFileCreation() :
+						this instanceof ColumnNodeEdit ? ((ColumnNodeEdit) this).getInputInvalidCause() :
 						this instanceof AttributeNodeEdit ? ((AttributeNodeEdit) this).getInputInvalidCause() : null;
 			} else if (isSupported()) {
 				cause = m_hdfObject == null ? InvalidCause.NO_HDF_SOURCE : this instanceof DataSetNodeEdit
@@ -1123,48 +1140,43 @@ public abstract class TreeNodeEdit {
 		
 		setEditState(EditState.IN_PROGRESS);
 		
-		EditSuccess success = null;
 		boolean successOfOther = true;
 
 		try {
 			switch (m_editAction) {
 			case CREATE:
-				success = createAction(flowVariables);
+				createAction(flowVariables, exec, totalProgressToDo);
 				break;
 			case COPY:
-				success = copyAction();
+				copyAction(exec, totalProgressToDo);
 				break;
 			case NO_ACTION:
 			case MODIFY_CHILDREN_ONLY:
-				success = EditSuccess.TRUE;
+				m_editSuccess = EditSuccess.TRUE;
 				break;
 			default:
 				break;
 			}
 			
-			if (success == EditSuccess.TRUE) {
-				setSuccess(true, exec, totalProgressToDo);
-			}
+			updateStateAndProgress(exec, totalProgressToDo);
 			
 			successOfOther &= doChildActionsInOrder(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
 			
 			switch (m_editAction) {
 			case DELETE:
-				success = deleteAction();
+				deleteAction();
 				break;
 			case MODIFY:
-				success = modifyAction();
+				modifyAction(exec, totalProgressToDo);
 				break;
 			default:
 				break;
 			}
 		} finally {
-			if (success.isSuccessDecided()) {
-				setSuccess(success == EditSuccess.TRUE, exec, totalProgressToDo);
-			}
+			updateStateAndProgress(exec, totalProgressToDo);
 		}
 		
-		return success.didNotFail() && successOfOther;
+		return m_editSuccess.didNotFail() && successOfOther;
 	}
 
 	private boolean doChildActionsInOrder(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException, IOException {
@@ -1190,7 +1202,11 @@ public abstract class TreeNodeEdit {
 			if (edit.isBackupNeeded(objectNames, attributeNames)) {
 				edit.createBackup();
 				if (edit.getEditAction() != EditAction.DELETE) {
-					edit.deleteAction();
+					try {
+						edit.deleteActionAndResetEditSuccess();
+					} catch (Exception e) {
+						edit.setEditSuccess(false);
+					}
 				}
 			}
 		}
@@ -1224,54 +1240,69 @@ public abstract class TreeNodeEdit {
 		
 		return backupNeeded;
 	}
+	
+	protected boolean deleteActionAndResetEditSuccess() throws IOException {
+		deleteAction();
+		boolean success = m_editSuccess == EditSuccess.TRUE;
+		resetSuccess();
+		
+		return success;
+	}
 
-	protected abstract EditSuccess createAction(Map<String, FlowVariable> flowVariables) throws IOException;
-	protected abstract EditSuccess copyAction() throws IOException;
-	protected abstract EditSuccess deleteAction() throws IOException;
-	protected abstract EditSuccess modifyAction() throws IOException;
+	// when using those methods in different parts from the actual execution of the editAction, reset the edit success afterwards!
+	protected abstract void createAction(Map<String, FlowVariable> flowVariables, ExecutionContext exec, long totalProgressToDo) throws IOException;
+	protected abstract void copyAction(ExecutionContext exec, long totalProgressToDo) throws IOException;
+	protected abstract void deleteAction() throws IOException;
+	protected abstract void modifyAction(ExecutionContext exec, long totalProgressToDo) throws IOException;
 	
 	protected boolean rollbackAction() throws IOException {
-		EditSuccess success = null;
+		resetSuccess();
 		
 		try {
 			if (m_editState == EditState.ROLLBACK_NOTHING_TODO
 					|| m_parent.getEditState() == EditState.ROLLBACK_SUCCESS
 					&& (m_parent.getEditAction() == EditAction.DELETE || m_parent.getEditAction() == EditAction.MODIFY && m_parent.getHdfBackup() != null)) {
 					// this edit's rollback has already been done successfully in the parent's rollback
-				success = EditSuccess.TRUE;
+				m_editSuccess = EditSuccess.TRUE;
 				
 			} else {
 				switch (m_editAction) {
 				case CREATE:
 				case COPY:
-					success = deleteAction();
+					deleteAction();
 					break;
 				case MODIFY:
 				case DELETE:
-					String newName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
-					if (this instanceof AttributeNodeEdit) {
-						Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfSource();
-						setHdfObject(attribute.getParent().renameAttribute(attribute.getName(), newName));
-					} else {
-						Hdf5TreeElement treeElement = (Hdf5TreeElement) getHdfSource();
-						setHdfObject(treeElement.getParent().moveObject(treeElement.getName(), treeElement.getParent(), newName));
+					try {
+						String newName = Hdf5TreeElement.getPathAndName(getInputPathFromFileWithName())[1];
+						if (this instanceof AttributeNodeEdit) {
+							Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfSource();
+							setHdfObject(attribute.getParent().renameAttribute(attribute.getName(), newName));
+						} else {
+							Hdf5TreeElement treeElement = (Hdf5TreeElement) getHdfSource();
+							setHdfObject(treeElement.getParent().moveObject(treeElement.getName(), treeElement.getParent(), newName));
+						}
+						/* 
+						 * do not set m_hdfBackup to null here because '!=null' check is needed for children
+						 * (at the beginning of this try-finally-block)
+						 */
+					} finally {
+						m_editSuccess = EditSuccess.getSuccess(m_hdfObject != null);
 					}
-					success = EditSuccess.getSuccess(m_hdfObject != null);
-					/* 
-					 * do not set m_hdfBackup to null here because '!=null' check is needed for children
-					 * (at the beginning of this try-finally-block)
-					 */
 					break;
 				default:
-					success = EditSuccess.TRUE;
+					m_editSuccess = EditSuccess.TRUE;
 					break;
 				}
 			}
 		} finally {
 			if (m_editState != EditState.ROLLBACK_NOTHING_TODO) {
-				setEditState(success == EditSuccess.TRUE ? EditState.ROLLBACK_SUCCESS : EditState.ROLLBACK_FAIL);
+				setEditState(m_editSuccess == EditSuccess.TRUE ? EditState.ROLLBACK_SUCCESS : EditState.ROLLBACK_FAIL);
 			}
 		}
+		
+		EditSuccess success = m_editSuccess;
+		resetSuccess();
 		
 		return success == EditSuccess.TRUE;
 	}
@@ -1490,19 +1521,20 @@ public abstract class TreeNodeEdit {
 			
 			private PropertyDescriptionPanel(String description, ChangeListener checkBoxListener, boolean northwest) {
 				setLayout(new BoxLayout(this, BoxLayout.X_AXIS));
+				
+				JComponent descriptionLabel = null;
 				if (checkBoxListener != null) {
-					m_checkBox = new JCheckBox();
-					add(m_checkBox);
+					descriptionLabel = new JCheckBox(description);
+					m_checkBox = (JCheckBox) descriptionLabel;
 					m_checkBox.addChangeListener(checkBoxListener);
-					
-					if (northwest) {
-						m_checkBox.setAlignmentY(0.0f);
-					}
+
+				} else {
+					descriptionLabel = new JLabel(description);
 				}
-				JLabel nameLabel = new JLabel(description);
-				add(nameLabel);
+				
+				add(descriptionLabel);
 				if (northwest) {
-					nameLabel.setAlignmentY(0.0f);
+					descriptionLabel.setAlignmentY(0.0f);
 				}
 			}
 			

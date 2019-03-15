@@ -150,8 +150,9 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 		try {
 			String renamedFilePath = policy == EditOverwritePolicy.RENAME ? Hdf5File.getUniqueFilePath(filePath) : filePath;
-			EditAction editAction = policy == EditOverwritePolicy.OVERWRITE || !filePath.equals(renamedFilePath)
-					? EditAction.CREATE : EditAction.get(settings.getString(SettingsKey.EDIT_ACTION.getKey()));
+			// TODO check this part again: note that SettingsKey.EDIT_ACTION is not used here
+			EditAction editAction = policy != EditOverwritePolicy.INTEGRATE || !Hdf5File.existsHdf5File(filePath)
+					? EditAction.CREATE : EditAction.NO_ACTION;
 			
 			edit = new FileNodeEdit(renamedFilePath, policy == EditOverwritePolicy.OVERWRITE, editAction);
 			
@@ -384,9 +385,17 @@ public class FileNodeEdit extends GroupNodeEdit {
 		
 		cause = cause == null && getName().contains("/") ? InvalidCause.NAME_CHARS : cause;
 		
-		cause = cause == null && getEditAction() == EditAction.CREATE && Hdf5File.existsHdf5File(m_filePath) && !m_overwriteHdfFile ? InvalidCause.FILE_ALREADY_EXISTS : cause;
+		return cause;
+	}
+	
+	InvalidCause validateFileCreation() {
+		InvalidCause cause = null;
 		
-		cause = cause == null && getEditAction() == EditAction.CREATE && !Hdf5File.isHdf5FileCreatable(m_filePath, m_overwriteHdfFile) ? InvalidCause.NO_DIR_FOR_FILE : cause;
+		if (getEditAction() == EditAction.CREATE) {
+			cause = !m_overwriteHdfFile && Hdf5File.existsHdf5File(m_filePath) ? InvalidCause.FILE_ALREADY_EXISTS : cause;
+			
+			cause = cause == null && !Hdf5File.isHdf5FileCreatable(m_filePath, m_overwriteHdfFile) ? InvalidCause.NO_DIR_FOR_FILE : cause;
+		}
 		
 		return cause;
 	}
@@ -482,7 +491,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 			} else if (m_overwriteHdfFile && Hdf5File.existsHdf5File(m_filePath)) {
 				setHdfObject(Hdf5File.openFile(m_filePath, Hdf5File.READ_WRITE_ACCESS));
 				createBackup();
-				preparationSuccess = deleteAction() == EditSuccess.TRUE;
+				preparationSuccess = deleteActionAndResetEditSuccess();
 			} else {
 				preparationSuccess = true;
 			}
@@ -502,36 +511,39 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	@Override
-	protected EditSuccess createAction(Map<String, FlowVariable> flowVariables) throws IOException {
-		setHdfObject(Hdf5File.createFile(m_filePath));
-		return EditSuccess.getSuccess(getHdfObject() != null);
-	}
-
-	@Override
-	protected EditSuccess copyAction() {
-		return null;
-	}
-
-	@Override
-	protected EditSuccess deleteAction() throws IOException {
-		Hdf5File file = (Hdf5File) getHdfObject();
-		if (file.deleteFile()) {
-			setHdfObject((Hdf5File) null);
+	protected void createAction(Map<String, FlowVariable> flowVariables, ExecutionContext exec, long totalProgressToDo) throws IOException {
+		try {
+			setHdfObject(Hdf5File.createFile(m_filePath));
+		} finally {
+			setEditSuccess(getHdfObject() != null);
 		}
-		
-		return EditSuccess.getSuccess(getHdfObject() == null);
 	}
 
 	@Override
-	protected EditSuccess modifyAction() {
-		return null;
+	protected void copyAction(ExecutionContext exec, long totalProgressToDo) {
+	}
+
+	@Override
+	protected void deleteAction() throws IOException {
+		try {
+			Hdf5File file = (Hdf5File) getHdfObject();
+			if (file.deleteFile()) {
+				setHdfObject((Hdf5File) null);
+			}
+		} finally {
+			setEditSuccess(getHdfObject() == null);
+		}
+	}
+
+	@Override
+	protected void modifyAction(ExecutionContext exec, long totalProgressToDo) {
 	}
 	
 	@SuppressWarnings("unchecked")
 	private boolean doPostponedDataSetActions(BufferedDataTable inputTable, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException, NullPointerException {
 		List<DataSetNodeEdit> dataSetEditList = new ArrayList<>();
 		for (TreeNodeEdit edit : getAllDecendants()) {
-			if (edit.getEditState() == EditState.POSTPONED) {
+			if (edit.getEditState() == EditState.CREATE_SUCCESS_WRITE_POSTPONED) {
 				if (edit instanceof DataSetNodeEdit) {
 					dataSetEditList.add((DataSetNodeEdit) edit);
 				}
@@ -581,9 +593,9 @@ public class FileNodeEdit extends GroupNodeEdit {
 					dataSetColumnIndices[i][j] = copyColumnEdits[i][j].getInputColumnIndex();
 					copyDataSets[i][j].open();
 				}
-				
-				outputDataSets[i] = (Hdf5DataSet<Object>) ((Hdf5Group) dataSetEdits[i].getOpenedHdfObjectOfParent()).createDataSetFromEdit(dataSetEdits[i]);
-				addProgress(331, exec, totalProgressToDo, true);
+
+				outputDataSets[i] = (Hdf5DataSet<Object>) dataSetEdits[i].getHdfObject();
+				dataSetEdits[i].setHdfObject((Hdf5DataSet<Object>) null);
 				
 			} catch (Exception e) {
 				dataSetEdits[i].setEditState(EditState.FAIL);
@@ -695,7 +707,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 		if (getEditAction().isCreateOrCopyAction()) {
 			if (Hdf5File.existsHdf5File(m_filePath)) {
 				try {
-					success &= deleteAction() == EditSuccess.TRUE;
+					success &= deleteActionAndResetEditSuccess();
 					if (getHdfBackup() != null) {
 						setHdfObject(((Hdf5File) getHdfBackup()).copyFile(m_filePath));
 						success &= getHdfObject() != null;
@@ -735,7 +747,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 						}
 						
 						try {
-							success &= edit.deleteAction() == EditSuccess.TRUE;
+							success &= edit.deleteActionAndResetEditSuccess();
 							
 						} catch (IOException ioe) {
 							success = false;

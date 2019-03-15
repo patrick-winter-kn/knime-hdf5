@@ -12,6 +12,7 @@ import javax.swing.JTextField;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
+import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
@@ -290,8 +291,14 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected InvalidCause validateEditInternal() {
-		return getName().startsWith(BACKUP_PREFIX) && !getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName())
+		InvalidCause cause = getName().startsWith(BACKUP_PREFIX) && !getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName())
 				? InvalidCause.NAME_BACKUP_PREFIX : null;
+		
+		if (cause == null) {
+			//m_editDataType.getOutputType().areValuesConvertible(, inputType, editDataType)
+		}
+		
+		return cause;
 	}
 
 	@Override
@@ -327,57 +334,65 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected EditSuccess createAction(Map<String, FlowVariable> flowVariables) throws IOException {
-		FlowVariable var = flowVariables.get(getInputPathFromFileWithName());
-		setHdfObject(getOpenedHdfObjectOfParent().createAndWriteAttribute(this, var));
-		
-		return EditSuccess.getSuccess(getHdfObject() != null);
-	}
-
-	@Override
-	protected EditSuccess copyAction() throws IOException {
-		Hdf5Attribute<?> copyAttribute = (Hdf5Attribute<?>) findCopySource();
-		Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
-		if (havePropertiesChanged(copyAttribute)) {
-			setHdfObject(parent.createAndWriteAttribute(this, copyAttribute));
-		} else {
-			setHdfObject(copyAttribute.getParent().copyAttribute(copyAttribute, parent, getName()));
+	protected void createAction(Map<String, FlowVariable> flowVariables, ExecutionContext exec, long totalProgressToDo) throws IOException {
+		try {
+			FlowVariable var = flowVariables.get(getInputPathFromFileWithName());
+			setHdfObject(getOpenedHdfObjectOfParent().createAndWriteAttribute(this, var));
+		} finally {
+			setEditSuccess(getHdfObject() != null);
 		}
-		
-		return EditSuccess.getSuccess(getHdfObject() != null);
 	}
 
 	@Override
-	protected EditSuccess deleteAction() throws IOException {
-		Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfObject();
-		if (getOpenedHdfObjectOfParent().deleteAttribute(attribute.getName())) {
-			setHdfObject((Hdf5Attribute<?>) null);
+	protected void copyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
+		try {
+			Hdf5Attribute<?> copyAttribute = (Hdf5Attribute<?>) findCopySource();
+			Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
+			if (havePropertiesChanged(copyAttribute)) {
+				setHdfObject(parent.createAndWriteAttribute(this, copyAttribute));
+			} else {
+				setHdfObject(copyAttribute.getParent().copyAttribute(copyAttribute, parent, getName()));
+			}
+		} finally {
+			setEditSuccess(getHdfObject() != null);
 		}
-		
-		return EditSuccess.getSuccess(getHdfObject() == null);
 	}
 
 	@Override
-	protected EditSuccess modifyAction() throws IOException {
-		Hdf5Attribute<?> oldAttribute = (Hdf5Attribute<?>) getHdfSource();
-		Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
-		if (havePropertiesChanged(oldAttribute)) {
-			setHdfObject(parent.createAndWriteAttribute(this, oldAttribute));
-			//throw new NullPointerException("exception test");
-			/*if (oldAttribute != getHdfBackup()) {
-				parent.deleteAttribute(oldAttribute.getName());
-			}*/
-		} else {
-			if (!oldAttribute.getName().equals(getName())) {
-				if (oldAttribute == getHdfBackup()) {
-					setHdfObject(oldAttribute.getParent().copyAttribute(oldAttribute, parent, getName()));
-				} else {
-					setHdfObject(parent.renameAttribute(oldAttribute.getName(), getName()));
+	protected void deleteAction() throws IOException {
+		try {
+			Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfObject();
+			if (getOpenedHdfObjectOfParent().deleteAttribute(attribute.getName())) {
+				setHdfObject((Hdf5Attribute<?>) null);
+			}
+		} finally {
+			setEditSuccess(getHdfObject() == null);
+		}
+	}
+
+	@Override
+	protected void modifyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
+		try {
+			Hdf5Attribute<?> oldAttribute = (Hdf5Attribute<?>) getHdfSource();
+			Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
+			if (havePropertiesChanged(oldAttribute)) {
+				setHdfObject(parent.createAndWriteAttribute(this, oldAttribute));
+				//throw new NullPointerException("exception test");
+				/*if (oldAttribute != getHdfBackup()) {
+					parent.deleteAttribute(oldAttribute.getName());
+				}*/
+			} else {
+				if (!oldAttribute.getName().equals(getName())) {
+					if (oldAttribute == getHdfBackup()) {
+						setHdfObject(oldAttribute.getParent().copyAttribute(oldAttribute, parent, getName()));
+					} else {
+						setHdfObject(parent.renameAttribute(oldAttribute.getName(), getName()));
+					}
 				}
 			}
+		} finally {
+			setEditSuccess(getHdfObject() != null);
 		}
-		
-		return EditSuccess.getSuccess(getHdfObject() != null);
 	}
 	
 	public class AttributeNodeMenu extends TreeNodeMenu {

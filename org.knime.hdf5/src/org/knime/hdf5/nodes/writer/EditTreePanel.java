@@ -320,7 +320,7 @@ public class EditTreePanel extends JPanel {
         		List<?> data = SpecInfo.get(specListKey).getSpecList();
                 if (data.get(0) instanceof DataColumnSpec) {
                 	if (!(parentEdit instanceof DataSetNodeEdit)) {
-                		String newName = TreeNodeEdit.getUniqueName(parentEdit, DataSetNodeEdit.class, "dataSet");
+                		String newName = TreeNodeEdit.getUniqueName(parentEdit, DataSetNodeEdit.class, ((DataColumnSpec) data.get(0)).getName());
             			DataSetNodeEdit newEdit = new DataSetNodeEdit((GroupNodeEdit) parentEdit, newName);
                     	newEdit.addEditToParentNodeIfPossible();
                     	parentEdit = newEdit;

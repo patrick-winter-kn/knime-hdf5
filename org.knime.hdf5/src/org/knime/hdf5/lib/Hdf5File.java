@@ -292,7 +292,7 @@ public class Hdf5File extends Hdf5Group {
 		        BufferedReader reader = null;
 		        
 			    try {
-			        process = new ProcessBuilder(new String[] {"/bin/sh", "-c", "lsof | grep ' " + file.getAbsolutePath() + "$'"}).start();
+			        process = new ProcessBuilder(new String[] {"lsof", file.getAbsolutePath()}).start();
 			        reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
 			        String line = null;
 			        while ((line = reader.readLine()) != null) {

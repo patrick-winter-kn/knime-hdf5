@@ -2,6 +2,7 @@ package org.knime.hdf5.nodes.writer.edit;
 
 import java.util.Map;
 
+import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.workflow.FlowVariable;
@@ -58,22 +59,18 @@ public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 	}
 
 	@Override
-	protected EditSuccess createAction(Map<String, FlowVariable> flowVariables) {
-		return null;
+	protected void createAction(Map<String, FlowVariable> flowVariables, ExecutionContext exec, long totalProgressToDo) {
 	}
 
 	@Override
-	protected EditSuccess copyAction() {
-		return null;
+	protected void copyAction(ExecutionContext exec, long totalProgressToDo) {
 	}
 
 	@Override
-	protected EditSuccess deleteAction() {
-		return null;
+	protected void deleteAction() {
 	}
 
 	@Override
-	protected EditSuccess modifyAction() {
-		return null;
+	protected void modifyAction(ExecutionContext exec, long totalProgressToDo) {
 	}
 }
