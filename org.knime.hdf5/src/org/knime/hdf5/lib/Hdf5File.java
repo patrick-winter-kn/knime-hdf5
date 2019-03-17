@@ -1,9 +1,9 @@
 package org.knime.hdf5.lib;
 
-import java.io.BufferedReader;
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -265,7 +265,7 @@ public class Hdf5File extends Hdf5Group {
 	}
 	
 	private boolean isOpenAnywhere() {
-		return PlatformOS.get().isFileOpened(new File(getFilePath()));
+		return PlatformOS.get().isFileOpen(new File(getFilePath()));
 	}
 	
 	private static enum PlatformOS {
@@ -282,41 +282,40 @@ public class Hdf5File extends Hdf5Group {
 			}
 		}
 		
-		private boolean isFileOpened(File file) {
-			switch (this) {
-			case WINDOWS:
-				return !file.renameTo(new File(file.getPath()));
-				
-			case LINUX:
-				Process process = null;
-		        BufferedReader reader = null;
-		        
-			    try {
-			        process = new ProcessBuilder(new String[] {"lsof", file.getAbsolutePath()}).start();
-			        reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-			        String line = null;
-			        while ((line = reader.readLine()) != null) {
-			            if (line.contains(file.getAbsolutePath())) {   
-			                return true;
-			            }
-			        }
-			    } catch (Exception e) {
-					NodeLogger.getLogger(Hdf5File.class).error(e.getMessage(), e);
+		private boolean isFileOpen(File file) {
+		    try {
+				switch (this) {
+				case WINDOWS:
+					return !file.renameTo(new File(file.getPath()));
 					
-			    } finally {
-				    try {
-						reader.close();
-					} catch (IOException ioe) {
-						NodeLogger.getLogger(Hdf5File.class).error(ioe.getMessage(), ioe);
-					}
-				    process.destroy();
-			    }
-			    
-			    return false;
-			    
-			default:
+				case LINUX:
+					Process process = null;
+			        try {
+			        	// using function 'lsof' instead of 'fuser' needs too long
+				    	if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+					        process = new ProcessBuilder(new String[] {"fuser", file.getAbsolutePath()}).start();
+				    	} else {
+				    		throw new UnsupportedOperationException("Function 'fuser' is only supported on POSIX-compilant OS");
+				    	}
+				        BufferedInputStream in = new BufferedInputStream(process.getInputStream());
+				        if (in.read(new byte[1]) != -1) {
+				            return true;
+				        }
+				    } finally {
+				    	if (process != null) {
+						    process.destroy();
+				    	}
+				    }
+				    
+				    return false;
+				    
+				default:
+					return false;
+				}
+		    } catch (Exception e) {
+				NodeLogger.getLogger(Hdf5File.class).warn("Could not check if file is open somewhere else: " + e.getMessage(), e);
 				return false;
-			}
+		    }
 		}
 	}
 	
