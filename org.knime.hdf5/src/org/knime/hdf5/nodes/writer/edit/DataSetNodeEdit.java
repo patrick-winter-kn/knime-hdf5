@@ -438,7 +438,9 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	public String getToolTipText() {
-		return (isSupported() ? "(" + getDataTypeInfo() + ") " : "") + super.getToolTipText();
+		return (isSupported() ? "(" + getDataTypeInfo()
+				+ (m_inputRowCount != ColumnNodeEdit.UNKNOWN_ROW_COUNT ? ", rows: " + m_inputRowCount : "")
+				+ ") " : "") + super.getToolTipText();
 	}
 	
 	private String getDataTypeInfo() {

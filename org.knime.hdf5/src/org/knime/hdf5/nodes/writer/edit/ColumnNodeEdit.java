@@ -124,7 +124,9 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	public String getToolTipText() {
-		return "(" + m_inputType.toString() + ") " + super.getToolTipText();
+		return "(" + m_inputType.toString()
+				+ (m_inputRowCount != ColumnNodeEdit.UNKNOWN_ROW_COUNT ? ", rows: " + m_inputRowCount : "")
+				+ ") " + super.getToolTipText();
 	}
 	
 	@Override

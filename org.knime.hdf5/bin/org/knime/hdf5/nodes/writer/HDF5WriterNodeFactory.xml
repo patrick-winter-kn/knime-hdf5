@@ -17,7 +17,7 @@
 			objects in the output HDF5 File.
 			<br />
 			<b>
-				Be careful that the output HDF5 File may not be opened somewhere
+				Be careful that the output HDF5 File is not open somewhere
 				else on the machine while executing this node!
 				It is only checked in Windows and POSIX-compliant Linux so far!
 			</b>

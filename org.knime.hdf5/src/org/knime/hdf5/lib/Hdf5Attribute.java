@@ -40,8 +40,6 @@ public class Hdf5Attribute<Type> {
 	
 	private long m_dimension;
 	
-	private boolean m_open;
-	
 	private String m_pathFromFile = "";
 	
 	private final ReentrantReadWriteLock m_openLock = new ReentrantReadWriteLock(true);
@@ -96,7 +94,6 @@ public class Hdf5Attribute<Type> {
                     HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
         	
         	parent.addAttribute(attribute);
-        	attribute.setOpen(true);
         	
         } catch (HDF5Exception | NullPointerException | IllegalArgumentException | IllegalStateException hnpiaise) {
         	throw new IOException("Attribute \"" + name + "\" in \""
@@ -234,12 +231,8 @@ public class Hdf5Attribute<Type> {
 		return m_dimension;
 	}
 
-	boolean isOpen() {
-		return m_open;
-	}
-
-	private void setOpen(boolean open) {
-		m_open = open;
+	public boolean isOpen() {
+		return m_attributeId >= 0;
 	}
 	
 	/**
@@ -278,7 +271,7 @@ public class Hdf5Attribute<Type> {
 	
 	private void checkOpen() throws IOException {
 		checkExists();
-    	if (!m_open) {
+    	if (!isOpen()) {
 			throw new IOException("Attribute is not open");
 		}
 	}
@@ -554,7 +547,6 @@ public class Hdf5Attribute<Type> {
 				m_attributeId = H5.H5Aopen(getParent().getElementId(), getName(),
 						HDF5Constants.H5P_DEFAULT);
 				
-				setOpen(true);
 		    	loadDimension();
 			}
 	    	
@@ -629,15 +621,14 @@ public class Hdf5Attribute<Type> {
         	
             if (isOpen()) {
                 success &= H5.H5Sclose(m_dataspaceId) >= 0;
-                
                 if (success) {
                 	m_dataspaceId = -1;
-                    success &= H5.H5Aclose(m_attributeId) >= 0;
                 }
 
-                if (success) {
-                    setOpen(false);
-                }
+                success &= H5.H5Aclose(m_attributeId) >= 0;
+	    		if (success) {
+	    			m_attributeId = -1;
+	    		}
             }
             
             return success;

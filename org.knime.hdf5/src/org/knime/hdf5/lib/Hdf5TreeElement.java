@@ -38,8 +38,6 @@ abstract public class Hdf5TreeElement {
 	
 	private long m_elementId = -1;
 	
-	private boolean m_open;
-	
 	private String m_pathFromFile = "";
 	
 	private Hdf5Group m_parent;
@@ -126,14 +124,7 @@ abstract public class Hdf5TreeElement {
 		if (isFile()) {
 			throw new IllegalStateException("Wrong method used for Hdf5File");
 		}
-		return m_open;
-	}
-
-	protected void setOpen(boolean open) {
-		if (isFile()) {
-			throw new IllegalStateException("Wrong method used for Hdf5File");
-		}
-		m_open = open;
+		return m_elementId >= 0;
 	}
 
 	public String getPathFromFile() {

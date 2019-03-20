@@ -82,7 +82,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
             H5.H5Pclose(propertyListId);
 	        
     		parent.addDataSet(dataSet);
-    		dataSet.setOpen(true);
     		
 		} catch (HDF5Exception | NullPointerException | IllegalArgumentException | IllegalStateException hnpiaise) {
             throw new IOException("DataSet could not be created: " + hnpiaise.getMessage(), hnpiaise);
@@ -561,7 +560,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				setElementId(H5.H5Dopen(getParent().getElementId(), getName(),
 						HDF5Constants.H5P_DEFAULT));
 				
-				setOpen(true);
 				loadDimensions();
 				loadChunkInfo();
 			}
@@ -689,8 +687,10 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
                     m_dataspaceId = -1;
         		}
                 
-                H5.H5Dclose(getElementId());
-                setOpen(false);
+        		success &= H5.H5Dclose(getElementId()) >= 0;
+	    		if (success) {
+	    			setElementId(-1);
+	    		}
             }
             
             return true;

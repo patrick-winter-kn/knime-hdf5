@@ -54,7 +54,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 					HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT,
 					HDF5Constants.H5P_DEFAULT));
 			parent.addGroup(group);
-			group.setOpen(true);
     		
 		} catch (HDF5LibraryException | NullPointerException | IllegalArgumentException | IllegalStateException hlnpiaise) {
 			throw new IOException("Group could not be created: " + hlnpiaise.getMessage(), hlnpiaise);
@@ -540,7 +539,6 @@ public class Hdf5Group extends Hdf5TreeElement {
 				
 				setElementId(H5.H5Gopen(getParent().getElementId(), getName(),
 						HDF5Constants.H5P_DEFAULT));
-				setOpen(true);
 			}
 			
             return true;
@@ -582,7 +580,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	    		
 	    		success &= H5.H5Gclose(getElementId()) >= 0;
 	    		if (success) {
-			        setOpen(false);
+	    			setElementId(-1);
 	    		}
             }
             

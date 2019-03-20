@@ -601,7 +601,7 @@ public class Hdf5HdfDataType {
 	
 	@Override
 	public String toString() {
-		return "type=" + m_type.toString() + ",endian=" + m_endian.toString()
-				+ (m_type == HdfDataType.STRING ? ",stringLength=" + m_stringLength : "");
+		return "{ type=" + m_type.toString() + ",endian=" + m_endian.toString()
+				+ (m_type == HdfDataType.STRING ? ",stringLength=" + m_stringLength : "") + " }";
 	}
 }

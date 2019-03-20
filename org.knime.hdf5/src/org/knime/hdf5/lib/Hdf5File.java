@@ -504,28 +504,7 @@ public class Hdf5File extends Hdf5Group {
         
         return opened;
 	}
-/*
-	private synchronized static String whatisOpenInHdf() {
-		String opened = "";
-		
-		try {
-			int fileNum = 0;
-			for (long id : H5.getOpenIDs()) {
-				if (H5.H5Iis_valid(id) && H5.H5Iget_type(id) == HDF5Constants.H5I_FILE) {
-					fileNum++;
-				}
-			}
-			
-			opened = H5.getOpenIDCount() + " objects, thereof " + (fileNum - 1) + " other files " + H5.getOpenIDs();
-			
-	    // TODO change to 'Exception e'
-		} catch (Exception e) {
-            NodeLogger.getLogger("HDF5 Files").debug("Info of open objects in total could not be loaded: " + e.getMessage(), e);
-		}
-		
-		return opened;
-	}
-	*/
+	
 	/**
 	 * Closes the group and all elements in this group.
 	 * @throws IOException 
@@ -554,11 +533,12 @@ public class Hdf5File extends Hdf5Group {
 	            		}
 			    		
 			    		NodeLogger.getLogger("HDF5 Files").debug("Number of open objects in file \""
-			    				+ getName() + "\": " + whatisOpenInFile() /* + " (total number: " + whatisOpenInHdf() + ")"*/);
-
-			    		// System.out.println(whatisOpenInHdf());
+			    				+ getName() + "\": " + whatisOpenInFile());
 			    		
 			    		success &= H5.H5Fclose(getElementId()) >= 0;
+			    		if (success) {
+			    			setElementId(-1);
+			    		}
 		    		}
 	    			
 	    			if (success) {
