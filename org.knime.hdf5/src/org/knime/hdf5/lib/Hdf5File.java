@@ -295,7 +295,7 @@ public class Hdf5File extends Hdf5Group {
 				    	if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
 					        process = new ProcessBuilder(new String[] {"fuser", file.getAbsolutePath()}).start();
 				    	} else {
-				    		throw new UnsupportedOperationException("Function 'fuser' is only supported on POSIX-compilant OS");
+				    		throw new UnsupportedOperationException("Function 'fuser' is only supported on POSIX-compliant OS");
 				    	}
 				        BufferedInputStream in = new BufferedInputStream(process.getInputStream());
 				        if (in.read(new byte[1]) != -1) {

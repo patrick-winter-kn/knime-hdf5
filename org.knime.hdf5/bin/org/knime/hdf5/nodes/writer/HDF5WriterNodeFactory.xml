@@ -19,7 +19,7 @@
 			<b>
 				Be careful that the output HDF5 File may not be opened somewhere
 				else on the machine while executing this node!
-				It is only checked in Windows and Linux so far!
+				It is only checked in Windows and POSIX-compliant Linux so far!
 			</b>
 		</intro>
 		
@@ -48,10 +48,6 @@
 				Specifies the configuration of the edits which the node should
 				apply on the output file.
 				<br />
-				<br />
-				The button <b>Update file path</b> allows to take over the settings from the
-				option 'Output file' (selected file, overwrite file) to the data
-				configuration.
 				<br />
 				The button <b>Reset config</b> resets the data configuration, i.e. it
 				removes all edits from the data configuration such that no manipulations

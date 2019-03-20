@@ -80,6 +80,8 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 	private SettingsModelString m_fileOverwritePolicySettings;
 	
 	private SettingsModelBoolean m_saveColumnPropertiesSettings;
+	
+	private DialogComponentLabel m_fileInfoLabel = new DialogComponentLabel("");
 
 	private ListPanel m_columnSpecPanel = new ListPanel();
 	
@@ -97,37 +99,25 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		DialogComponentFileChooser fileChooser = new DialogComponentFileChooser(m_filePathSettings, "outputFilePathHistory",
 				JFileChooser.SAVE_DIALOG, false, filePathFvm, ".h5|.hdf5");
 		
-		DialogComponentLabel fileInfoLabel = new DialogComponentLabel("");
-		fileChooser.getModel().addChangeListener(new ChangeListener() {
-			
-			@Override
-			public void stateChanged(ChangeEvent e) {
-				String urlPath = m_filePathSettings.getStringValue();
-				try {
-					String filePath = HDF5WriterNodeModel.getFilePathFromUrlPath(urlPath, false);
-					
-					if (Hdf5File.hasHdf5FileEnding(filePath)) {
-						fileInfoLabel.setText("Info: File " + (Hdf5File.existsHdf5File(filePath) ? "exists" : "does not exist"));
-					} else {
-						fileInfoLabel.setText("Error: File ending is not valid");
-					}
-				} catch (IOException ioe) {
-					fileInfoLabel.setText("Error: " + ioe.getMessage());
-				}
-			}
-		});
-		
-		// TODO is it clear for the user that here is only meant the file as whole and not also its components?
 		m_fileOverwritePolicySettings = SettingsFactory.createFileOverwritePolicySettings();
 		DialogComponentButtonGroup fileOverwritePolicy = new DialogComponentButtonGroup(m_fileOverwritePolicySettings,
 				false, "Overwrite file: ", EditOverwritePolicy.getNames(EditOverwritePolicy.getAvailableValuesForFile()));
 		
+		ChangeListener fileChangeListener = new ChangeListener() {
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				updateFileInfo();
+				updateFilePath();
+			}
+		};
+		fileChooser.getModel().addChangeListener(fileChangeListener);
+		fileOverwritePolicy.getModel().addChangeListener(fileChangeListener);
+		
         createNewGroup("Output file:");
 		addDialogComponent(fileChooser);
-		addDialogComponent(fileInfoLabel);
+		addDialogComponent(m_fileInfoLabel);
 		addDialogComponent(fileOverwritePolicy);
         closeCurrentGroup();
-		
 		
 		JPanel inputPanel = new JPanel();
 		inputPanel.setLayout(new BoxLayout(inputPanel, BoxLayout.Y_AXIS));
@@ -142,21 +132,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		JPanel buttonPanel = new JPanel();
 		outputPanel.add(buttonPanel);
 		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
-		
-		JButton updateFilePathButton = new JButton("Update file path");
-		updateFilePathButton.addActionListener(new ActionListener() {
-			
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				try {
-					m_editTreePanel.updateTreeWithFile(getFilePathFromSettings(),
-							EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()) == EditOverwritePolicy.OVERWRITE, true);
-				} catch (IOException | InvalidSettingsException ioise) {
-		    		NodeLogger.getLogger(getClass()).error(ioise.getMessage(), ioise);
-				}
-			}
-		});
-		buttonPanel.add(updateFilePathButton);
 
 		JButton resetConfigButton = new JButton("Reset config");
 		resetConfigButton.addActionListener(new ActionListener() {
@@ -333,15 +308,19 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 				protected DataDialog(Component comp, String title) {
 					super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, comp), title, true);
 					setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
+					setMinimumSize(new Dimension(800, 600));
 					// setLocation(400, 400);
 					
 					JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true, inputPanel, outputPanel);
 					add(splitPane, BorderLayout.CENTER);
 					splitPane.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-					// splitPane.setMinimumSize(new Dimension(900, 600));
+					splitPane.setContinuousLayout(true);
+					splitPane.setOneTouchExpandable(true);
+					splitPane.setResizeWeight(0.3);
 
 					JPanel selectDataButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
 					add(selectDataButtonPanel, BorderLayout.PAGE_END);
+					
 					JButton okButton = new JButton("OK");
 					okButton.addActionListener(new ActionListener() {
 						
@@ -359,6 +338,16 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 					});
 					selectDataButtonPanel.add(okButton);
 					
+					JButton cancelButton = new JButton("Cancel");
+					cancelButton.addActionListener(new ActionListener() {
+						
+						@Override
+						public void actionPerformed(ActionEvent e) {
+							setVisible(false);
+						}
+					});
+					selectDataButtonPanel.add(cancelButton);
+					
 					pack();
 				}
 			}
@@ -374,11 +363,55 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
         closeCurrentGroup();
 	}
     
-    private String getFilePathFromSettings() throws IOException, InvalidSettingsException {
+    private void updateFilePath() {
+    	updateFileInfo();
+    	
+		try {
+			m_editTreePanel.updateTreeWithFile(getFilePathFromSettings(),
+					EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()) == EditOverwritePolicy.OVERWRITE, true);
+			
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+			
+		} catch (InvalidSettingsException ise) {
+    		// nothing to do: exception is already handled by updateFileInfo()
+		}
+    }
+    
+    private void updateFileInfo() {
+    	String errorInfo = null;
+    	
+		String urlPath = m_filePathSettings.getStringValue();
+		try {
+			if (!urlPath.trim().isEmpty()) {
+				String filePath = HDF5WriterNodeModel.getFilePathFromUrlPath(urlPath, false);
+				
+				if (Hdf5File.hasHdf5FileEnding(filePath)) {
+					m_fileInfoLabel.setText("Info: File " + (Hdf5File.existsHdf5File(filePath) ? "exists" : "does not exist"));
+				} else {
+					errorInfo = "Error: File ending is not valid";
+				}
+			} else {
+				errorInfo = "Error: No file selected";
+			}
+		} catch (InvalidSettingsException ise) {
+			errorInfo = "Error: " + ise.getMessage();
+		}
+		
+		if (errorInfo != null) {
+			m_fileInfoLabel.setText("<html><font color=\"red\">" + errorInfo + "</font></html>");
+		}
+    }
+    
+    private String getFilePathFromSettings() throws InvalidSettingsException {
     	String filePath = HDF5WriterNodeModel.getFilePathFromUrlPath(m_filePathSettings.getStringValue(), false);
     	
     	if (EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()) == EditOverwritePolicy.RENAME) {
-    		filePath = Hdf5File.getUniqueFilePath(filePath);
+    		try {
+				filePath = Hdf5File.getUniqueFilePath(filePath);
+			} catch (IOException ioe) {
+				throw new InvalidSettingsException(ioe);
+			}
     	}
     	
     	return filePath;
@@ -512,6 +545,8 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     @Override
 	public void loadAdditionalSettingsFrom(final NodeSettingsRO settings,
             final DataTableSpec[] specs) throws NotConfigurableException {
+    	updateFileInfo();
+    	
     	DataColumnSpec[] colSpecs = new DataColumnSpec[specs[0].getNumColumns()];
     	for (int i = 0; i < colSpecs.length; i++) {
         	colSpecs[i] = specs[0].getColumnSpec(i);

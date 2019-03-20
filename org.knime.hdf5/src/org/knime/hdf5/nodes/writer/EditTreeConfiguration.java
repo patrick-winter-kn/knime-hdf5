@@ -66,7 +66,7 @@ public class EditTreeConfiguration {
 		}
     }
 	
-	void updateConfiguration(final String urlPath, final EditOverwritePolicy policy) throws IOException {
+	void updateConfiguration(final String urlPath, final EditOverwritePolicy policy) throws IOException, InvalidSettingsException {
 		FileNodeEdit oldFileEdit = m_fileEdit;
 		m_fileEdit = null;
 		

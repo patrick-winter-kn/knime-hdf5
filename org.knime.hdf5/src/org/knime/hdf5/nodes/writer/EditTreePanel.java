@@ -442,24 +442,6 @@ public class EditTreePanel extends JPanel {
 		}
 	}
 	
-	/**
-	 * Resets the config of the tree. If there have not been a config so far,
-	 * the file with the path {@code filePath} will be loaded.
-	 * 
-	 * @param filePath
-	 * @param keepOldFileEditIfPossible
-	 * @param overwriteFile
-	 * @throws IOException
-	 */
-	void updateTreeWithResetConfig(String filePath, boolean keepOldFileEditIfPossible, boolean overwriteFile) throws IOException {
-		FileNodeEdit oldFileEdit = m_editTreeConfig.getFileNodeEdit();
-		if (keepOldFileEditIfPossible && oldFileEdit != null && oldFileEdit.isOverwriteHdfFile() == overwriteFile) {
-			updateTreeWithResetConfig();
-		} else {
-			updateTreeWithFile(filePath, overwriteFile, false);
-		}
-	}
-	
 	void updateTreeWithFile(String filePath, boolean overwriteFile, boolean keepConfig) throws IOException {
 		m_editTreeConfig.initConfigOfFile(filePath, overwriteFile, keepConfig, m_tree);
 	}

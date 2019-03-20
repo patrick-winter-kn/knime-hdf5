@@ -150,9 +150,9 @@ public class HDF5WriterNodeModel extends NodeModel {
 		}
 	}
 	
-	static String getFilePathFromUrlPath(String urlPath, boolean mustExist) throws IOException {
+	static String getFilePathFromUrlPath(String urlPath, boolean mustExist) throws InvalidSettingsException {
 		if (urlPath == null || urlPath.trim().isEmpty()) {
-			throw new IOException("No file selected");
+			throw new InvalidSettingsException("No file selected");
 		}
         
         try {
@@ -166,7 +166,7 @@ public class HDF5WriterNodeModel extends NodeModel {
             return filePath.toString();
             
         } catch (InvalidSettingsException | InvalidPathException | IOException | URISyntaxException | NullPointerException isipiousnpe) {
-        	throw new IOException("Incorrect file path/url: " + isipiousnpe.getMessage(), isipiousnpe);
+        	throw new InvalidSettingsException("Incorrect file path/url: " + isipiousnpe.getMessage(), isipiousnpe);
         }
 	}
 
@@ -222,8 +222,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 		try {
 			m_editTreeConfig.updateConfiguration(m_filePathSettings.getStringValue(),
 					EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()));
-		} catch (IOException ioe) {
-			NodeLogger.getLogger("HDF5 Files").error("Reset failed: " + ioe.getMessage(), ioe);
+		} catch (IOException | InvalidSettingsException ioise) {
+			NodeLogger.getLogger("HDF5 Files").error("Reset failed: " + ioise.getMessage(), ioise);
 		}
 	}
 }
