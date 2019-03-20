@@ -426,7 +426,7 @@ public class Hdf5Attribute<Type> {
 	@SuppressWarnings("unchecked")
 	public boolean clearData() throws IOException {
 		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) m_dimension);
-		Arrays.fill(dataIn, (Type) m_type.getKnimeType().getMissingValue());
+		Arrays.fill(dataIn, (Type) m_type.getKnimeType().getStandardValue());
 		return write(dataIn, Rounding.DOWN);
 	}
 	

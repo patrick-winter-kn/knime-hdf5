@@ -12,13 +12,32 @@ import org.knime.core.data.def.StringCell;
 import org.knime.core.node.workflow.FlowVariable.Type;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
+/**
+ * Enum which stores the 4 data types ({@code int, long, double, String})
+ * which are supported for data tables or flow variables on knime side.
+ * This enum also provides several methods for case distinctions between
+ * those data types.
+ */
 public enum Hdf5KnimeDataType {
-	INTEGER,		// equivalent to INT32 in HDF
-	LONG,			// equivalent to INT64 in HDF
-	DOUBLE,			// equivalent to FLOAT64 in HDF
-	STRING,			// supports any other dataType through .toString()
-	UNKNOWN;		// unknown dataType for cases it should not be supported
+	/** equivalent to INT32 in hdf */
+	INTEGER,
+	/** equivalent to INT64 in hdf */
+	LONG,
+	/** equivalent to FLOAT64 in hdf */
+	DOUBLE,
+	/** supports any other dataType through .toString() */
+	STRING,
+	/** not supported dataTypes */
+	UNKNOWN;
 
+	/**
+	 * Returns the nearest convertible type from the input type.
+	 * Only dataSets can be converted to {@code LONG}.
+	 * 
+	 * @param type the hdf type
+	 * @param fromDS {@code true} if the {@link HdfDataType} is from a dataSet
+	 * @return the equivalent knime type
+	 */
 	public static Hdf5KnimeDataType getKnimeDataType(HdfDataType type, boolean fromDS) {
 		switch (type) {
 		case INT8:
@@ -43,6 +62,10 @@ public enum Hdf5KnimeDataType {
 		}
 	}
 	
+	/**
+	 * @param type data type of a column spec
+	 * @return the equivalent knime type
+	 */
 	public static Hdf5KnimeDataType getKnimeDataType(DataType type) {
 		if (type != null) {
 			if (type.equals(IntCell.TYPE)) {	
@@ -58,6 +81,10 @@ public enum Hdf5KnimeDataType {
 		return null;
 	}
 	
+	/**
+	 * @param type data type of a flow variable
+	 * @return the equivalent knime type
+	 */
 	public static Hdf5KnimeDataType getKnimeDataType(Type type) {
 		switch (type) {
 		case INTEGER:
@@ -69,6 +96,13 @@ public enum Hdf5KnimeDataType {
 		}
 	}
 	
+	/**
+	 * Returns the equivalent knime type for the data type of the
+	 * components in the input array.
+	 * 
+	 * @param values an array of objects
+	 * @return the equivalent knime type
+	 */
 	public static Hdf5KnimeDataType getKnimeDataType(Object[] values) {
 		Class<?> type = values.getClass().getComponentType();
 		if (type == Integer.class) {
@@ -82,6 +116,10 @@ public enum Hdf5KnimeDataType {
 		}
 	}
 	
+	/**
+	 * @return the data type of a column spec for this type
+	 * @throws UnsupportedDataTypeException	if this type is unknown
+	 */
 	public DataType getColumnDataType() throws UnsupportedDataTypeException {
 		switch (this) {
 		case INTEGER:
@@ -97,6 +135,15 @@ public enum Hdf5KnimeDataType {
 		}
 	}
 
+	/**
+	 * Returns the value of the input data cell in the data type of this type.
+	 * If the data cell is a {@link MissingCell}, the returned value is {@code null}.
+	 * 
+	 * @param dataCell the cell of a data table
+	 * @return the value of {@code dataCell} in the data type of this type
+	 * @throws UnsupportedDataTypeException if the data type of the input data cell
+	 * 	is a String and the data type of this type is not a String
+	 */
 	public Object getValueFromDataCell(DataCell dataCell) throws UnsupportedDataTypeException {
 		if (dataCell instanceof MissingCell) {
 			return null;
@@ -150,9 +197,18 @@ public enum Hdf5KnimeDataType {
 		throw new UnsupportedDataTypeException("Unsupported combination of dataCellDataType and knimeDataType while reading from dataCell");
 	}
 
-	public DataCell getDataCellWithValue(Object value) throws UnsupportedDataTypeException {
+	/**
+	 * Returns the {@link DataCell} of this type which stores the input value.
+	 * If the value is {@code null}, the {@link DataCell} is a {@link MissingCell}.
+	 * 
+	 * @param value the value with should be stored in the {@link DataCell}
+	 * @param missingValueMessage the message in case the value is {@code null}
+	 * @return the {@link DataCell} of this type which stores the input value
+	 * @throws UnsupportedDataTypeException if this type is unknown
+	 */
+	public DataCell getDataCellWithValue(Object value, String missingValueMessage) throws UnsupportedDataTypeException {
 		if (value == null) {
-			return new MissingCell("(null) on joining hdf dataSets");
+			return new MissingCell(missingValueMessage);
 		}
 		
 		switch (this) {
@@ -169,6 +225,11 @@ public enum Hdf5KnimeDataType {
 		}
 	}
 
+	/**
+	 * @param length the length of the array
+	 * @return the array of this type with the input length
+	 * @throws UnsupportedDataTypeException if this type is unknown
+	 */
 	public Object[] createArray(int length) throws UnsupportedDataTypeException {
 		switch (this) {
 		case INTEGER:
@@ -184,7 +245,11 @@ public enum Hdf5KnimeDataType {
 		}
 	}
 	
-	public Object getMissingValue() throws UnsupportedDataTypeException {
+	/**
+	 * @return the standard value of a missing value for this type
+	 * @throws UnsupportedDataTypeException if this type is unknown
+	 */
+	public Object getStandardValue() throws UnsupportedDataTypeException {
 		switch (this) {
 		case INTEGER:
 			return 0;
@@ -199,6 +264,9 @@ public enum Hdf5KnimeDataType {
 		}
 	}
 	
+	/**
+	 * @return the equivalent hdf type for this knime type
+	 */
 	public HdfDataType getEquivalentHdfType() {
 		switch (this) {
 		case INTEGER:

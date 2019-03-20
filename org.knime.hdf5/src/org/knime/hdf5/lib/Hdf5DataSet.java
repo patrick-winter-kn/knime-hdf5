@@ -339,7 +339,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public boolean copyValuesToRow(long rowIndex, DataRow row, int[] dataRowColumnIndices, Hdf5DataSet<?>[] dataSets,
-			long[] dataSetColumnIndices, Type standardValue, Rounding rounding) throws HDF5DataspaceInterfaceException, IOException {
+			long[] dataSetColumnIndices, Type standardValue, Rounding rounding) throws IOException, HDF5DataspaceInterfaceException {
 		Object[] dataWrite = m_type.getHdfType().createArray((int) numberOfColumns());
 		Class outputClass = m_type.getHdfClass();
 		int dataSetIndex = 0;
@@ -394,7 +394,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		try {
 			success = true;
 			Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) numberOfColumns());
-			Arrays.fill(dataIn, (Type) m_type.getKnimeType().getMissingValue());
+			Arrays.fill(dataIn, (Type) m_type.getKnimeType().getStandardValue());
 			for (long i = 0; i < numberOfRows(); i++) {
 				success &= writeRow(dataIn, i, Rounding.DOWN);
 			}
@@ -528,19 +528,20 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		long rowNum = numberOfRows();
 		int colNum = (int) numberOfColumns();
 		
+		String missingValueMessage = "(null) on joining hdf dataSets";
 		if (rowIndex < rowNum) {
 			try {
 				Type[] dataRead = readRow(rowIndex);
 				
 				for (int c = 0; c < colNum; c++) {
-					row.add(knimeType.getDataCellWithValue(dataRead[c]));
+					row.add(knimeType.getDataCellWithValue(dataRead[c], missingValueMessage));
 				}
 			} catch (IllegalStateException ise) {
 				NodeLogger.getLogger("HDF5 Files").error(ise.getMessage(), ise);
 			}
 		} else {
 			for (int c = 0; c < colNum; c++) {
-				row.add(knimeType.getDataCellWithValue(null));
+				row.add(knimeType.getDataCellWithValue(null, missingValueMessage));
 			}
 		}
 	}

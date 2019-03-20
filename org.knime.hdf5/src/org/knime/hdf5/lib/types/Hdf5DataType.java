@@ -12,6 +12,10 @@ import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
+/**
+ * Data type class to connect hdf and knime type which is used to create
+ * objects in an hdf file.
+ */
 public class Hdf5DataType {
 	
 	static final int POW_2_8 = (int) Math.pow(2, 8);
@@ -26,11 +30,11 @@ public class Hdf5DataType {
 
 	private final Hdf5KnimeDataType m_knimeType;
 
-	private final boolean m_vlen; // variable length
+	private final boolean m_vlen;
 	
 	private final boolean m_fromDS;
 	
-	private Hdf5DataType(Hdf5HdfDataType hdfType, Hdf5KnimeDataType knimeType, 
+	private Hdf5DataType(Hdf5HdfDataType hdfType, Hdf5KnimeDataType knimeType,
 			boolean vlen, boolean fromDS) {
 		m_hdfType = hdfType;
 		m_knimeType = knimeType;
@@ -38,21 +42,22 @@ public class Hdf5DataType {
 		m_fromDS = fromDS;
 	}
 	
+	
 	/**
-	 * 
-	 * @param type dataType class name ( starts with H5T_ )
+	 * @param fromDS true if the data type is from a dataSet
+	 * @param classId id of the data type
 	 * @param size size in byte
-	 * @param unsigned true if the dataType is unsigned
-	 * @param vlen true if dataType has a variable length
-	 * @param fromDS true if the dataType is from a dataSet
-	 * @throws HDF5LibraryException 
+	 * @param endian the endian
+	 * @param unsigned true if the data type is unsigned
+	 * @param vlen true if data type has variable length
+	 * @throws HDF5LibraryException
 	 */
-	private Hdf5DataType(boolean fromDS, long classId, int size, Endian endian, boolean unsigned, boolean vlen) throws HDF5LibraryException {
+	private Hdf5DataType(boolean fromDS, long classId, int size, Endian endian,
+			boolean unsigned, boolean vlen) throws HDF5LibraryException {
 		m_vlen = vlen;
 		m_fromDS = fromDS;
 		
-		// see Hdf5HdfDataType for the structure of the typeId
-		// if typeId cannot be defined differently, it will stay a STRING
+		// define typeId by using the way explained in HdfDataType#getTypeId()
 		int typeId = HdfDataType.STRING.getTypeId();
 		
 		if (classId == HDF5Constants.H5T_INTEGER) {
@@ -66,6 +71,16 @@ public class Hdf5DataType {
 		m_knimeType = Hdf5KnimeDataType.getKnimeDataType(m_hdfType.getType(), m_fromDS);
 	}
 	
+	/**
+	 * @param hdfType the hdf type
+	 * @param knimeType the knime type
+	 * @param vlen true if data type has variable length
+	 * @param fromDS true if the data type is from a dataSet
+	 * @param stringLength the string length for String data types
+	 * @return a new data type which can be used to create objects in hdf files
+	 * @throws IOException if the data type could not be created
+	 * 	(can only happen for String data types)
+	 */
 	public static Hdf5DataType createDataType(Hdf5HdfDataType hdfType, Hdf5KnimeDataType knimeType, 
 			boolean vlen, boolean fromDS, long stringLength) throws IOException {
 		Hdf5DataType dataType = new Hdf5DataType(hdfType, knimeType, vlen, fromDS);
@@ -74,12 +89,31 @@ public class Hdf5DataType {
 		return dataType;
 	}
 	
+	/**
+	 * @param copyDataType the data type to copy from
+	 * @return the new copy
+	 * @throws IOException if the new copy of the data type could not be created
+	 * 	(can only happen for String data types)
+	 */
 	public static Hdf5DataType createCopyFrom(Hdf5DataType copyDataType) throws IOException {
 		return createDataType(Hdf5HdfDataType.createCopyFrom(copyDataType.getHdfType()),
-				copyDataType.getKnimeType(), copyDataType.isVlen(), copyDataType.isFromDS(), copyDataType.getHdfType().getStringLength());
+				copyDataType.getKnimeType(), copyDataType.isVlen(), copyDataType.isFromDS(),
+				copyDataType.getHdfType().getStringLength());
 	}
 	
-	public static Hdf5DataType openDataType(long elementId) throws HDF5LibraryException, IllegalArgumentException, IOException, UnsupportedDataTypeException {
+	/**
+	 * Opens the data type of the hdf object with the input {@code elementId}.
+	 * 
+	 * @param elementId the id of the hdf object
+	 * @return the opened data type
+	 * @throws HDF5LibraryException if an internal error occured
+	 * @throws IllegalArgumentException if the hdf object is no dataSet or attribute
+	 * @throws UnsupportedDataTypeException if the data type is not supported
+	 * 	(e.g. {@code HDF5Constants.H5T_VLEN, HDF5Constants.H5T_REFERENCE, HDF5Constants.H5T_COMPOUND})
+	 * @throws IOException if the data type could not be opened (can only happen for String data types)
+	 */
+	public static Hdf5DataType openDataType(long elementId) throws HDF5LibraryException,
+			IllegalArgumentException, UnsupportedDataTypeException, IOException {
 		int elementTypeId = H5.H5Iget_type(elementId);
 		if (elementTypeId != HDF5Constants.H5I_DATASET && elementTypeId != HDF5Constants.H5I_ATTR) {
 			throw new IllegalArgumentException("DataType can only be opened for a DataSet or Attribute");
@@ -115,14 +149,23 @@ public class Hdf5DataType {
 		return m_knimeType;
 	}
 	
+	/**
+	 * @return {@code true} if the data type has variable length
+	 */
 	public boolean isVlen() {
 		return m_vlen;
 	}
-	
+
+	/**
+	 * @return {@code true} if the data type belongs to a dataSet
+	 */
 	private boolean isFromDS() {
 		return m_fromDS;
 	}
 
+	/**
+	 * @return array of 2 constants for the file type and memory type of an hdf data type
+	 */
 	public long[] getConstants() {
 		return m_hdfType.getConstants();
 	}
@@ -135,24 +178,22 @@ public class Hdf5DataType {
 		return m_knimeType == knimeType;
 	}
 	
+	/**
+	 * @param dataType the data type to compare
+	 * @return {@code true} if their knime types, isVlen() and isFromDS() are equal
+	 * 	and their hdf types are similar, <br>
+	 * 	i.e. {@code toString().equals(dataType.toString())}
+	 * @see Hdf5HdfDataType#isSimilarTo(Hdf5HdfDataType)
+	 */
 	public boolean isSimilarTo(Hdf5DataType dataType) {
-		return getHdfType().isSimilarTo(dataType.getHdfType()) /* not necessary: && isKnimeType(dataType.getKnimeType()) */
-				&& isVlen() == dataType.isVlen() && isFromDS() == dataType.isFromDS();
+		return getHdfType().isSimilarTo(dataType.getHdfType()) && isVlen() == dataType.isVlen() && isFromDS() == dataType.isFromDS();
 	}
 	
-	public boolean hdfTypeEqualsKnimeType() throws UnsupportedDataTypeException {
-		switch (m_knimeType) {
-		case INTEGER:
-			return isHdfType(HdfDataType.INT32);
-		case LONG:
-			return isHdfType(HdfDataType.INT64);
-		case DOUBLE:
-			return isHdfType(HdfDataType.FLOAT64);
-		case STRING:
-			return isHdfType(HdfDataType.STRING);
-		default:
-			throw new UnsupportedDataTypeException("Unknown knimeDataType");
-		}
+	/**
+	 * @return {@code true} if the type does not change if it gets converted from hdf to knime
+	 */
+	public boolean hdfTypeEqualsKnimeType() {
+		return m_hdfType.getType() == m_knimeType.getEquivalentHdfType();
 	}
 	
 	public Class<?> getHdfClass() throws UnsupportedDataTypeException {
@@ -195,6 +236,16 @@ public class Hdf5DataType {
 		}
 	}
 
+	/**
+	 * Converts a value from knime to hdf data type.
+	 * 
+	 * @param knimeClass the class of the knime type (use {@link #getKnimeClass()})
+	 * @param knimeValue the value of the knime type
+	 * @param hdfClass the class of the hdf type (use {@link #getHdfClass()})
+	 * @param rounding the rounding from float to int
+	 * @return the value of the hdf type
+	 * @throws UnsupportedDataTypeException if the input parameters contradict each other
+	 */
 	public <T, S> S knimeToHdf(Class<T> knimeClass, T knimeValue, Class<S> hdfClass, Rounding rounding) throws UnsupportedDataTypeException {
 		if (knimeClass == knimeValue.getClass() && knimeClass == getKnimeClass() && hdfClass == getHdfClass()) {
 			if (isHdfType(HdfDataType.STRING)) {
@@ -277,6 +328,15 @@ public class Hdf5DataType {
 		throw new UnsupportedDataTypeException("Incorrect combination of input classes");
 	}
 	
+	/**
+	 * Converts a value from hdf to knime data type.
+	 * 
+	 * @param hdfClass the class of the hdf type (use {@link #getHdfClass()})
+	 * @param hdfValue the value of the hdf type
+	 * @param knimeClass the class of the knime type (use {@link #getKnimeClass()})
+	 * @return the value of the knime type
+	 * @throws UnsupportedDataTypeException if the input parameters contradict each other
+	 */
 	public <T, S> S hdfToKnime(Class<T> hdfClass, T hdfValue, Class<S> knimeClass) throws UnsupportedDataTypeException {
 		if (hdfClass == hdfValue.getClass() && hdfClass == getHdfClass() && knimeClass == getKnimeClass()) {
 			if (isHdfType(HdfDataType.INT32) || isHdfType(HdfDataType.FLOAT64) || isHdfType(HdfDataType.STRING)) {
@@ -321,6 +381,17 @@ public class Hdf5DataType {
 		throw new UnsupportedDataTypeException("Incorrect combination of input classes");
 	}
 	
+	/**
+	 * Converts a value from between 2 hdf data types.
+	 * 
+	 * @param inputClass the class of the hdf type (use {@link #getHdfClass()})
+	 * @param inputValue the input value
+	 * @param outputClass the class of the output type
+	 * @param outputType the output type
+	 * @param rounding the rounding from float to int
+	 * @return the output value
+	 * @throws UnsupportedDataTypeException if the input parameters contradict each other
+	 */
 	public <T, S> S hdfToHdf(Class<T> inputClass, T inputValue, Class<S> outputClass, Hdf5DataType outputType, Rounding rounding) throws UnsupportedDataTypeException {
 		if (inputClass == inputValue.getClass() && inputClass == getHdfClass() && outputClass == outputType.getHdfClass()) {
 			if (inputClass == outputClass) {

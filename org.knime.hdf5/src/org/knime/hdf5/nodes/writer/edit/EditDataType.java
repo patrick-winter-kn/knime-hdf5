@@ -162,7 +162,7 @@ public class EditDataType {
 				standardValue = standardValueString;
 			} else if (m_outputType.isFloat()) {
 				standardValue = Double.parseDouble(standardValueString);
-			} else if (m_outputType.isMaxValueLargerThanInt()) {
+			} else if (!m_outputType.fitMinMaxValuesIntoType(HdfDataType.INT32)) {
 				standardValue = Long.parseLong(standardValueString);
 			} else {
 				standardValue = Integer.parseInt(standardValueString);
@@ -322,7 +322,7 @@ public class EditDataType {
 				
 				m_standardValueStringTextField.setText(isString ? (String) m_standardValue : "");
 				m_standardValueFloatSpinner.setValue(isFloat ? (Double) m_standardValue : 0.0);
-				m_standardValueIntSpinner.setValue(isInteger ? (m_outputType.isMaxValueLargerThanInt()
+				m_standardValueIntSpinner.setValue(isInteger ? (!m_outputType.fitMinMaxValuesIntoType(HdfDataType.INT32)
 						? (Long) m_standardValue : (long) (int) (Integer) m_standardValue) : 0L);
 			}
 			
@@ -341,7 +341,7 @@ public class EditDataType {
 					standardValue = m_standardValueStringTextField.getText();
 				} else if (m_outputType.isFloat()) {
 					standardValue = (Double) m_standardValueFloatSpinner.getValue();
-				} else if (m_outputType.isMaxValueLargerThanInt()) {
+				} else if (!m_outputType.fitMinMaxValuesIntoType(HdfDataType.INT32)) {
 					standardValue = (Long) m_standardValueIntSpinner.getValue();
 				} else {
 					standardValue = (Integer) (int) (long) (Long) m_standardValueIntSpinner.getValue();

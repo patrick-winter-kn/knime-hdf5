@@ -338,16 +338,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 					});
 					selectDataButtonPanel.add(okButton);
 					
-					JButton cancelButton = new JButton("Cancel");
-					cancelButton.addActionListener(new ActionListener() {
-						
-						@Override
-						public void actionPerformed(ActionEvent e) {
-							setVisible(false);
-						}
-					});
-					selectDataButtonPanel.add(cancelButton);
-					
 					pack();
 				}
 			}

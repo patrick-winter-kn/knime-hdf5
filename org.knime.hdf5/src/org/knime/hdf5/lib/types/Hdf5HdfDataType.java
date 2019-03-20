@@ -19,8 +19,15 @@ import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
+/**
+ * Manages the data types on hdf side which stores the enum
+ * {@link HdfDataType} and more information.
+ */
 public class Hdf5HdfDataType {
 
+	/**
+	 * Enum which stores all supported data types on hdf side.
+	 */
 	public static enum HdfDataType {
 		INT8(110),
 		UINT8(111),
@@ -47,10 +54,19 @@ public class Hdf5HdfDataType {
 			m_typeId = typeId;
 		}
 
+		/**
+		 * @param typeId the type id
+		 * @return the data type
+		 * @see HdfDataType#getTypeId()
+		 */
 		public static HdfDataType get(int typeId) {
 			return LOOKUP.get(typeId);
 		}
 		
+		/**
+		 * @param type data type of a column spec
+		 * @return the equivalent hdf type
+		 */
 		public static HdfDataType getHdfDataType(DataType type) {
 			if (type.equals(IntCell.TYPE)) {	
 				return INT32;
@@ -63,6 +79,10 @@ public class Hdf5HdfDataType {
 			}
 		}
 		
+		/**
+		 * @param type data type of a flow variable
+		 * @return the equivalent hdf type
+		 */
 		public static HdfDataType getHdfDataType(Type type) {
 			switch (type) {
 			case INTEGER:
@@ -74,6 +94,15 @@ public class Hdf5HdfDataType {
 			}
 		}
 		
+		/**
+		 * Returns the equivalent hdf type for the data type of the
+		 * components in the input array considering the option
+		 * that it can be unsigned.
+		 * 
+		 * @param values an array of objects
+		 * @param unsigned {@code true} if the data type is unsigned
+		 * @return the equivalent hdf type
+		 */
 		public static HdfDataType getHdfDataType(Object[] values, boolean unsigned) {
 			Class<?> type = values.getClass().getComponentType();
 			if (type == Byte.class) {
@@ -93,6 +122,14 @@ public class Hdf5HdfDataType {
 			}
 		}
 		
+		/**
+		 * Returns the convertible output types for the input considering
+		 * its type and its min/max values or String lengths.
+		 * 
+		 * @param inputType the input hdf type
+		 * @param values the input values
+		 * @return the convertible output types
+		 */
 		public static List<HdfDataType> getConvertibleTypes(HdfDataType inputType, Object[] values) {
 			List<HdfDataType> types = inputType.getAlwaysConvertibleHdfTypes();
 
@@ -107,6 +144,22 @@ public class Hdf5HdfDataType {
 			return types;
 		}
 		
+		/**
+		 * The id has the following structure:
+		 * <br>
+		 * <br>
+		 * {@code typeId = 100 * a + 10 * b + 1 * c}
+		 * <br>
+		 * <br>
+		 * {@code a} is its size in bytes (only for numbers)
+		 * <br>
+		 * {@code b} is its base dataType ({@code b == 1} for int, {@code b == 2} for float)
+		 * <br>
+		 * {@code c} is its sign ({@code c == 0} for signed, {@code c == 1} for unsigned)
+		 * or the id for String ({@code c == 2})
+		 * 
+		 * @return the id for this hdf type
+		 */
 		public int getTypeId() {
 			return m_typeId;
 		}
@@ -115,6 +168,9 @@ public class Hdf5HdfDataType {
 			return m_typeId % 10 == 1;
 		}
 		
+		/**
+		 * @return the signed data type for this hdf type
+		 */
 		public HdfDataType getSignedType() {
 			return isUnsigned() ? get(m_typeId - 1) : this;
 		}
@@ -127,36 +183,61 @@ public class Hdf5HdfDataType {
 			return (m_typeId / 10) % 10 == 2;
 		}
 		
-		public boolean isMaxValueLargerThanInt() {
-			return this == UINT32 || this == INT64 || this == UINT64;
+		/**
+		 * @return {@code true} if the min-max-range of this hdf type fits
+		 * 	into the min-max-range of the input type
+		 */
+		public boolean fitMinMaxValuesIntoType(HdfDataType type) {
+			return isNumber() && type.isNumber()
+					&& getMinValue() >= type.getMinValue() && getMaxValue() <= type.getMaxValue();
 		}
 		
+		/**
+		 * @return the number of bits to store this hdf type (or 0 for Strings)
+		 */
 		public int getSize() {
 			return 8 * (m_typeId / 100);
 		}
 		
-		private double getMin() {
-			if (!isFloat()) {
-				return isUnsigned() ? 0 : -Math.pow(2, getSize()-1);
-			} else if (this == FLOAT32) {
-				return ((Float) (-Float.MAX_VALUE)).doubleValue();
-			} else if (this == FLOAT64) {
+		/**
+		 * @return the min value of the range for this hdf type (or 0 for Strings)
+		 */
+		private double getMinValue() {
+			if (isNumber()) {
+				if (!isFloat()) {
+					return isUnsigned() ? 0 : -Math.pow(2, getSize()-1);
+				} else if (this == FLOAT32) {
+					return ((Float) (-Float.MAX_VALUE)).doubleValue();
+				} else if (this == FLOAT64) {
+					return -Double.MAX_VALUE;
+				}
 				return -Double.MAX_VALUE;
 			}
-			return -Double.MAX_VALUE;
-		}
-		
-		private double getMax() {
-			if (!isFloat()) {
-				return Math.pow(2, getSize() - (isUnsigned() ? 0 : 1)) - 1;
-			} else if (this == FLOAT32) {
-				return  ((Float) Float.MAX_VALUE).doubleValue();
-			} else if (this == FLOAT64) {
-				return Double.MAX_VALUE;
-			}
-			return Double.MAX_VALUE;
+			
+			return 0;
 		}
 
+		/**
+		 * @return the max value of the range for this hdf type (or 0 for Strings)
+		 */
+		private double getMaxValue() {
+			if (isNumber()) {
+				if (!isFloat()) {
+					return Math.pow(2, getSize() - (isUnsigned() ? 0 : 1)) - 1;
+				} else if (this == FLOAT32) {
+					return  ((Float) Float.MAX_VALUE).doubleValue();
+				} else if (this == FLOAT64) {
+					return Double.MAX_VALUE;
+				}
+				return Double.MAX_VALUE;
+			}
+			
+			return 0;
+		}
+
+		/**
+		 * @return the types which are always convertible from this hdf type
+		 */
 		public List<HdfDataType> getAlwaysConvertibleHdfTypes() {
 			List<HdfDataType> types = new ArrayList<>();
 			
@@ -197,10 +278,13 @@ public class Hdf5HdfDataType {
 			return types;
 		}
 		
+		/**
+		 * @return the types which may be convertible from this hdf type
+		 * 	depending on the values
+		 */
 		public List<HdfDataType> getPossiblyConvertibleHdfTypes() {
 			List<HdfDataType> types = new ArrayList<>();
 			
-			// TODO check this again
 			switch (this) {
 			case INT8:
 			case UINT8:
@@ -230,14 +314,27 @@ public class Hdf5HdfDataType {
 			return types;
 		}
 		
+		/**
+		 * Returns {@code true} if the input values can be converted to this hdf
+		 * type (output type). If this hdf type is {@code STRING}, the input
+		 * editDataType is used to check the string length or set the string
+		 * length if the string length is not fixed.
+		 * 
+		 * @param values the input values
+		 * @param inputType the input hdf type
+		 * @param editDataType more information for the output data type
+		 * @return {@code true} if the input values can be converted to this hdf
+		 * 	type
+		 */
 		public boolean areValuesConvertible(Object[] values, HdfDataType inputType, EditDataType editDataType) {
 			if (isNumber()) {
+				// if the inputType is String, it is not convertible to a number
 				if (!inputType.isNumber()) {
 					return false;
 				}
 				
-				double min = getMin();
-				double max = getMax();
+				double min = getMinValue();
+				double max = getMaxValue();
 				for (Object value : values) {
 					double number = ((Number) value).doubleValue();
 					if (Double.compare(number, min) < 0 || Double.compare(number, max) > 0) {
@@ -246,6 +343,7 @@ public class Hdf5HdfDataType {
 				}
 			} else if (editDataType != null) {
 				if (editDataType.isFixed()) {
+					// check if no value exceeds the fixed string length 
 					int stringLength = editDataType.getStringLength();
 					for (Object value : values) {
 						if (value.toString().length() > stringLength) {
@@ -253,6 +351,7 @@ public class Hdf5HdfDataType {
 						}
 					}
 				} else {
+					// set the string length to the maximum of the values
 					int stringLength = editDataType.getStringLength();
 					for (Object value : values) {
 						int newStringLength = value.toString().length();
@@ -266,12 +365,21 @@ public class Hdf5HdfDataType {
 		}
 	}
 	
+	/**
+	 * Enum for the endians.
+	 */
 	public static enum Endian {
 		LITTLE_ENDIAN, BIG_ENDIAN
 	}
 	
+	/**
+	 * map such that only one {@code Hdf5HdfDataType} exists per {@code HdfDataType} for big endians
+	 */
 	private static final Map<HdfDataType, Hdf5HdfDataType> BIG_ENDIAN_TYPES = new HashMap<>();
 
+	/**
+	 * map such that only one {@code Hdf5HdfDataType} exists per {@code HdfDataType} for little endians
+	 */
 	private static final Map<HdfDataType, Hdf5HdfDataType> LITTLE_ENDIAN_TYPES = new HashMap<>();
 
 	private final HdfDataType m_type;
@@ -338,23 +446,14 @@ public class Hdf5HdfDataType {
 	}
 
 	/**
-	 * {@code Hdf5HdfDataType} is the representation of the dataType in the .h5 file. <br>
-	 * <br>
-	 * TODO {@code VLEN} and {@code REFERENCE} are not implemented
+	 * Returns the hdf data type with more information which are needed to
+	 * create an object in an hdf file. Creates a new instance if none exists
+	 * for the input type and endian or returns the already existing instance.
+	 * For String, it always creates a new instance.
 	 * 
-	 * @param elementId
-	 * @param typeId - 
-	 * 				This is the code for the {@code Hdf5HdfDataType}
-	 * 				and has the following structure: <br>
-	 * 				<br>
-	 * 				{@code typeId = 100 * a + 10 * b + 1 * c} <br>
-	 * 				<br>
-	 * 				{@code a} is its size in bytes (only for numbers) <br>
-	 * 				{@code b} is its base dataType ({@code b == 1} for int, {@code b == 2} for float, {@code b == 3} for char,
-	 * 						{@code b == 4} for String, {@code b == 5} for reference) <br>
-	 * 				{@code c} is its sign ({@code c == 0} for signed, {@code c == 1} for unsigned) <br>
-	 * @param stringLength
-	 * 
+	 * @param type the hdf type
+	 * @param endian the endian
+	 * @return the hdf data type with more information
 	 */
 	public static synchronized Hdf5HdfDataType getInstance(final HdfDataType type, final Endian endian) {
 		if (type != HdfDataType.STRING) {
@@ -367,10 +466,26 @@ public class Hdf5HdfDataType {
 		return new Hdf5HdfDataType(type, endian);
 	}
 	
+	/**
+	 * Returns a new copy of the input {@code copyHdfType}. This returns only
+	 * a new instance for String data types. In the other cases, it returns
+	 * the input again.
+	 * 
+	 * @param copyHdfType the hdf type to copy
+	 * @return the copy hdf type which might be the same instance
+	 */
 	public static Hdf5HdfDataType createCopyFrom(Hdf5HdfDataType copyHdfType) {
 		return getInstance(copyHdfType.getType(), copyHdfType.getEndian());
 	}
 	
+	/**
+	 * Creates the String data type if the hdf type is a String. In the other
+	 * cases, it does nothing.
+	 * 
+	 * @param stringLength the String length for which the String data type
+	 * 	is created for
+	 * @throws IOException if the String data type could not be created
+	 */
 	void createHdfDataTypeString(final long stringLength) throws IOException {
 		if (m_type == HdfDataType.STRING) {
 			try {
@@ -396,6 +511,13 @@ public class Hdf5HdfDataType {
 		}
 	}
 	
+	/**
+	 * Opens the String data type if the hdf type is a String. In the other
+	 * cases, it does nothing.
+	 * 
+	 * @param elementId the id of the hdf object of this String data type
+	 * @throws IOException if the String data type could not be opened
+	 */
 	void openHdfDataTypeString(final long elementId) throws IOException {
 		if (m_type == HdfDataType.STRING) {
 			try {
@@ -418,22 +540,36 @@ public class Hdf5HdfDataType {
 		}
 	}
 	
+	/**
+	 * @return the hdf type (as enum)
+	 */
 	public HdfDataType getType() {
 		return m_type;
 	}
-	
+
 	public Endian getEndian() {
 		return m_endian;
 	}
-	
+
+	/**
+	 * @return array of 2 constants for the file type and memory type of an hdf data type
+	 */
 	long[] getConstants() {
 		return m_constants;
 	}
 
+	/**
+	 * @return the string length of the String data type (or 0 for non-Strings)
+	 */
 	public long getStringLength() {
 		return m_stringLength;
 	}
 	
+	/**
+	 * @param hdfType the hdf type to compare
+	 * @return {@code true} if type, endian and stringLength are equal, <br>
+	 * 	i.e. {@code toString().equals(hdfType.toString())}
+	 */
 	public boolean isSimilarTo(Hdf5HdfDataType hdfType) {
 		return getType() == hdfType.getType() && getEndian() == hdfType.getEndian() && getStringLength() == hdfType.getStringLength();
 	}
@@ -465,6 +601,7 @@ public class Hdf5HdfDataType {
 	
 	@Override
 	public String toString() {
-		return m_type.toString() + "," + m_endian.toString();
+		return "type=" + m_type.toString() + ",endian=" + m_endian.toString()
+				+ (m_type == HdfDataType.STRING ? ",stringLength=" + m_stringLength : "");
 	}
 }
