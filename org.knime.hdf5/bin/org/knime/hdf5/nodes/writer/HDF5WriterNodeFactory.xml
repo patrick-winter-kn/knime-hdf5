@@ -16,11 +16,10 @@
 			All objects can also be created by copying or modifying existing
 			objects in the output HDF5 File.
 			<br />
-			<b>
-				Be careful that the output HDF5 File is not open somewhere
-				else on the machine while executing this node!
-				It is only checked in Windows and POSIX-compliant Linux so far!
-			</b>
+			<br />
+			<b>Note:</b> Be careful that the output HDF5 File is not open somewhere
+			else on the machine while executing this node!
+			It is only checked in Windows and POSIX-compliant Linux so far!
 		</intro>
 		
 		<tab name="Options">

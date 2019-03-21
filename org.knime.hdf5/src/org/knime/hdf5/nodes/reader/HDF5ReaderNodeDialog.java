@@ -116,7 +116,6 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 			} finally {
 				file.close();
 			}
-			
 		} catch (IOException | InvalidSettingsException ioise) {
 			spec = new DataTableSpec();
 		}

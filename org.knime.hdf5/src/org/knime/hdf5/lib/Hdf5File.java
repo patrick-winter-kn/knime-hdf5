@@ -216,11 +216,17 @@ public class Hdf5File extends Hdf5Group {
 		return m_filePath;
 	}
 	
+	/**
+	 * @return {@code true} if this file is open
+	 */
 	@Override
 	protected boolean isOpen() {
 		return isOpenInThisThread();
 	}
-	
+
+	/**
+	 * @return {@code true} if this file exists
+	 */
 	@Override
 	public boolean exists() {
 		return Hdf5File.existsHdf5File(m_filePath);
@@ -404,7 +410,18 @@ public class Hdf5File extends Hdf5Group {
         }
 	}
 	
-	public Hdf5File createBackup(String prefix) throws IOException {
+	/**
+	 * @param prefix the prefix for the name like "temp_"
+	 * @return the instance for the newly created copy of this hdf file
+	 * @throws IOException if an internal error occurred while creating
+	 * @throws IllegalArgumentException if the prefix contains '/'
+	 */
+	@Override
+	public Hdf5File createBackup(String prefix) throws IOException, IllegalArgumentException {
+		if (prefix.contains("/")) {
+			throw new IllegalArgumentException("Prefix for backup file cannot contain '/'");
+		}
+		
 		return copyFile(getUniqueFilePath(getDirectoryPath(m_filePath) + File.separator + prefix + getName()));
 	}
 	

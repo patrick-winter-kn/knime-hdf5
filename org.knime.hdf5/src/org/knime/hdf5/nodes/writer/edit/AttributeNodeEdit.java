@@ -291,14 +291,9 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected InvalidCause validateEditInternal() {
-		InvalidCause cause = getName().startsWith(BACKUP_PREFIX) && !getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName())
+		return getName().isEmpty() ? InvalidCause.NAME_CHARS :
+				getName().startsWith(BACKUP_PREFIX) && !getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName())
 				? InvalidCause.NAME_BACKUP_PREFIX : null;
-		
-		if (cause == null) {
-			//m_editDataType.getOutputType().areValuesConvertible(, inputType, editDataType)
-		}
-		
-		return cause;
 	}
 
 	@Override
@@ -349,9 +344,9 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			Hdf5Attribute<?> copyAttribute = (Hdf5Attribute<?>) findCopySource();
 			Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
 			if (havePropertiesChanged(copyAttribute)) {
-				setHdfObject(parent.createAndWriteAttribute(this, copyAttribute));
+				setHdfObject(parent.copyAttribute(this, copyAttribute));
 			} else {
-				setHdfObject(copyAttribute.getParent().copyAttribute(copyAttribute, parent, getName()));
+				setHdfObject(parent.copyAttribute(copyAttribute, getName()));
 			}
 		} finally {
 			setEditSuccess(getHdfObject() != null);
@@ -376,7 +371,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			Hdf5Attribute<?> oldAttribute = (Hdf5Attribute<?>) getHdfSource();
 			Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
 			if (havePropertiesChanged(oldAttribute)) {
-				setHdfObject(parent.createAndWriteAttribute(this, oldAttribute));
+				setHdfObject(parent.copyAttribute(this, oldAttribute));
 				//throw new NullPointerException("exception test");
 				/*if (oldAttribute != getHdfBackup()) {
 					parent.deleteAttribute(oldAttribute.getName());
@@ -384,7 +379,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			} else {
 				if (!oldAttribute.getName().equals(getName())) {
 					if (oldAttribute == getHdfBackup()) {
-						setHdfObject(oldAttribute.getParent().copyAttribute(oldAttribute, parent, getName()));
+						setHdfObject(parent.copyAttribute(oldAttribute, getName()));
 					} else {
 						setHdfObject(parent.renameAttribute(oldAttribute.getName(), getName()));
 					}

@@ -50,10 +50,9 @@ public class Hdf5DataType {
 	 * @param endian the endian
 	 * @param unsigned true if the data type is unsigned
 	 * @param vlen true if data type has variable length
-	 * @throws HDF5LibraryException
 	 */
 	private Hdf5DataType(boolean fromDS, long classId, int size, Endian endian,
-			boolean unsigned, boolean vlen) throws HDF5LibraryException {
+			boolean unsigned, boolean vlen) {
 		m_vlen = vlen;
 		m_fromDS = fromDS;
 		
@@ -80,6 +79,7 @@ public class Hdf5DataType {
 	 * @return a new data type which can be used to create objects in hdf files
 	 * @throws IOException if the data type could not be created
 	 * 	(can only happen for String data types)
+	 * @see Hdf5HdfDataType#createHdfDataTypeString(long)
 	 */
 	public static Hdf5DataType createDataType(Hdf5HdfDataType hdfType, Hdf5KnimeDataType knimeType, 
 			boolean vlen, boolean fromDS, long stringLength) throws IOException {
@@ -111,6 +111,7 @@ public class Hdf5DataType {
 	 * @throws UnsupportedDataTypeException if the data type is not supported
 	 * 	(e.g. {@code HDF5Constants.H5T_VLEN, HDF5Constants.H5T_REFERENCE, HDF5Constants.H5T_COMPOUND})
 	 * @throws IOException if the data type could not be opened (can only happen for String data types)
+	 * @see Hdf5HdfDataType#openHdfDataTypeString(long)
 	 */
 	public static Hdf5DataType openDataType(long elementId) throws HDF5LibraryException,
 			IllegalArgumentException, UnsupportedDataTypeException, IOException {
@@ -239,9 +240,9 @@ public class Hdf5DataType {
 	/**
 	 * Converts a value from knime to hdf data type.
 	 * 
-	 * @param knimeClass the class of the knime type (use {@link #getKnimeClass()})
+	 * @param knimeClass the class of the knime type (use {@linkplain #getKnimeClass()})
 	 * @param knimeValue the value of the knime type
-	 * @param hdfClass the class of the hdf type (use {@link #getHdfClass()})
+	 * @param hdfClass the class of the hdf type (use {@linkplain #getHdfClass()})
 	 * @param rounding the rounding from float to int
 	 * @return the value of the hdf type
 	 * @throws UnsupportedDataTypeException if the input parameters contradict each other
@@ -331,9 +332,9 @@ public class Hdf5DataType {
 	/**
 	 * Converts a value from hdf to knime data type.
 	 * 
-	 * @param hdfClass the class of the hdf type (use {@link #getHdfClass()})
+	 * @param hdfClass the class of the hdf type (use {@linkplain #getHdfClass()})
 	 * @param hdfValue the value of the hdf type
-	 * @param knimeClass the class of the knime type (use {@link #getKnimeClass()})
+	 * @param knimeClass the class of the knime type (use {@linkplain #getKnimeClass()})
 	 * @return the value of the knime type
 	 * @throws UnsupportedDataTypeException if the input parameters contradict each other
 	 */
@@ -384,7 +385,7 @@ public class Hdf5DataType {
 	/**
 	 * Converts a value from between 2 hdf data types.
 	 * 
-	 * @param inputClass the class of the hdf type (use {@link #getHdfClass()})
+	 * @param inputClass the class of the hdf type (use {@linkplain #getHdfClass()})
 	 * @param inputValue the input value
 	 * @param outputClass the class of the output type
 	 * @param outputType the output type
@@ -468,6 +469,9 @@ public class Hdf5DataType {
 		throw new UnsupportedDataTypeException("Incorrect combination of input classes");
 	}
 	
+	/**
+	 * @see Hdf5HdfDataType#toString()
+	 */
 	@Override
 	public String toString() {
 		return "{ hdfType=" + m_hdfType + ",knimeType=" + m_knimeType + ",vlen=" + m_vlen + ",fromDS=" + m_fromDS + " }";

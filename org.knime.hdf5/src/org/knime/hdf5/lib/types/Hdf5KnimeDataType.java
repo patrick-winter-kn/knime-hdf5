@@ -35,7 +35,7 @@ public enum Hdf5KnimeDataType {
 	 * Only dataSets can be converted to {@code LONG}.
 	 * 
 	 * @param type the hdf type
-	 * @param fromDS {@code true} if the {@link HdfDataType} is from a dataSet
+	 * @param fromDS {@code true} if the {@linkplain HdfDataType} is from a dataSet
 	 * @return the equivalent knime type
 	 */
 	public static Hdf5KnimeDataType getKnimeDataType(HdfDataType type, boolean fromDS) {
@@ -137,7 +137,7 @@ public enum Hdf5KnimeDataType {
 
 	/**
 	 * Returns the value of the input data cell in the data type of this type.
-	 * If the data cell is a {@link MissingCell}, the returned value is {@code null}.
+	 * If the data cell is a {@linkplain MissingCell}, the returned value is {@code null}.
 	 * 
 	 * @param dataCell the cell of a data table
 	 * @return the value of {@code dataCell} in the data type of this type
@@ -198,12 +198,12 @@ public enum Hdf5KnimeDataType {
 	}
 
 	/**
-	 * Returns the {@link DataCell} of this type which stores the input value.
-	 * If the value is {@code null}, the {@link DataCell} is a {@link MissingCell}.
+	 * Returns the {@linkplain DataCell} of this type which stores the input value.
+	 * If the value is {@code null}, the {@linkplain DataCell} is a {@linkplain MissingCell}.
 	 * 
-	 * @param value the value with should be stored in the {@link DataCell}
+	 * @param value the value with should be stored in the {@linkplain DataCell}
 	 * @param missingValueMessage the message in case the value is {@code null}
-	 * @return the {@link DataCell} of this type which stores the input value
+	 * @return the {@linkplain DataCell} of this type which stores the input value
 	 * @throws UnsupportedDataTypeException if this type is unknown
 	 */
 	public DataCell getDataCellWithValue(Object value, String missingValueMessage) throws UnsupportedDataTypeException {

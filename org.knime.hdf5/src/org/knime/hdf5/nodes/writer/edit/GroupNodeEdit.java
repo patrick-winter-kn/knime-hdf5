@@ -419,7 +419,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	
 	@Override
 	protected InvalidCause validateEditInternal() {
-		return getName().contains("/") ? InvalidCause.NAME_CHARS :
+		return getName().contains("/") || getName().isEmpty() ? InvalidCause.NAME_CHARS :
 			getName().startsWith(BACKUP_PREFIX) && !getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName())
 					? InvalidCause.NAME_BACKUP_PREFIX : null;
 	}

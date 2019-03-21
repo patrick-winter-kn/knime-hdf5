@@ -306,7 +306,7 @@ public class Hdf5Attribute<Type> {
 	*/
 
 	public Hdf5Attribute<?> createBackup(String prefix) throws IOException {
-		return m_parent.copyAttribute(this, m_parent, Hdf5TreeElement.getUniqueName(Arrays.asList(m_parent.loadAttributeNames()), prefix + m_name));
+		return m_parent.copyAttribute(this, Hdf5TreeElement.getUniqueName(Arrays.asList(m_parent.loadAttributeNames()), prefix + m_name));
 	}
 	
 	/**

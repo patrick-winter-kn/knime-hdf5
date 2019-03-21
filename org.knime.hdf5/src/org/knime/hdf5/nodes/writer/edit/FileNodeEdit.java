@@ -675,7 +675,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 					if (dataSetEdits[i].getEditAction() == EditAction.MODIFY) {
 						Hdf5DataSet<?> oldDataSet = (Hdf5DataSet<?>) dataSetEdits[i].getHdfSource();
 						for (String attrName : oldDataSet.loadAttributeNames()) {
-							oldDataSet.copyAttribute(oldDataSet.getAttribute(attrName), outputDataSets[i], attrName);
+							outputDataSets[i].copyAttribute(oldDataSet.getAttribute(attrName), attrName);
 						}
 					}
 					

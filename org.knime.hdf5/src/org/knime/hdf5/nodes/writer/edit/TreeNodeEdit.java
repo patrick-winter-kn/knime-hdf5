@@ -142,7 +142,7 @@ public abstract class TreeNodeEdit {
 		NO_HDF_SOURCE("no hdf source available"),
 		NO_COPY_SOURCE("no source available to copy from"),
 		PARENT_DELETE("parent is getting deleted so this also has to be deleted"),
-		NAME_CHARS("name contains invalid characters"),
+		NAME_CHARS("name contains invalid characters or is empty"),
 		NAME_BACKUP_PREFIX("cannot change to name with prefix \"" + BACKUP_PREFIX + "\""),
 		ROW_COUNT("dataSet has unequal row sizes"),
 		// TODO maybe allow that the dataSet has "too many" columns; if yes, check it for every column which exceeds the limit

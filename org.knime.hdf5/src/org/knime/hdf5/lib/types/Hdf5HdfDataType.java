@@ -97,7 +97,8 @@ public class Hdf5HdfDataType {
 		/**
 		 * Returns the equivalent hdf type for the data type of the
 		 * components in the input array considering the option
-		 * that it can be unsigned.
+		 * that it can be unsigned. It will be String if no other
+		 * data type fits.
 		 * 
 		 * @param values an array of objects
 		 * @param unsigned {@code true} if the data type is unsigned
@@ -484,7 +485,7 @@ public class Hdf5HdfDataType {
 	 * 
 	 * @param stringLength the String length for which the String data type
 	 * 	is created for
-	 * @throws IOException if the String data type could not be created
+	 * @throws IOException if an internal error occurred while creating
 	 */
 	void createHdfDataTypeString(final long stringLength) throws IOException {
 		if (m_type == HdfDataType.STRING) {
@@ -516,7 +517,7 @@ public class Hdf5HdfDataType {
 	 * cases, it does nothing.
 	 * 
 	 * @param elementId the id of the hdf object of this String data type
-	 * @throws IOException if the String data type could not be opened
+	 * @throws IOException if an internal error occurred while opening
 	 */
 	void openHdfDataTypeString(final long elementId) throws IOException {
 		if (m_type == HdfDataType.STRING) {
