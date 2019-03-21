@@ -124,11 +124,12 @@
 						if the dataSet only has one column, otherwise it has two dimensions
 					</li>
 					<li>
-						(optional) <b>compression</b>
+						(optional) <b>compression:</b> level of compression from 0 (none) to 9
 					</li>
 					<li>
-						(optional) <b>chunk row size:</b> option only available if option
-						'compression' is enabled
+						(optional) <b>chunk row size:</b> the size of the row chunks to store
+						the dataSet (option only available if option 'compression' is enabled),
+						may not be larger than the number of rows in the dataSet or 2^32-1
 					</li>
 					<li>
 						<b>columns:</b> a list to order the columns using drag-and-drop

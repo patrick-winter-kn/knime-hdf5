@@ -464,9 +464,9 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			Hdf5Group oldGroup = (Hdf5Group) getHdfSource();
 			if (!oldGroup.getName().equals(getName())) {
 				if (oldGroup == getHdfBackup()) {
-					setHdfObject(oldGroup.getParent().copyObject(oldGroup.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
+					setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).copyObject(oldGroup, getName()));
 				} else {
-					setHdfObject(oldGroup.getParent().moveObject(oldGroup.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
+					setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).moveObject(oldGroup, getName()));
 				}
 			}
 		} finally {

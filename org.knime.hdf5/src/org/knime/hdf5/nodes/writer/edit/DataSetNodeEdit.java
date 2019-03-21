@@ -643,7 +643,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			if (havePropertiesChanged(copyDataSet)) {
 				createAction(null, exec, totalProgressToDo);
 			} else {
-				setHdfObject((Hdf5DataSet<?>) copyDataSet.getParent().copyObject(copyDataSet.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
+				setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).copyObject(copyDataSet, getName()));
 			}
 		} finally {
 			setEditSuccess(getHdfObject() != null);
@@ -672,9 +672,9 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			} else {
 				if (!oldDataSet.getName().equals(getName())) {
 					if (oldDataSet == getHdfBackup()) {
-						setHdfObject(oldDataSet.getParent().copyObject(oldDataSet.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
+						setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).copyObject(oldDataSet, getName()));
 					} else {
-						setHdfObject(oldDataSet.getParent().moveObject(oldDataSet.getName(), (Hdf5Group) getOpenedHdfObjectOfParent(), getName()));
+						setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).moveObject(oldDataSet, getName()));
 					}
 				}
 			}

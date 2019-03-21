@@ -702,4 +702,12 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
         	unlockWriteOpen();
         }
 	}
+	
+	@Override
+	public String toString() {
+		return "{ name=" + getName() + ",pathFromFile=" + getPathFromFile() + ",id=" + getElementId()
+				+ ", dataspaceId=" + m_dataspaceId + ", dimensions=" + Arrays.toString(m_dimensions)
+				+ ", type=" + m_type + ", compressionLevel=" + m_compressionLevel
+				+ ", chunkRowSize=" + m_chunkRowSize + " }";
+	}
 }

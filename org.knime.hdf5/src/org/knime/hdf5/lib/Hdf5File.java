@@ -216,17 +216,11 @@ public class Hdf5File extends Hdf5Group {
 		return m_filePath;
 	}
 	
-	/**
-	 * @return {@code true} if this file is open
-	 */
 	@Override
 	protected boolean isOpen() {
 		return isOpenInThisThread();
 	}
 
-	/**
-	 * @return {@code true} if this file exists
-	 */
 	@Override
 	public boolean exists() {
 		return Hdf5File.existsHdf5File(m_filePath);
@@ -588,5 +582,11 @@ public class Hdf5File extends Hdf5Group {
         } finally {
 			unlockWriteOpen();
 		}
+	}
+	
+	@Override
+	public String toString() {
+		return "{ filePath=" + m_filePath + ",id=" + getElementId() + ",access= "
+				+ (m_access == READ_ONLY_ACCESS ? "READ" : m_access == READ_WRITE_ACCESS ? "WRITE" : "NONE") + " }";
 	}
 }

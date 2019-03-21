@@ -1280,7 +1280,7 @@ public abstract class TreeNodeEdit {
 							setHdfObject(attribute.getParent().renameAttribute(attribute.getName(), newName));
 						} else {
 							Hdf5TreeElement treeElement = (Hdf5TreeElement) getHdfSource();
-							setHdfObject(treeElement.getParent().moveObject(treeElement.getName(), treeElement.getParent(), newName));
+							setHdfObject(treeElement.getParent().moveObject(treeElement, newName));
 						}
 						/* 
 						 * do not set m_hdfBackup to null here because '!=null' check is needed for children

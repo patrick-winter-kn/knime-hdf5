@@ -641,4 +641,11 @@ public class Hdf5Attribute<Type> {
 	    	unlockWriteOpen();
 	    }
 	}
+	
+	@Override
+	public String toString() {
+		return "{ name=" + m_name + ",pathFromFile=" + m_pathFromFile + ",id=" + m_attributeId
+				+ ", dataspaceId=" + m_dataspaceId + ", dimension=" + m_dimension + ", type=" + m_type
+				+ (m_value != null ? ", value=" + m_value : "") + " }";
+	}
 }
