@@ -32,8 +32,6 @@ public class Hdf5File extends Hdf5Group {
 	
 	public static final int READ_WRITE_ACCESS = 1;
 	
-	// private static final long START = System.nanoTime();
-	
 	private static final List<Hdf5File> ALL_FILES = new ArrayList<>();
 
 	private static final ReentrantReadWriteLock GLOBAL_RWL = new ReentrantReadWriteLock(true);
@@ -241,9 +239,6 @@ public class Hdf5File extends Hdf5Group {
 				m_accessors.put(curThread, m_accessors.get(curThread) + (open ? 1 : -1));
 			}
 			
-			// String access = m_access == READ_ONLY_ACCESS ? "READ" : m_access == READ_WRITE_ACCESS ? "WRITE" : "NONE";
-			// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + curThread + "\t\t" + access + "\t\"" + getName() + "\" is open " + m_accessors.get(curThread) + " times");
-			
 			if (m_accessors.get(curThread) == 0) {
 				m_accessors.remove(curThread);
 			}
@@ -321,9 +316,7 @@ public class Hdf5File extends Hdf5Group {
 	
 	private void create() throws IOException {
 		try {
-			// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tLOCK \tWRITE \t\"" + getName() + "\" ...");
 			m_w.lock();
-			// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tLOCK \tWRITE \t\"" + getName() + "\" ... successful");
 			
 			try {
 				lockWriteOpen();
@@ -336,9 +329,7 @@ public class Hdf5File extends Hdf5Group {
 				unlockWriteOpen();
 			}
         } catch (HDF5LibraryException | NullPointerException hlnpe) {
-			// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tUNLOCK \tWRITE \t\"" + getName() + "\" ...");
             m_w.unlock();
-			// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tUNLOCK \tWRITE \t\"" + getName() + "\" ... successful");
 
 			throw new IOException("The file \"" + getFilePath() + "\" cannot be created : " + hlnpe.getMessage(), hlnpe);
         }
@@ -350,9 +341,7 @@ public class Hdf5File extends Hdf5Group {
     			long pid = Hdf5File.getAccessPropertyList();
     			
 				if (access == READ_ONLY_ACCESS) {
-					// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tLOCK \tREAD \t\"" + getName() + "\" ...");
 					m_r.lock();
-					// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tLOCK \tREAD \t\"" + getName() + "\" ... successful");
 					
 					try {
 						lockWriteOpen();
@@ -366,9 +355,7 @@ public class Hdf5File extends Hdf5Group {
 						unlockWriteOpen();
 					}
 				} else if (access == READ_WRITE_ACCESS) {
-					// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tLOCK \tWRITE \t\"" + getName() + "\" ...");
 					m_w.lock();
-					// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tLOCK \tWRITE \t\"" + getName() + "\" ... successful");
 
 					try {
 						lockWriteOpen();
@@ -390,14 +377,10 @@ public class Hdf5File extends Hdf5Group {
 			}
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			if (access == READ_ONLY_ACCESS) {
-				// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tUNLOCK \tREAD \t\"" + getName() + "\" ...");
 				m_r.unlock();
-				// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tUNLOCK \tREAD \t\"" + getName() + "\" ... successful");
 				
 			} else if (access == READ_WRITE_ACCESS) {
-				// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tUNLOCK \tWRITE \t\"" + getName() + "\" ...");
 				m_w.unlock();
-				// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tUNLOCK \tWRITE \t\"" + getName() + "\" ... successful");
 			}
 
 			throw new IOException("The file \"" + getFilePath() + "\" cannot be opened: " + hlnpe.getMessage(), hlnpe);
@@ -556,13 +539,9 @@ public class Hdf5File extends Hdf5Group {
 			    		setOpenInThisThread(false);
 	  
 						if (m_access == READ_ONLY_ACCESS) {
-							// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tUNLOCK \tREAD \t\"" + getName() + "\" ...");
 							m_r.unlock();
-							// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tUNLOCK \tREAD \t\"" + getName() + "\" ... successful");
 						} else if (m_access == READ_WRITE_ACCESS) {
-							// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tUNLOCK \tWRITE \t\"" + getName() + "\" ...");
 							m_w.unlock();
-							// System.out.println(String.format("%,20d", System.nanoTime() - START) + " " + Thread.currentThread() + " \tUNLOCK \tWRITE \t\"" + getName() + "\" ... successful");
 						}
 						
 			    		if (!isOpenInAnyThread()) {
