@@ -8,7 +8,8 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.workflow.FlowVariable;
 
 /**
- * Class for unsupported types of hdf objects which is only there to avoid naming conflicts.
+ * Class for unsupported types of objects in an hdf file. This class is
+ * necessary to avoid name conflicts.
  */
 public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 
@@ -58,19 +59,36 @@ public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 				&& getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
 	}
 
+	/**
+	 * Not supported here.
+	 */
 	@Override
 	protected void createAction(Map<String, FlowVariable> flowVariables, ExecutionContext exec, long totalProgressToDo) {
 	}
 
+	/**
+	 * Not supported here.
+	 */
 	@Override
 	protected void copyAction(ExecutionContext exec, long totalProgressToDo) {
 	}
 
+	/**
+	 * Not supported here.
+	 */
 	@Override
 	protected void deleteAction() {
 	}
 
+	/**
+	 * Not supported here.
+	 */
 	@Override
 	protected void modifyAction(ExecutionContext exec, long totalProgressToDo) {
+	}
+
+	@Override
+	public String toString() {
+		return "{ path=" + getInputPathFromFileWithName() + ",valid=" + isValid() + " }";
 	}
 }

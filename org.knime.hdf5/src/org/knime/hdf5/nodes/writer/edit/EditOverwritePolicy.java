@@ -5,10 +5,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Enum that handles the overwrite policy for {@linkplain TreeNodeEdit}s.
+ */
 public enum EditOverwritePolicy {
 	
     /**
-     * Do nothing. Throw an error if this case happens.
+     * Do nothing. Throw an error if a TreeNodeEdit exists.
      */
     NONE("none"),
 
@@ -53,6 +56,10 @@ public enum EditOverwritePolicy {
 		return LOOKUP.get(name);
 	}
 	
+	/**
+	 * @param edit the treeNodeEdit
+	 * @return the reasonable policies for the input treeNodeEdit
+	 */
 	static EditOverwritePolicy[] getAvailableValuesForEdit(TreeNodeEdit edit) {
 		List<EditOverwritePolicy> values = new ArrayList<>();
 		
@@ -70,11 +77,18 @@ public enum EditOverwritePolicy {
 		
 		return values.toArray(new EditOverwritePolicy[values.size()]);
 	}
-	
+
+	/**
+	 * @return the reasonable policies for any {@linkplain FileNodeEdit}
+	 */
 	public static EditOverwritePolicy[] getAvailableValuesForFile() {
 		return new EditOverwritePolicy[] { INTEGRATE, OVERWRITE, RENAME };
 	}
 	
+	/**
+	 * @param policies the overwrite policies
+	 * @return the name Strings for the input overwrite policies
+	 */
 	public static String[] getNames(EditOverwritePolicy[] policies) {
 		String[] names = new String[policies.length];
 		

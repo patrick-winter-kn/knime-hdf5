@@ -31,12 +31,12 @@ public class Hdf5Group extends Hdf5TreeElement {
 	
 	private final List<Hdf5DataSet<?>> m_dataSets = new ArrayList<>();
 
-	protected Hdf5Group(final String name)
+	protected Hdf5Group(String name)
 			throws NullPointerException, IllegalArgumentException {
 		super(name);
 	}
 	
-	private static Hdf5Group getInstance(final Hdf5Group parent, final String name) throws IllegalArgumentException, IllegalStateException {
+	private static Hdf5Group getInstance(Hdf5Group parent, String name) throws IllegalArgumentException, IllegalStateException {
 		if (parent == null) {
 			throw new IllegalArgumentException("Parent of group \"" + name + "\" cannot be null");
 			
@@ -47,7 +47,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return new Hdf5Group(name);
 	}
 	
-	private static Hdf5Group createGroup(final Hdf5Group parent, final String name) throws IOException {
+	private static Hdf5Group createGroup(Hdf5Group parent, String name) throws IOException {
 		Hdf5Group group = null;
 		
 		try {
@@ -70,7 +70,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 		return group;
 	}
 
-	private static Hdf5Group openGroup(final Hdf5Group parent, final String name) throws IOException {
+	private static Hdf5Group openGroup(Hdf5Group parent, String name) throws IOException {
 		Hdf5Group group = null;
 		
 		try {
@@ -113,7 +113,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * @throws IOException if there already exists a child <b>treeElement</b>
 	 * 	with the same name in this group
 	 */
-	public Hdf5Group createGroup(final String name) throws IOException {
+	public Hdf5Group createGroup(String name) throws IOException {
 		int objectType = getObjectTypeByName(name);
 		if (objectType == OBJECT_NOT_EXISTS) {
 			return createGroup(this, name);
@@ -136,13 +136,20 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * @param dimensions the dimensions for the new dataSet
 	 * @param compressionLevel the compression level (from 0 to 9) for the new dataSet
 	 * @param chunkRowSize the size of the row chunks to store the dataSet
-	 * 	(may not be larger than the number of rows or 2^32-1)
+	 * 	(may not be larger than the number of rows or 2^32-1,
+	 * 	may not be 0 if compression is used)
 	 * @param type the data type for the new dataSet
 	 * @return the new dataSet
 	 * @throws IOException if there already exists a child <b>treeElement</b>
 	 * 	with the same name in this group
+	 * @see <a href=
+	 *	"https://support.hdfgroup.org/HDF5/doc/RM/RM_H5P.html#Property-SetDeflate"
+	 *	>H5.H5Pset_deflate(long, int)</a>
+	 * @see <a href=
+	 *	"https://support.hdfgroup.org/HDF5/doc/RM/RM_H5P.html#Property-SetChunk"
+	 *	>H5.H5Pset_chunk(long, int, long[])</a>
 	 */
-	public Hdf5DataSet<?> createDataSet(final String name, long[] dimensions,
+	public Hdf5DataSet<?> createDataSet(String name, long[] dimensions,
 			int compressionLevel, long chunkRowSize, Hdf5DataType type) throws IOException {
 		int objectType = getObjectTypeByName(name);	
 		if (objectType == OBJECT_NOT_EXISTS) {
@@ -236,7 +243,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * @return the open group with the input name if it exists
 	 * @throws IOException if it does not exist or an internal error occurred
 	 */
-	public Hdf5Group getGroup(final String name) throws IOException {
+	public Hdf5Group getGroup(String name) throws IOException {
 		Hdf5Group group = null;
 		
 		synchronized (m_groups) {
@@ -294,7 +301,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * @return the open dataSet with the input name if it exists
 	 * @throws IOException if it does not exist or an internal error occurred
 	 */
-	public Hdf5DataSet<?> getDataSet(final String name) throws IOException {
+	public Hdf5DataSet<?> getDataSet(String name) throws IOException {
 		Hdf5DataSet<?> dataSet = null;
 		
 		synchronized (m_dataSets) {
@@ -386,10 +393,10 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * not usable anymore.
 	 * 
 	 * @param name the name of the object to delete
-	 * @return {@code true} if the deletion form the hdf file was successful
+	 * @return if the deletion from the hdf file was successful
 	 * @throws IOException if the object does not exist or an internal error occurred
 	 */
-	public boolean deleteObject(final String name) throws IOException {
+	public boolean deleteObject(String name) throws IOException {
 		boolean success = false;
 		
 		try {
@@ -583,7 +590,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * 
 	 * @param edit information about name and data type for the dataSet creation
 	 * @return the new dataSet
-	 * @throws IOException if an internal error occurred while creating
+	 * @throws IOException if an error occurred in the hdf library while creating
 	 */
 	public Hdf5DataSet<?> createDataSetFromEdit(DataSetNodeEdit edit) throws IOException {
 		EditDataType editDataType = edit.getEditDataType();
@@ -607,7 +614,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 	 * @param name name of the child dataSet of this treeElement
 	 * @throws UnsupportedDataTypeException if the data type is not supported
 	 * 	(for {@code HDF5Constants.H5T_VLEN, HDF5Constants.H5T_REFERENCE, HDF5Constants.H5T_COMPOUND})
-	 * @throws IOException if an internal error occurred
+	 * @throws IOException if an error occurred in the hdf library
 	 */
 	Hdf5DataType findDataSetType(String name) throws UnsupportedDataTypeException, IOException {
 		Hdf5DataType dataType = null;

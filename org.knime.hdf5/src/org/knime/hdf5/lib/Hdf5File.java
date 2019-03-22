@@ -22,9 +22,10 @@ import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
+/**
+ * Class for hdf files, i.e. are accessed through {@code H5F} in the hdf api.
+ */
 public class Hdf5File extends Hdf5Group {
-	
-	private static final int FILE_CLOSE_DEGREE = HDF5Constants.H5F_CLOSE_STRONG;
 
 	public static final int NOT_ACCESSED = -1;
 	
@@ -32,8 +33,14 @@ public class Hdf5File extends Hdf5Group {
 	
 	public static final int READ_WRITE_ACCESS = 1;
 	
+	/**
+	 * Lists all loaded file instances.
+	 */
 	private static final List<Hdf5File> ALL_FILES = new ArrayList<>();
 
+	/**
+	 * Manages the locks for opening/creating/deleting files on the machine.
+	 */
 	private static final ReentrantReadWriteLock GLOBAL_RWL = new ReentrantReadWriteLock(true);
 	
 	private static final Lock GLOBAL_R = GLOBAL_RWL.readLock();
@@ -41,7 +48,10 @@ public class Hdf5File extends Hdf5Group {
 	private static final Lock GLOBAL_W = GLOBAL_RWL.writeLock();
 	
 	private final String m_filePath;
-	
+
+	/**
+	 * Manages the locks for reading/writing this file.
+	 */
 	private final ReentrantReadWriteLock m_rwl = new ReentrantReadWriteLock(true);
 	
 	private final Lock m_r = m_rwl.readLock();
@@ -50,9 +60,13 @@ public class Hdf5File extends Hdf5Group {
 	
 	private int m_access = NOT_ACCESSED;
 	
+	/**
+	 * Lists all threads that have access to this file and maps them to the
+	 * number how many times they have opened this file.
+	 */
 	private Map<Thread, Integer> m_accessors = new HashMap<>();
 	
-	private Hdf5File(final String filePath) throws HDF5LibraryException, NullPointerException,
+	private Hdf5File(String filePath) throws HDF5LibraryException, NullPointerException,
 			IllegalArgumentException {
 		super(filePath.substring(filePath.lastIndexOf(File.separator) + 1));
 		m_filePath = filePath;
@@ -61,13 +75,13 @@ public class Hdf5File extends Hdf5Group {
 	}
 	
 	/**
-	 * Creating an instance creates a new file or, if there's already a file in this path, opens it. <br>
-	 * If the File.separator is not '/', the part of the path after the last File.separator
-	 * may not contain '/'.
+	 * Creates a new file with the input file path.
+	 * The name of the file may not contain '/'.
 	 * 
-	 * @param filePath The whole path to the file including its name.
+	 * @param filePath the path to the file including its name
+	 * @throws IOException if the file already exists or an internal error occurred
 	 */
-	public static Hdf5File createFile(final String filePath) throws IOException {
+	public static Hdf5File createFile(String filePath) throws IOException {
 		try {
 			GLOBAL_W.lock();
 		
@@ -87,8 +101,23 @@ public class Hdf5File extends Hdf5Group {
 			GLOBAL_W.unlock();
 		}
 	}
-	
-	public synchronized static Hdf5File openFile(final String filePath, final int access) throws IOException {
+
+	/**
+	 * Opens the file with the input file path with either READ or WRITE access.
+	 * The name of the file may not contain '/'.
+	 * <br>
+	 * <br>
+	 * If the file is already open in this thread, increase the counter of
+	 * accesses for this thread by 1.
+	 * <br>
+	 * If the file is open in different threads, it may happen that this
+	 * method is locked until the other threads have closed the file.
+	 * 
+	 * @param filePath the path to the file including its name
+	 * @param access {@code READ_ONLY_ACCESS} or {@code READ_WRITE_ACCESS}
+	 * @throws IOException if the file does not exist or an internal error occurred
+	 */
+	public synchronized static Hdf5File openFile(String filePath, int access) throws IOException {
 		try {
 			GLOBAL_R.lock();
 		
@@ -97,6 +126,7 @@ public class Hdf5File extends Hdf5Group {
 			}
 			
 			Hdf5File file = null;
+			// check if the file has already been loaded
 			for (Hdf5File f : ALL_FILES) {
 				if (f.getFilePath().equals(filePath)) {
 					file = f;
@@ -106,6 +136,7 @@ public class Hdf5File extends Hdf5Group {
 			}
 	
 			if (file == null) {
+				// load the file and add it to the list of loaded files
 				file = new Hdf5File(filePath);
 				file.open(access);
 			}
@@ -120,14 +151,27 @@ public class Hdf5File extends Hdf5Group {
 		}
 	}
 
+	/**
+	 * Returns the property list which sets the close degree to strong, i.e.
+	 * it ensures that all elements in the file are also closed after
+	 * closing the file.
+	 * 
+	 * @return the property list that specifies how the file will be closed
+	 * @throws HDF5LibraryException if an error occurred in the hdf library
+	 * @see Hdf5File#FILE_CLOSE_DEGREE
+	 */
 	private static long getAccessPropertyList() throws HDF5LibraryException {
 		long pid = H5.H5Pcreate(HDF5Constants.H5P_FILE_ACCESS);
-		H5.H5Pset_fclose_degree(pid, FILE_CLOSE_DEGREE);
+		H5.H5Pset_fclose_degree(pid, HDF5Constants.H5F_CLOSE_STRONG);
 		
 		return pid;
 	}
 	
-	public static boolean existsHdf5File(final String filePath) {
+	/**
+	 * @param filePath the file path
+	 * @return if a file with the file path exists and has an hdf extension (.h5, .hdf5)
+	 */
+	public static boolean existsHdf5File(String filePath) {
 		try {
 			GLOBAL_R.lock();
 			return hasHdf5FileEnding(filePath) && new File(filePath).exists();
@@ -137,8 +181,14 @@ public class Hdf5File extends Hdf5Group {
 		}
 	}
 	
-	public static boolean isHdf5FileCreatable(final String filePath, final boolean overwriteHdfFile) {
-		// TODO maybe use org.knime.core.node.util.CheckUtils, but without possibility for url
+	/**
+	 * @param filePath the file path
+	 * @param overwriteHdfFile if an already existing file may be overwritten
+	 * @return if a new file with the file path can be created, i.e. if the
+	 * 	file path has an hdf extension (.h5, .hdf5), the parent directory
+	 * 	exists and the file does not exist or may be overwritten
+	 */
+	public static boolean isHdf5FileCreatable(String filePath, boolean overwriteHdfFile) {
 		try {
 			GLOBAL_R.lock();
 			return hasHdf5FileEnding(filePath) && new File(getDirectoryPath(filePath)).isDirectory()
@@ -150,13 +200,15 @@ public class Hdf5File extends Hdf5Group {
 	}
 
 	/**
-	 * Checks if the file is writable. It is not writable if it is opened somewhere else.
-	 * TODO this method is only supported for Windows and Linux so far
+	 * Checks if the file is writable.
 	 * 
-	 * @return
-	 * @throws IOException
+	 * @param filePath the file path
+	 * @throws IOException if the file is not writable, i.e. it is not creatable
+	 * 	if it does not exist or otherwise, if it is open somewhere on the machine
+	 * @see Hdf5File#isHdf5FileCreatable(String, boolean)
+	 * @see Hdf5File#isOpenAnywhere()
 	 */
-	public static void checkHdf5FileWritable(final String filePath) throws IOException {
+	public static void checkHdf5FileWritable(String filePath) throws IOException {
 		try {
 			if (existsHdf5File(filePath)) {
 				Hdf5File file = Hdf5File.openFile(filePath, READ_WRITE_ACCESS);
@@ -177,15 +229,30 @@ public class Hdf5File extends Hdf5Group {
 		}
 	}
 	
-	public static boolean hasHdf5FileEnding(final String filePath) {
+	/**
+	 * @param filePath the file path
+	 * @return if the file path has an hdf extension (.h5, .hdf5)
+	 */
+	public static boolean hasHdf5FileEnding(String filePath) {
 		return filePath.endsWith(".h5") || filePath.endsWith(".hdf5");
 	}
 	
+	/**
+	 * @param filePath the file path
+	 * @return the file path of the parent directory
+	 */
 	public static String getDirectoryPath(String filePath) {
 		int dirPathLength = filePath.lastIndexOf(File.separator);
 		return filePath.substring(0, dirPathLength >= 0 ? dirPathLength : 0);
 	}
 
+	/**
+	 * @param filePath the file path
+	 * @return a file path with a constructed name from the input such that it
+	 * 	is not contained in the parent directory
+	 * @throws IOException if no parent directory exists for the file path
+	 * @see Hdf5TreeElement#getUniqueName(List, String)
+	 */
 	public static String getUniqueFilePath(String filePath) throws IOException {
 		File directory = new File(Hdf5File.getDirectoryPath(filePath));
 		if (directory.isDirectory()) {
@@ -210,8 +277,11 @@ public class Hdf5File extends Hdf5Group {
 		}
 	}
 	
+	/**
+	 * @return the absolute file path of this file
+	 */
 	public String getFilePath() {
-		return m_filePath;
+		return new File(m_filePath).getAbsolutePath();
 	}
 	
 	@Override
@@ -221,7 +291,7 @@ public class Hdf5File extends Hdf5Group {
 
 	@Override
 	public boolean exists() {
-		return Hdf5File.existsHdf5File(m_filePath);
+		return Hdf5File.existsHdf5File(getFilePath());
 	}
 	
 	private boolean isOpenInThisThread() {
@@ -234,11 +304,17 @@ public class Hdf5File extends Hdf5Group {
 		synchronized (m_accessors) {
 			Thread curThread = Thread.currentThread();
 			if (!isOpenInThisThread() && open) {
+				// add the thread as new accessor
 				m_accessors.put(curThread, 1);
 			} else if (isOpenInThisThread()) {
+				// update the number of accesses to the file
 				m_accessors.put(curThread, m_accessors.get(curThread) + (open ? 1 : -1));
 			}
 			
+			/*
+			 * delete the thread from the accessor list if it does not access
+			 * the file anymore
+			 */
 			if (m_accessors.get(curThread) == 0) {
 				m_accessors.remove(curThread);
 			}
@@ -251,6 +327,9 @@ public class Hdf5File extends Hdf5Group {
 		}
 	}
 	
+	/**
+	 * @return if this file is open in this thread, but not in any other thread
+	 */
 	private boolean isOpenOnlyInThisThread() {
 		return isOpenInThisThread() && m_accessors.size() == 1;
 	}
@@ -259,6 +338,13 @@ public class Hdf5File extends Hdf5Group {
 		return !m_accessors.isEmpty();
 	}
 	
+	/**
+	 * <b>Note:</b> This method is platform-dependent. It only works on Windows
+	 * and POSIX-compliant Linux so far.
+	 * 
+	 * @return if the file is open somewhere on the machine
+	 * @see Hdf5File.PlatformOS#isFileOpen(File)
+	 */
 	private boolean isOpenAnywhere() {
 		return PlatformOS.get().isFileOpen(new File(getFilePath()));
 	}
@@ -277,6 +363,10 @@ public class Hdf5File extends Hdf5Group {
 			}
 		}
 		
+		/**
+		 * @param file the file
+		 * @return if the file is open on the machine
+		 */
 		private boolean isFileOpen(File file) {
 		    try {
 				switch (this) {
@@ -288,12 +378,14 @@ public class Hdf5File extends Hdf5Group {
 			        try {
 			        	// using function 'lsof' instead of 'fuser' needs too long
 				    	if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+				    		// execute the command 'fuser absoluteFilePath'
 					        process = new ProcessBuilder(new String[] {"fuser", file.getAbsolutePath()}).start();
 				    	} else {
 				    		throw new UnsupportedOperationException("Function 'fuser' is only supported on POSIX-compliant OS");
 				    	}
 				        BufferedInputStream in = new BufferedInputStream(process.getInputStream());
 				        if (in.read(new byte[1]) != -1) {
+				        	// the result of the command was not empty
 				            return true;
 				        }
 				    } finally {
@@ -308,12 +400,17 @@ public class Hdf5File extends Hdf5Group {
 					return false;
 				}
 		    } catch (Exception e) {
-				NodeLogger.getLogger(Hdf5File.class).warn("Could not check if file is open somewhere else: " + e.getMessage(), e);
+				NodeLogger.getLogger(getClass()).warn("Could not check if file is open somewhere else: " + e.getMessage(), e);
 				return false;
 		    }
 		}
 	}
 	
+	/**
+	 * Creates the hdf file from this instance.
+	 * 
+	 * @throws IOException if the file already exists or an internal error occurred
+	 */
 	private void create() throws IOException {
 		try {
 			m_w.lock();
@@ -335,16 +432,31 @@ public class Hdf5File extends Hdf5Group {
         }
 	}
 	
-	public void open(final int access) throws IOException {
+	/**
+	 * Opens this file with either READ or WRITE access.
+	 * <br>
+	 * <br>
+	 * If the file is already open in this thread, increase the counter of
+	 * accesses for this thread by 1.
+	 * <br>
+	 * If the file is open in different threads, it may happen that this
+	 * method is locked until the other threads have closed the file.
+	 * 
+	 * @param access {@code READ_ONLY_ACCESS} or {@code READ_WRITE_ACCESS}
+	 * @throws IOException if this file does not exist or an internal error occurred
+	 */
+	public void open(int access) throws IOException {
 		try {
+			// acquire a read or write lock if this file is not open in this thread
 			if (!isOpenInThisThread()) {
     			long pid = Hdf5File.getAccessPropertyList();
-    			
+
 				if (access == READ_ONLY_ACCESS) {
 					m_r.lock();
 					
 					try {
 						lockWriteOpen();
+						// open this file only if this instance is not already open
 						if (!isOpenInAnyThread()) {
 							setElementId(H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDONLY, pid));
 						}
@@ -359,6 +471,7 @@ public class Hdf5File extends Hdf5Group {
 
 					try {
 						lockWriteOpen();
+						// open this file only if this instance is not already open
 						if (!isOpenInAnyThread()) {
 							setElementId(H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDWR, pid));
 						}
@@ -390,7 +503,7 @@ public class Hdf5File extends Hdf5Group {
 	/**
 	 * @param prefix the prefix for the name like "temp_"
 	 * @return the instance for the newly created copy of this hdf file
-	 * @throws IOException if an internal error occurred while creating
+	 * @throws IOException if an error occurred in the hdf library while creating
 	 * @throws IllegalArgumentException if the prefix contains '/'
 	 */
 	@Override
@@ -399,13 +512,25 @@ public class Hdf5File extends Hdf5Group {
 			throw new IllegalArgumentException("Prefix for backup file cannot contain '/'");
 		}
 		
-		return copyFile(getUniqueFilePath(getDirectoryPath(m_filePath) + File.separator + prefix + getName()));
+		return copyFile(getUniqueFilePath(getDirectoryPath(getFilePath()) + File.separator + prefix + getName()));
 	}
 	
+	/**
+	 * Copies this file to {@code newPath} and opens the new file.
+	 * 
+	 * @param newPath the path for the new file
+	 * @return the new file
+	 * @throws IOException if a file in {@code newPath} already exists or the
+	 * 	new file could not be opened
+	 */
 	public Hdf5File copyFile(String newPath) throws IOException {
 		GLOBAL_W.lock();
 		
-		Path backupPath = Files.copy(Paths.get(m_filePath), Paths.get(newPath), StandardCopyOption.COPY_ATTRIBUTES);
+		if (new File(newPath).exists()) {
+			throw new IOException("File could not be copied: File already exists");
+		}
+		
+		Path backupPath = Files.copy(Paths.get(getFilePath()), Paths.get(newPath), StandardCopyOption.COPY_ATTRIBUTES);
 		Hdf5File file = openFile(backupPath.toString(), READ_ONLY_ACCESS);
 		
 		GLOBAL_W.unlock();
@@ -413,13 +538,25 @@ public class Hdf5File extends Hdf5Group {
 		return file;
 	}
 
-	public boolean deleteFile() throws IOException {
-		// TODO maybe only allow deletion in write access; same for deletion of children
+	/**
+	 * <b>Note:</b> Be careful that this instance is not usable anymore after
+	 * deletion.
+	 * 
+	 * @return if the deletion from the hdf file was successful
+	 * @throws IOException if this file does not exist, is open somewhere on
+	 * the machine or an internal error occurred
+	 * @throws IllegalStateException if this file is not in write access
+	 * @see Hdf5File#isOpenAnywhere()
+	 */
+	public boolean deleteFile() throws IOException, IllegalStateException {
 		// TODO check if some other threads are still waiting for this file
+		if (m_access != READ_WRITE_ACCESS) {
+			throw new IllegalStateException("Write access is needed to delete a file.");
+		}
 		
 		GLOBAL_W.lock();
 		
-		File file = new File(m_filePath);
+		File file = new File(getFilePath());
 		if (file == null || !file.exists()) {
 			throw new IOException("File cannot be deleted: it does not exist");
 		}
@@ -439,6 +576,9 @@ public class Hdf5File extends Hdf5Group {
 		return success;
 	}
 	
+	/**
+	 * @return information about what elements in this file are still open
+	 */
 	private String whatisOpenInFile() {
         long count = -1;
         long openObjects = -1;
@@ -454,13 +594,14 @@ public class Hdf5File extends Hdf5Group {
 				return "(error: file is already closed)";
 			}
 		} catch (HDF5LibraryException hle) {
-			NodeLogger.getLogger("HDF5 Files").debug("Number of open objects in file could not be loaded: " + hle.getMessage(), hle);
+			NodeLogger.getLogger(getClass()).debug("Number of open objects in file could not be loaded: " + hle.getMessage(), hle);
 		}
 
         if (count <= 0) {
         	return "(error: couldn't find out number of open objects)";
         }
-        
+
+		// only the file itself is open
         if (count == 1) {
         	return "0";
         }
@@ -471,7 +612,7 @@ public class Hdf5File extends Hdf5Group {
         try {
 			openObjects = H5.H5Fget_obj_ids(getElementId(), HDF5Constants.H5F_OBJ_ALL, count, objects);
 			   
-			// i = 0 is just the file itself
+			// i == 0 is just the file itself
 			int i = 1;
 	        if (i < openObjects) {
 	    		String pathFromFile = H5.H5Iget_name(objects[i]);
@@ -493,16 +634,30 @@ public class Hdf5File extends Hdf5Group {
 	        opened += "]";
 	        
 		} catch (Exception e) {
-            NodeLogger.getLogger("HDF5 Files").debug("Info of open objects in file could not be loaded: " + e.getMessage(), e);
+            NodeLogger.getLogger(getClass()).debug("Info of open objects in file could not be loaded: " + e.getMessage(), e);
         }
         
         return opened;
 	}
 	
 	/**
-	 * Closes the group and all elements in this group.
-	 * @throws IOException 
+	 * Closes this group and all elements in this group.
 	 * 
+	 * @throws IOException 
+	 */
+
+	/**
+	 * Closes this file and all elements in this file if it is not accessed by
+	 * any threads anymore.
+	 * <br>
+	 * <br>
+	 * If the file is already closed in this thread, the method does nothing.
+	 * <br>
+	 * If the file is still open in this thread, decrease the counter of
+	 * accesses for this thread by 1.
+	 * 
+	 * @param access {@code READ_ONLY_ACCESS} or {@code READ_WRITE_ACCESS}
+	 * @throws IOException if this file does not exist or an internal error occurred
 	 */
 	@Override
 	public boolean close() throws IOException {
@@ -526,7 +681,7 @@ public class Hdf5File extends Hdf5Group {
 	            			success &= group.close();
 	            		}
 			    		
-			    		NodeLogger.getLogger("HDF5 Files").debug("Number of open objects in file \""
+			    		NodeLogger.getLogger(getClass()).debug("Number of open objects in file \""
 			    				+ getName() + "\": " + whatisOpenInFile());
 			    		
 			    		success &= H5.H5Fclose(getElementId()) >= 0;
@@ -537,7 +692,11 @@ public class Hdf5File extends Hdf5Group {
 	    			
 	    			if (success) {
 			    		setOpenInThisThread(false);
-	  
+			    		
+			    		/*
+			    		 * unlock the read or write lock since the file is not
+			    		 * open anymore in this thread
+			    		 */
 						if (m_access == READ_ONLY_ACCESS) {
 							m_r.unlock();
 						} else if (m_access == READ_WRITE_ACCESS) {
@@ -565,7 +724,7 @@ public class Hdf5File extends Hdf5Group {
 	
 	@Override
 	public String toString() {
-		return "{ filePath=" + m_filePath + ",id=" + getElementId() + ",access= "
+		return "{ filePath=" + getFilePath() + ",open=" + isOpen() + ",access= "
 				+ (m_access == READ_ONLY_ACCESS ? "READ" : m_access == READ_WRITE_ACCESS ? "WRITE" : "NONE") + " }";
 	}
 }

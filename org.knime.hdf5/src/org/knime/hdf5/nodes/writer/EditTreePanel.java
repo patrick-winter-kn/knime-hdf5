@@ -217,7 +217,7 @@ public class EditTreePanel extends JPanel {
     			
             	if (specListKey.isEmpty()) {
             		for (TreeNodeEdit copyEdit : m_copyEdits) {
-            			if (!copyEdit.isSupported() || copyEdit instanceof GroupNodeEdit && copyEdit.isEditDescendant(dropLocationEdit)) {
+            			if (!copyEdit.isSupported() || copyEdit instanceof GroupNodeEdit && copyEdit.isEditDescendantOf(dropLocationEdit)) {
             				return false;
             			}
             			

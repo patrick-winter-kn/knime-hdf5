@@ -56,6 +56,10 @@ import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.nodes.writer.edit.EditDataType.DataTypeChooser;
 import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
+/**
+ * Class for edits on dataSets in an hdf file. The respective hdf
+ * source is a {@linkplain Hdf5DataSet}.
+ */
 public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	private boolean m_overwriteWithNewColumns;
@@ -617,7 +621,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		boolean conflictPossible = !(edit instanceof ColumnNodeEdit) && !(edit instanceof AttributeNodeEdit) && this != edit;
 		boolean inConflict = conflictPossible && getName().equals(edit.getName()) && getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
 		
-		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willModifyActionBeAbortedOnEdit(edit);
+		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willBeNameConflictWithIgnoredEdit(edit);
 	}
 
 	@Override
@@ -936,4 +940,16 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			}
 		}
     }
+
+	@Override
+	public String toString() {
+		return "{ input=" + getInputPathFromFileWithName() + ",output=" + getOutputPathFromFileWithName()
+				+ ",dataSet=" + getHdfObject() + ",backup=" + getHdfBackup()
+				+ ",overwrite=" + getEditOverwritePolicy() + ",overwriteWithNewColumns=" + m_overwriteWithNewColumns
+				+ ",valid=" + isValid() + ",action=" + getEditAction() + ",state=" + getEditState() 
+				+ ",dimension" + (getNumberOfDimensions() > 1 ? "s=[" + m_inputRowCount + ", "
+						+ getNotDeletedColumnNodeEdits().length + "]" : "=" + m_inputRowCount)
+				+ ",inputType=" + m_inputType + ",editDataType=" + m_editDataType
+				+ ",compressionLevel=" + m_compressionLevel + ",chunkRowSize=" + m_chunkRowSize + " }";
+	}
 }

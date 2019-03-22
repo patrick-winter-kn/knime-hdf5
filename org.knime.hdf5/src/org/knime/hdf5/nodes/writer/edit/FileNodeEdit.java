@@ -33,6 +33,10 @@ import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
 import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
 
+/**
+ * Class for edits on files in an hdf file. The respective hdf
+ * source is a {@linkplain Hdf5File}.
+ */
 public class FileNodeEdit extends GroupNodeEdit {
 
 	private static final String COLUMN_PROPERTY_NAMES = "knime.columnnames";
@@ -500,7 +504,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 				setEditState(EditState.FAIL);
 			}
 		}
-			
+		
 		exec.setProgress(0.0);
 		// TODO change after testing
 		long pTD = getTotalProgressToDo();
@@ -773,5 +777,12 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 		
 		return success;
+	}
+	
+	@Override
+	public String toString() {
+		return "{ filePath=" + getFilePath() + ",file=" + getHdfObject() + ",backup=" + getHdfBackup()
+				+ ",overwrite=" + getEditOverwritePolicy() + ",valid=" + isValid()
+				+ ",action=" + getEditAction() + ",state=" + getEditState() + " }";
 	}
 }

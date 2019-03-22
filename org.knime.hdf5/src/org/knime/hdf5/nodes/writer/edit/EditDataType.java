@@ -30,6 +30,10 @@ import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.PropertiesDialog;
 import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.SettingsKey;
 
+/**
+ * Holds the information of how to edit a data type of a
+ * {@linkplain DataSetNodeEdit} or {@linkplain AttributeNodeEdit}.
+ */
 public class EditDataType {
 
 	private static enum Sign {
@@ -40,6 +44,9 @@ public class EditDataType {
 		}
 	}
 	
+	/**
+	 * Defines the rounding mode from FLOAT64/double to INT64/long.
+	 */
 	public static enum Rounding {
 		DOWN, UP, FLOOR, CEIL, MATH;
 		
@@ -73,6 +80,9 @@ public class EditDataType {
 	
 	private Object m_standardValue;
 	
+	/**
+	 * @return the data type that should be used for the output
+	 */
 	public HdfDataType getOutputType() {
 		return m_outputType;
 	}
@@ -89,6 +99,9 @@ public class EditDataType {
 		m_endian = endian;
 	}
 
+	/**
+	 * @return the rounding mode from float to int
+	 */
 	public Rounding getRounding() {
 		return m_rounding;
 	}
@@ -97,6 +110,10 @@ public class EditDataType {
 		m_rounding = rounding;
 	}
 
+	/**
+	 * @return if the string length is fixed or is set automatically when
+	 * 	checking the string length
+	 */
 	public boolean isFixed() {
 		return m_fixed;
 	}
@@ -113,6 +130,10 @@ public class EditDataType {
 		m_stringLength = stringLength;
 	}
 	
+	/**
+	 * @return the standard value for missing values or {@code null} if missing
+	 * 	values are not allowed
+	 */
 	public Object getStandardValue() {
 		return m_standardValue;
 	}
@@ -171,6 +192,9 @@ public class EditDataType {
 		setStandardValue(standardValue);
 	}
 	
+	/**
+	 * Holds the GUI for choosing the data type.
+	 */
 	protected class DataTypeChooser {
 		
 		private JComboBox<HdfDataType> m_typeField = new JComboBox<>();
@@ -192,6 +216,7 @@ public class EditDataType {
 		private final boolean m_standardValueEnabled;
 		
 		protected DataTypeChooser(boolean standardValueEnabled) {
+			// define the field for the data type
 			m_typeField.addActionListener(new ActionListener() {
 				
 				@Override
@@ -200,6 +225,7 @@ public class EditDataType {
 				}
 			});
 			
+			// define the field for the String length
 			m_stringLengthField = new JPanel();
 			ButtonGroup stringLengthGroup = new ButtonGroup();
 			m_stringLengthField.setLayout(new GridBagLayout());
@@ -226,6 +252,7 @@ public class EditDataType {
 				}
 			});
 			
+			// define the field for standard values
 			m_standardValueEnabled = standardValueEnabled;
 			if (m_standardValueEnabled) {
 				m_standardValueField.add(m_standardValueIntSpinner, BorderLayout.NORTH);
@@ -235,6 +262,9 @@ public class EditDataType {
 			}
 		}
 		
+		/**
+		 * Enables all selectable fields.
+		 */
 		private void setSelectableFieldsEnabled() {
 			HdfDataType selectedType = (HdfDataType) m_typeField.getSelectedItem();
 			
@@ -263,12 +293,24 @@ public class EditDataType {
 			}
 		}
 		
-		private void enableStandardValueField(boolean selected) {
-			m_standardValueIntSpinner.setEnabled(selected);
-			m_standardValueFloatSpinner.setEnabled(selected);
-			m_standardValueStringTextField.setEnabled(selected);
+		/**
+		 * Enables/disables the spinners and textField of the standard value.
+		 * 
+		 * @param enable if the field for standard values should be enabled
+		 */
+		private void enableStandardValueField(boolean enable) {
+			m_standardValueIntSpinner.setEnabled(enable);
+			m_standardValueFloatSpinner.setEnabled(enable);
+			m_standardValueStringTextField.setEnabled(enable);
 		}
 		
+		/**
+		 * Makes only String data types selectable
+		 * 
+		 * @param onlyString if only String data types can be selectable
+		 * @param stringLength the string length of the source for this
+		 * 	dataSet/attribute
+		 */
 		void setOnlyStringSelectable(boolean onlyString, int stringLength) {
 			m_typeField.setEnabled(!onlyString);
 			if (onlyString) {
@@ -279,6 +321,11 @@ public class EditDataType {
 			}
 		}
 		
+		/**
+		 * Adds all the fields to the dialog
+		 * 
+		 * @param dialog the dialog where the properties should be added to
+		 */
 		void addToPropertiesDialog(PropertiesDialog dialog) {
 			dialog.addProperty("Type: ", m_typeField);
 			dialog.addProperty("Unsigned: ", m_unsignedField);
@@ -296,6 +343,13 @@ public class EditDataType {
 			}
 		}
 		
+		/**
+		 * Updates the fields with the loaded values of this editDataType
+		 * with more information
+		 * 
+		 * @param possibleHdfTypes what hdf types are possible as output
+		 * @param roundingEnabled if the rounding is enabled
+		 */
 		void loadFromDataType(List<HdfDataType> possibleHdfTypes, boolean roundingEnabled) {
 			m_possibleHdfTypes.clear();
 			Collections.sort(possibleHdfTypes);
@@ -330,6 +384,9 @@ public class EditDataType {
 			setSelectableFieldsEnabled();
 		}
 		
+		/**
+		 * Saves the values of the fields back in the editDataType.
+		 */
 		void saveToDataType() {
 			setValues(HdfDataType.get(((HdfDataType) m_typeField.getSelectedItem()).getTypeId() + (m_unsignedField.isSelected() ? 1 : 0)),
 					(Endian) m_endianField.getSelectedItem(), (Rounding) m_roundingField.getSelectedItem(), m_stringLengthFixed.isSelected(),

@@ -25,6 +25,10 @@ import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.nodes.writer.edit.EditDataType.DataTypeChooser;
 import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
+/**
+ * Class for edits on attributes in an hdf file. The respective hdf
+ * source is a {@linkplain Hdf5Attribute}.
+ */
 public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	private InvalidCause m_inputInvalidCause;
@@ -69,7 +73,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		this(parent, attribute.getPathFromFile() + attribute.getName().replaceAll("/", "\\\\/"), attribute.getName(), EditOverwritePolicy.NONE,
 				attribute.getType().getHdfType().getType(), EditAction.NO_ACTION);
 
-		m_itemStringLength = (int) attribute.getStringLength();
+		m_itemStringLength = (int) attribute.getMaxStringLengthOfValues();
 		m_editDataType.setValues(m_inputType, attribute.getType().getHdfType().getEndian(), Rounding.DOWN, false, m_itemStringLength);
 		m_totalStringLength = (int) Math.max(attribute.getDimension(), 1) * m_itemStringLength;
 		
@@ -302,7 +306,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		boolean inConflict = conflictPossible && getName().equals(edit.getName())
 				&& getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
 		
-		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willModifyActionBeAbortedOnEdit(edit);
+		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willBeNameConflictWithIgnoredEdit(edit);
 	}
 	
 	void validateCreateAction(Map<String, FlowVariable> flowVariables) {
@@ -468,4 +472,14 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			}
 		}
     }
+	
+	@Override
+	public String toString() {
+		return "{ input=" + getInputPathFromFileWithName() + ",output=" + getOutputPathFromFileWithName()
+				+ ",attribute=" + getHdfObject() + ",backup=" + getHdfBackup()
+				+ ",overwrite=" + getEditOverwritePolicy() + ",valid=" + isValid()
+				+ ",action=" + getEditAction() + ",state=" + getEditState() 
+				+ ",inputType=" + m_inputType + ",editDataType=" + m_editDataType
+				+ ",flowVariableArrayUsed=" + m_flowVariableArrayUsed + " }";
+	}
 }

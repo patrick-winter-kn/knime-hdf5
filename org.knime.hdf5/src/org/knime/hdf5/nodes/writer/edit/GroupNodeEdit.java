@@ -21,6 +21,10 @@ import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
+/**
+ * Class for edits on groups in an hdf file. The respective hdf
+ * source is a {@linkplain Hdf5Group}.
+ */
 public class GroupNodeEdit extends TreeNodeEdit {
 	
 	private final List<GroupNodeEdit> m_groupEdits = new ArrayList<>();
@@ -79,7 +83,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	 * @throws IllegalArgumentException	if {@code parent} is already a descendant of this
 	 */
 	GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent, boolean needsCopySource, boolean copyWithAllChildren) throws IllegalArgumentException {
-		if (isEditDescendant(parent)) {
+		if (isEditDescendantOf(parent)) {
 			throw new IllegalArgumentException("Cannot add group to ifself");
 		}
 		
@@ -429,7 +433,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		boolean conflictPossible = !(edit instanceof ColumnNodeEdit) && !(edit instanceof AttributeNodeEdit) && this != edit;
 		boolean inConflict = conflictPossible && getName().equals(edit.getName()) && getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
 
-		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willModifyActionBeAbortedOnEdit(edit);
+		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willBeNameConflictWithIgnoredEdit(edit);
 	}
 
 	@Override
@@ -538,4 +542,12 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			}
 		}
     }
+	
+	@Override
+	public String toString() {
+		return "{ input=" + getInputPathFromFileWithName() + ",output=" + getOutputPathFromFileWithName()
+				+ ",group=" + getHdfObject() + ",backup=" + getHdfBackup()
+				+ ",overwrite=" + getEditOverwritePolicy() + ",valid=" + isValid()
+				+ ",action=" + getEditAction() + ",state=" + getEditState() + " }";
+	}
 }

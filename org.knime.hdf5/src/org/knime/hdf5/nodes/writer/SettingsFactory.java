@@ -9,12 +9,18 @@ import java.util.Map;
 import org.knime.core.node.defaultnodesettings.SettingsModelBoolean;
 import org.knime.core.node.defaultnodesettings.SettingsModelString;
 
+/**
+ * Factory that defines the settings for the hdf writer.
+ */
 final class SettingsFactory {
 	
 	private static final String OUTPUT_CONFIG_KEY = "_Output";
 	
 	private static final String OUTPUT_EDIT_TREE_CONFIG_KEY = "fileEditTree";
 	
+	/**
+	 * Enum to store the current columnSpecs and flowVariableSpecs.
+	 */
 	static enum SpecInfo {
 		COLUMN_SPECS("colSpecs"),
 		FLOW_VARIABLE_SPECS("varSpecs");
@@ -58,8 +64,7 @@ final class SettingsFactory {
     /**
 	 * Factory method for the source setting of the file chooser.
 	 * 
-	 * 
-	 * @return Source <code>SettingsModel</code>
+	 * @return source {@code SettingsModel}
 	 */
 	static SettingsModelString createFilePathSettings() {
 		return new SettingsModelString("filePath" + OUTPUT_CONFIG_KEY, "");
@@ -68,8 +73,7 @@ final class SettingsFactory {
 	/**
 	 * Factory method for the source setting of the overwrite policy for the file.
 	 * 
-	 * 
-	 * @return Source <code>SettingsModel</code>
+	 * @return source {@code SettingsModel}
 	 */
 	static SettingsModelString createFileOverwritePolicySettings() {
 		return new SettingsModelString("fileOverwritePolicy" + OUTPUT_CONFIG_KEY, "");
@@ -78,15 +82,14 @@ final class SettingsFactory {
     /**
 	 * Factory method for the source setting of the CheckBox for saving column properties.
 	 * 
-	 * 
-	 * @return Source <code>SettingsModel</code>
+	 * @return source {@code SettingsModel}
 	 */
 	static SettingsModelBoolean createSaveColumnPropertiesSettings() {
 		return new SettingsModelBoolean("saveColumnProperties" + OUTPUT_CONFIG_KEY, false);
 	}
 	
-    /** A new configuration to store the settings of the attribute filter. Also enables the type filter.
-     * @return ...
+    /** 
+     * @return a new configuration to store the settings how to modify/create an hdf file
      */
     static final EditTreeConfiguration createEditTreeConfiguration() {
         return new EditTreeConfiguration(OUTPUT_EDIT_TREE_CONFIG_KEY);

@@ -16,6 +16,11 @@ import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
 
+/**
+ * Class for edits on columns of dataSets in an hdf file. The respective hdf
+ * source is specified by the {@linkplain Hdf5DataSet} and
+ * {@linkplain ColumnNodeEdit#getInputColumnIndex()}.
+ */
 public class ColumnNodeEdit extends TreeNodeEdit {
 
 	public static final long UNKNOWN_ROW_COUNT = -1;
@@ -291,5 +296,15 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 
             parentOfVisible.reloadTreeWithEditVisible(true);
 		}
+	}
+
+	@Override
+	public String toString() {
+		return "{ input=" + getInputPathFromFileWithName() + ",inputColumnIndex=" + m_inputColumnIndex
+				+ ",output=" + getOutputPathFromFileWithName() + ",outputColumnIndex=" + m_outputColumnIndex
+				+ ",dataSet=" + getHdfObject() + ",backupDataSet=" + getHdfBackup()
+				+ ",overwrite=" + getEditOverwritePolicy() + ",valid=" + isValid()
+				+ ",action=" + getEditAction() + ",state=" + getEditState() 
+				+ ",rowSize" + m_inputRowCount + ",inputType=" + m_inputType + " }";
 	}
 }

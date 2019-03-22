@@ -41,13 +41,13 @@ abstract public class Hdf5TreeElement {
 
 	private final String m_name;
 	
+	private Hdf5Group m_parent;
+	
 	private final List<Hdf5Attribute<?>> m_attributes = new ArrayList<>();
 	
 	private long m_elementId = -1;
 	
 	private String m_pathFromFile = "";
-	
-	private Hdf5Group m_parent;
 
 	/**
 	 * Manages the access to the opening and closing process of this treeElement
@@ -61,7 +61,7 @@ abstract public class Hdf5TreeElement {
 	 * @throws NullPointerException if the name is {@code null}
 	 * @throws IllegalArgumentException if the name is empty or contains a '/'
 	 */
-	protected Hdf5TreeElement(final String name)
+	protected Hdf5TreeElement(String name)
 			throws NullPointerException, IllegalArgumentException {
 		if (name == null) {
 			throw new NullPointerException("name cannot be null");
@@ -143,6 +143,14 @@ abstract public class Hdf5TreeElement {
 		return m_name;
 	}
 
+	public Hdf5Group getParent() {
+		return m_parent;
+	}
+
+	protected void setParent(Hdf5Group parent) {
+		m_parent = parent;
+	}
+
 	/**
 	 * @return the child attributes of this treeElement
 	 */
@@ -163,15 +171,12 @@ abstract public class Hdf5TreeElement {
 		m_elementId = elementId;
 	}
 
-	/**
-	 * @return {@code true} if the treeElement is open
-	 */
 	protected boolean isOpen() {
 		return m_elementId >= 0;
 	}
 
 	/**
-	 * @return the path within the file
+	 * @return the path using the hdf file as root directory and '/' as separator
 	 */
 	public String getPathFromFile() {
 		return m_pathFromFile;
@@ -180,17 +185,28 @@ abstract public class Hdf5TreeElement {
 	protected void setPathFromFile(String pathFromFile) {
 		m_pathFromFile = pathFromFile;
 	}
-
-	public Hdf5Group getParent() {
-		return m_parent;
+	
+	/**
+	 * @param endSlash if a '/' should be added after the
+	 * 	name (only possible if it is no {@linkplain Hdf5File})
+	 * @return the concatenation of {@linkplain #getPathFromFile()},
+	 * 	{@linkplain #getName()} and an optional '/' (or empty String if it is a
+	 * 	{@linkplain Hdf5File})
+	 */
+	public String getPathFromFileWithName(boolean endSlash) {
+		return (isFile() ? "" : getPathFromFile() + getName() + (endSlash ? "/" : ""));
 	}
-
-	protected void setParent(Hdf5Group parent) {
-		m_parent = parent;
+	
+	/**
+	 * @return the concatenation of {@linkplain #getPathFromFile()},
+	 * 	{@linkplain #getName()} (or empty String if it is a {@linkplain Hdf5File})
+	 */
+	public String getPathFromFileWithName() {
+		return getPathFromFileWithName(false);
 	}
 
 	/**
-	 * @return {@code true} if this is an instance of {@linkplain Hdf5Group}
+	 * @return if this is an instance of {@linkplain Hdf5Group}
 	 * 	(which can be a Hdf5Group or {@linkplain Hdf5File})
 	 */
 	public boolean isGroup() {
@@ -198,22 +214,22 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	/**
-	 * @return {@code true} if this is an instance of {@linkplain Hdf5File}
+	 * @return if this is an instance of {@linkplain Hdf5File}
 	 */
 	public boolean isFile() {
 		return this instanceof Hdf5File;
 	}
 
 	/**
-	 * @return {@code true} if this is an instance of {@linkplain Hdf5DataSet}
+	 * @return if this is an instance of {@linkplain Hdf5DataSet}
 	 */
 	public boolean isDataSet() {
 		return this instanceof Hdf5DataSet;
 	}
 	
 	/**
-	 * @return {@code true} if this treeElement exists in the hdf file
-	 * @throws IOException if an internal error occurred while checking the existence
+	 * @return if this treeElement exists in the hdf file
+	 * @throws IOException if an error occurred in the hdf library while checking the existence
 	 */
 	public boolean exists() throws IOException {
 		if (m_parent != null) {
@@ -252,7 +268,7 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	/**
-	 * Acquires the lock such that no other thread can see/edit if this treeElement
+	 * Acquires the lock such that no other thread can see/edit if this treeElement is
 	 * open.
 	 */
 	protected void lockWriteOpen() {
@@ -267,7 +283,7 @@ abstract public class Hdf5TreeElement {
 	}
 
 	/**
-	 * Acquires the lock such that no other thread can edit if this treeElement
+	 * Acquires the lock such that no other thread can edit if this treeElement is
 	 * open.
 	 */
 	protected void lockReadOpen() {
@@ -282,29 +298,10 @@ abstract public class Hdf5TreeElement {
 	}
 	
 	/**
-	 * @param endSlash {@code true} if a '/' should be added after the
-	 * 	name (only possible if it is no {@linkplain Hdf5File})
-	 * @return the concatenation of {@linkplain #getPathFromFile()},
-	 * 	{@linkplain #getName()} and an optional '/' (or empty String if it is a
-	 * 	{@linkplain Hdf5File})
-	 */
-	public String getPathFromFileWithName(boolean endSlash) {
-		return (isFile() ? "" : getPathFromFile() + getName() + (endSlash ? "/" : ""));
-	}
-	
-	/**
-	 * @return the concatenation of {@linkplain #getPathFromFile()},
-	 * 	{@linkplain #getName()} (or empty String if it is a {@linkplain Hdf5File})
-	 */
-	public String getPathFromFileWithName() {
-		return getPathFromFileWithName(false);
-	}
-	
-	/**
 	 * @param prefix the prefix for the name like "temp_"
 	 * @return the instance for the newly created copy of this treeElement
 	 * 	in the hdf file
-	 * @throws IOException if an internal error occurred while creating
+	 * @throws IOException if an error occurred in the hdf library while creating
 	 * @throws IllegalArgumentException if the prefix contains '/'
 	 */
 	public Hdf5TreeElement createBackup(String prefix) throws IOException, IllegalArgumentException {
@@ -323,9 +320,9 @@ abstract public class Hdf5TreeElement {
 	 * 	attribute
 	 * @param type the data type for the attribute
 	 * @return the new attribute
-	 * @throws IOException if an internal error occurred while creating
+	 * @throws IOException if an error occurred in the hdf library while creating
 	 */
-	public Hdf5Attribute<?> createAttribute(final String name, final long dimension, final Hdf5DataType type) throws IOException {
+	public Hdf5Attribute<?> createAttribute(String name, long dimension, Hdf5DataType type) throws IOException {
 		if (!existsAttribute(name)) {
 			return Hdf5Attribute.createAttribute(this, name, dimension, type);
 			
@@ -342,7 +339,7 @@ abstract public class Hdf5TreeElement {
 	 * @param dimension number of values that fit in the (one-dimensional)
 	 * 	attribute
 	 * @return the new attribute
-	 * @throws IOException if an internal error occurred while creating
+	 * @throws IOException if an error occurred in the hdf library while creating
 	 */
 	public Hdf5Attribute<?> createAttributeFromEdit(AttributeNodeEdit edit, long dimension) throws IOException {
 		EditDataType editDataType = edit.getEditDataType();
@@ -368,10 +365,10 @@ abstract public class Hdf5TreeElement {
 	 * 	for more information on the data type)
 	 * @param unsigned if the data type is unsigned
 	 * @return the new attribute
-	 * @throws IOException if an internal error occurred while creating
+	 * @throws IOException if an error occurred in the hdf library while creating
 	 */
 	@SuppressWarnings("unchecked")
-	public Hdf5Attribute<?> createAndWriteAttribute(final String name, Object[] values, boolean unsigned) throws IOException {
+	public Hdf5Attribute<?> createAndWriteAttribute(String name, Object[] values, boolean unsigned) throws IOException {
 		Hdf5Attribute<Object> attribute = null;
 		
 		HdfDataType hdfType = HdfDataType.getHdfDataType(values, unsigned);
@@ -410,7 +407,7 @@ abstract public class Hdf5TreeElement {
 	 * @param edit information about name and data type for the attribute creation
 	 * @param flowVariable the flow variable that should be used for the values
 	 * @return the new attribute
-	 * @throws IOException if an internal error occurred while creating
+	 * @throws IOException if an error occurred in the hdf library while creating
 	 */
 	@SuppressWarnings("unchecked")
 	public Hdf5Attribute<?> createAndWriteAttribute(AttributeNodeEdit edit, FlowVariable flowVariable) throws IOException {
@@ -442,7 +439,7 @@ abstract public class Hdf5TreeElement {
 	 * @param copyAttribute the attribute that should be copied
 	 * @param newName the name of the new attribute
 	 * @return the new attribute
-	 * @throws IOException if an internal error occurred while copying
+	 * @throws IOException if an error occurred in the hdf library while copying
 	 */
 	public Hdf5Attribute<?> copyAttribute(Hdf5Attribute<?> copyAttribute, String newName) throws IOException {
 		Hdf5Attribute<?> newAttribute = null;
@@ -476,7 +473,7 @@ abstract public class Hdf5TreeElement {
 	 * @param edit information about the name and data type for the attribute creation
 	 * @param copyAttribute the flow variable that should be used for the values
 	 * @return the new attribute
-	 * @throws IOException if an internal error occurred while creating
+	 * @throws IOException if an error occurred in the hdf library while creating
 	 */
 	public Hdf5Attribute<?> copyAttribute(AttributeNodeEdit edit, Hdf5Attribute<?> copyAttribute) throws IOException {
 		try {
@@ -506,7 +503,7 @@ abstract public class Hdf5TreeElement {
 	 * @return the open attribute with the input name if it exists
 	 * @throws IOException if it does not exist or an internal error occurred
 	 */
-	public Hdf5Attribute<?> getAttribute(final String name) throws IOException {
+	public Hdf5Attribute<?> getAttribute(String name) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
 		synchronized (m_attributes) {
@@ -544,9 +541,9 @@ abstract public class Hdf5TreeElement {
 	 * 
 	 * @param path the path with this treeElement as root
 	 * @return the open attribute if it exists
-	 * @throws IOException if an internal error occurred
+	 * @throws IOException if an error occurred in the hdf library
 	 */
-	public Hdf5Attribute<?> getAttributeByPath(final String path) throws IOException {
+	public Hdf5Attribute<?> getAttributeByPath(String path) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
 		if (path.matches(".*(?<!\\\\)/.*")) {
@@ -560,7 +557,7 @@ abstract public class Hdf5TreeElement {
 		return attribute;
 	}
 	
-	public Hdf5Attribute<?> getAttributeByPath(final String path, final String name) throws IOException {
+	public Hdf5Attribute<?> getAttributeByPath(String path, String name) throws IOException {
 		Hdf5TreeElement treeElement = this;
 		
 		if (!path.isEmpty()) {
@@ -578,7 +575,7 @@ abstract public class Hdf5TreeElement {
 		return treeElement.getAttribute(name);
 	}
 	
-	public boolean existsAttribute(final String name) throws IOException {
+	public boolean existsAttribute(String name) throws IOException {
 		try {
 			lockReadOpen();
 			checkOpen();
@@ -601,7 +598,7 @@ abstract public class Hdf5TreeElement {
 	 * @param oldName the old name of the child attribute
 	 * @param newName the new name of the child attribute
 	 * @return the new attribute
-	 * @throws IOException if an internal error occurred
+	 * @throws IOException if an error occurred in the hdf library
 	 */
 	public Hdf5Attribute<?> renameAttribute(String oldName, String newName) throws IOException {
 		boolean success = false;
@@ -630,10 +627,10 @@ abstract public class Hdf5TreeElement {
 	 * not usable anymore.
 	 * 
 	 * @param name the name of the attribute to delete
-	 * @return {@code true} if the deletion form the hdf file was successful
+	 * @return if the deletion form the hdf file was successful
 	 * @throws IOException if the object does not exist or an internal error occurred
 	 */
-	public boolean deleteAttribute(final String name) throws IOException {
+	public boolean deleteAttribute(String name) throws IOException {
 		boolean success = false;
 		
 		try {
@@ -670,7 +667,7 @@ abstract public class Hdf5TreeElement {
 	
 	/**
 	 * @return an array of all names of child attributes
-	 * @throws IOException if an internal error occurred
+	 * @throws IOException if an error occurred in the hdf library
 	 */
 	public String[] loadAttributeNames() throws IOException {
 		String[] attrNames = null;
@@ -700,7 +697,7 @@ abstract public class Hdf5TreeElement {
 	
 	/**
 	 * @return all descendant attributes mapped to their data type
-	 * @throws IOException if an internal error occurred
+	 * @throws IOException if an error occurred in the hdf library
 	 * @throws IllegalStateException if this treeElement is not open
 	 */
 	public Map<String, Hdf5DataType> getAllAttributesInfo() throws IOException, IllegalStateException {
@@ -798,7 +795,7 @@ abstract public class Hdf5TreeElement {
 	 * @param name name of the child attribute of this treeElement
 	 * @throws UnsupportedDataTypeException if the data type is not supported
 	 * 	(for {@code HDF5Constants.H5T_VLEN, HDF5Constants.H5T_REFERENCE})
-	 * @throws IOException if an internal error occurred
+	 * @throws IOException if an error occurred in the hdf library
 	 */
 	Hdf5DataType findAttributeType(String name) throws UnsupportedDataTypeException, IOException {
 		Hdf5DataType dataType = null;
@@ -841,9 +838,10 @@ abstract public class Hdf5TreeElement {
 	
 	/**
 	 * Opens this treeElement and all of its ancestors (if necessary).
+	 * Does nothing if it is already open.
 	 * 
-	 * @return {@code true} if this treeElement is opened
-	 * @throws IOException if an internal error occurred
+	 * @return if this treeElement is open
+	 * @throws IOException if an error occurred in the hdf library
 	 * @throws IllegalStateException if the method is used for a {@linkplain Hdf5File}
 	 * 	(use {@linkplain Hdf5File#isOpen()} instead)
 	 */
@@ -851,14 +849,15 @@ abstract public class Hdf5TreeElement {
 
 	/**
 	 * Closes this treeElement and all of its descendants (if necessary).
+	 * Does nothing if it is already closed.
 	 * 
-	 * @return {@code true} if this treeElement is closed
-	 * @throws IOException if an internal error occurred
+	 * @return if this treeElement is closed
+	 * @throws IOException if an error occurred in the hdf library
 	 */
 	public abstract boolean close() throws IOException;
 	
 	@Override
 	public String toString() {
-		return "{ name=" + m_name + ",pathFromFile=" + m_pathFromFile + ",id=" + m_elementId + " }";
+		return "{ name=" + m_name + ",pathFromFile=" + m_pathFromFile + ",open=" + isOpen() + " }";
 	}
 }

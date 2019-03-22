@@ -40,6 +40,10 @@ import org.knime.hdf5.lib.Hdf5DataSet;
 import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 
+/**
+ * The {@link NodeModel} for the hdf reader in order to
+ * import hdf files.
+ */
 public class HDF5ReaderNodeModel extends NodeModel {
 
 	private SettingsModelString m_filePathSettings;
@@ -52,6 +56,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
 
 	protected HDF5ReaderNodeModel() {
 		super(0, 1);
+		
+		// init settings
 		m_filePathSettings = SettingsFactory.createFilePathSettings();
 		m_failIfRowSizeDiffersSettings = SettingsFactory.createFailIfRowSizeDiffersSettings();
 		m_dataSetFilterConfig = SettingsFactory.createDataSetFilterConfiguration();
@@ -72,8 +78,11 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		try {
 	        file = Hdf5File.openFile(getFilePathFromUrlPath(m_filePathSettings.getStringValue(), true), Hdf5File.READ_ONLY_ACCESS);
 			outContainer = exec.createDataContainer(createOutSpec());
+			
+			// find all the paths of the dataSets to import
 			String[] dataSetPaths = m_dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
 
+			// find the maximum number of rows within the dataSets
 			Hdf5DataSet<?>[] dataSets = new Hdf5DataSet<?>[dataSetPaths.length];
 			long maxRows = 0;
 			for (int i = 0; i < dataSetPaths.length; i++) {
@@ -83,6 +92,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 				maxRows = rowCount > maxRows ? rowCount : maxRows;
 			}
 
+			// populate the outContainer with the values from the dataSets
 			for (long i = 0; i < maxRows; i++) {
 				exec.checkCanceled();
 				exec.setProgress((double) i / maxRows);
@@ -107,6 +117,13 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		return new BufferedDataTable[] { outContainer.getTable() };
 	}
 
+	/**
+	 * Find the attributes of this input file, convert them to flow variables
+	 * and push them.
+	 * 
+	 * @param file the input file
+	 * @throws IOException if an error in the hdf library occurred
+	 */
 	private void pushFlowVariables(Hdf5File file) throws IOException {
 		String[] attributePaths = m_attributeFilterConfig.applyTo(file.createSpecOfAttributes()).getIncludes();
 		if (attributePaths != null) {
@@ -129,6 +146,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 							pushFlowVariableString(attrPath, "" + attr.getValue()[0]);
 						}
 					} else {
+						// create a flow variable representing the attribute as array
 						pushFlowVariableString(attrPath, Arrays.toString(attr.getValue()) + " ("
 								+ attr.getType().getKnimeType().toString() + ")");
 					}
@@ -137,6 +155,10 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		}
 	}
 
+	/**
+	 * @return the table spec for the output table of all selected dataSets
+	 * @throws InvalidSettingsException if the file or a dataSet does not exist
+	 */
 	private DataTableSpec createOutSpec() throws InvalidSettingsException {
 		List<DataColumnSpec> colSpecList = new ArrayList<>();
         
@@ -164,27 +186,27 @@ public class HDF5ReaderNodeModel extends NodeModel {
 					DataType type = dataType.getColumnDataType();
 	
 					if (dataSet.getDimensions().length > 1) {
-						long[] colDims = new long[dataSet.getDimensions().length - 1];
-						Arrays.fill(colDims, 0);
+						long[] colIndices = new long[dataSet.getDimensions().length - 1];
+						Arrays.fill(colIndices, 0);
 	
 						do {
-							colSpecList
-									.add(new DataColumnSpecCreator(dsPath + Arrays.toString(colDims), type).createSpec());
-						} while (dataSet.nextColumnDims(colDims));
+							colSpecList.add(new DataColumnSpecCreator(dsPath
+									+ Arrays.toString(colIndices), type).createSpec());
+						} while (dataSet.nextColumnIndices(colIndices));
 	
 					} else {
 						// also do this for dataSet.getDimensions().length == 0 which means that the dataSet is scalar
 						colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
 					}
 				} catch (UnsupportedDataTypeException udte) {
-					NodeLogger.getLogger("HDF5 Files").warn("Unknown dataType of columns in \"" + dsPath + "\"");
+					NodeLogger.getLogger(getClass()).warn("Unknown dataType of columns in \"" + dsPath + "\"");
 				}
 			}
 		} finally {
 			try {
 				file.close();
 			} catch (IOException ioe) {
-				NodeLogger.getLogger("HDF5 Files").error(ioe.getMessage(), ioe);
+				NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 			}
 		}
 
@@ -197,6 +219,15 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		return new DataTableSpec[] { createOutSpec() };
 	}
 	
+	/**
+	 * Checks the config for errors.
+	 * 
+	 * @param filePathSettings the settings for the file path
+	 * @param failIfRowSizeDiffersSettings the settings for the checkBox if row sizes my differ
+	 * @param dataSetFilterConfig the config for the dataSet selection
+	 * @throws InvalidSettingsException if the file or a dataSet does not exist
+	 * 	or if the row sizes are not equal and the settings do not allow that
+	 */
 	private static void checkForErrors(SettingsModelString filePathSettings, 
 			SettingsModelBoolean failIfRowSizeDiffersSettings, 
 			DataColumnSpecFilterConfiguration dataSetFilterConfig) throws InvalidSettingsException {
@@ -208,6 +239,7 @@ public class HDF5ReaderNodeModel extends NodeModel {
 		}
 		
 		try {
+			// check for unequal row sizes if the row sizes may not differ
 			if (failIfRowSizeDiffersSettings.getBooleanValue()) {
 				String[] dataSetPaths = dataSetFilterConfig.applyTo(file.createSpecOfDataSets()).getIncludes();
 				Map<Long, List<String>> rowSizes = new TreeMap<>();
@@ -241,11 +273,19 @@ public class HDF5ReaderNodeModel extends NodeModel {
 			try {
 				file.close();
 			} catch (IOException ioe) {
-				NodeLogger.getLogger("HDF5 Files").error(ioe.getMessage(), ioe);
+				NodeLogger.getLogger(HDF5ReaderNodeModel.class).error(ioe.getMessage(), ioe);
 			}
 		}
 	}
 	
+	/**
+	 * Get the file path from the knime url path.
+	 * 
+	 * @param urlPath the url path
+	 * @param mustExist if the file on the url path must exist
+	 * @return the file path
+	 * @throws InvalidSettingsException if the file path is not valid
+	 */
 	static String getFilePathFromUrlPath(String urlPath, boolean mustExist) throws InvalidSettingsException {
 		if (urlPath.trim().isEmpty()) {
 			throw new InvalidSettingsException("No file selected");

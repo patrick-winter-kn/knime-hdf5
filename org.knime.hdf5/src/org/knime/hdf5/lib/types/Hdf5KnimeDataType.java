@@ -35,7 +35,7 @@ public enum Hdf5KnimeDataType {
 	 * Only dataSets can be converted to {@code LONG}.
 	 * 
 	 * @param type the hdf type
-	 * @param fromDS {@code true} if the {@linkplain HdfDataType} is from a dataSet
+	 * @param fromDS if the {@linkplain HdfDataType} is from a dataSet
 	 * @return the equivalent knime type
 	 */
 	public static Hdf5KnimeDataType getKnimeDataType(HdfDataType type, boolean fromDS) {

@@ -14,7 +14,6 @@ import org.knime.core.node.NodeDialogPane;
 import org.knime.core.node.NodeSettings;
 import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.NodeSettingsWO;
-import org.knime.core.node.NotConfigurableException;
 import org.knime.core.node.defaultnodesettings.DefaultNodeSettingsPane;
 import org.knime.core.node.defaultnodesettings.DialogComponentBoolean;
 import org.knime.core.node.defaultnodesettings.DialogComponentFileChooser;
@@ -25,6 +24,10 @@ import org.knime.core.node.util.filter.column.DataColumnSpecFilterConfiguration;
 import org.knime.core.node.util.filter.column.DataColumnSpecFilterPanel;
 import org.knime.hdf5.lib.Hdf5File;
 
+/**
+ * The {@link NodeDialogPane} for the hdf reader in order to
+ * import hdf files.
+ */
 class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 
 	private final DataColumnSpecFilterPanel m_dataSetFilterPanel;
@@ -35,18 +38,8 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 
 	private SettingsModelBoolean m_failIfRowSizeDiffersSettings;
 
-	/**
-	 * Creates a new {@link NodeDialogPane} for the column filter in order to
-	 * set the desired columns.
-	 */
 	public HDF5ReaderNodeDialog() {
 		createFileChooser();
-
-		m_dataSetFilterPanel = new DataColumnSpecFilterPanel();
-		addTab("Data Sets", m_dataSetFilterPanel);
-
-		m_attributeFilterPanel = new DataColumnSpecFilterPanel();
-		addTab("Attributes", m_attributeFilterPanel);
 
 		m_failIfRowSizeDiffersSettings = SettingsFactory.createFailIfRowSizeDiffersSettings();
 		DialogComponentBoolean failIfRowSizeDiffers = new DialogComponentBoolean(m_failIfRowSizeDiffersSettings,
@@ -54,6 +47,12 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		failIfRowSizeDiffers.getComponentPanel()
 				.setBorder(BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "Advanced settings:"));
 		addDialogComponent(failIfRowSizeDiffers);
+		
+		m_dataSetFilterPanel = new DataColumnSpecFilterPanel();
+		addTab("Data Sets", m_dataSetFilterPanel);
+
+		m_attributeFilterPanel = new DataColumnSpecFilterPanel();
+		addTab("Attributes", m_attributeFilterPanel);
 	}
 
 	private void createFileChooser() {
@@ -65,26 +64,33 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		DialogComponentLabel fileInfoLabel = new DialogComponentLabel("");
 		fileChooser.getModel().addChangeListener(new ChangeListener() {
 			
-			private boolean m_specEmpty = true;
+			/**
+			 * {@code true} if there are specs loaded at the moment
+			 */
+			private boolean m_specsExist = false;
 			
 			@Override
 			public void stateChanged(ChangeEvent e) {
-				boolean validFile = false;
+		    	String errorInfo = null;
+		    	
 				String urlPath = m_filePathSettings.getStringValue();
 				try {
 					String filePath = HDF5ReaderNodeModel.getFilePathFromUrlPath(urlPath, true);
 					if (Hdf5File.hasHdf5FileEnding(filePath)) {
-						validFile = true;
-						fileInfoLabel.setText("");
+						fileInfoLabel.setText("Info: File " + (Hdf5File.existsHdf5File(filePath) ? "exists" : "does not exist"));
 					} else {
-						fileInfoLabel.setText("Error: File ending is not valid");
+						errorInfo = "Error: File ending is not valid";
 					}
 				} catch (InvalidSettingsException ise) {
-					fileInfoLabel.setText("Error: " + ise.getMessage());
+					errorInfo = "Error: " + ise.getMessage();
 				}
 				
-				if (validFile || !m_specEmpty) {
-					m_specEmpty = updateConfigs(null);
+				if (errorInfo != null) {
+					fileInfoLabel.setText("<html><font color=\"red\">" + errorInfo + "</font></html>");
+				}
+				
+				if (errorInfo == null || m_specsExist) {
+					m_specsExist = updateConfigs(null);
 				}
 			}
 		});
@@ -96,9 +102,15 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 	}
 
 	private boolean updateConfigs(final NodeSettingsRO settings) {
-		return updateDataSetConfig(settings) & updateAttributeConfig(settings);
+		return updateDataSetConfig(settings) | updateAttributeConfig(settings);
 	}
 
+	/**
+	 * Updates the configuration for importing the hdf dataSets.
+	 * 
+	 * @param settings the node settings to read from
+	 * @return if the specs are not empty
+	 */
 	private boolean updateDataSetConfig(NodeSettingsRO settings) {
 		DataColumnSpecFilterConfiguration config = SettingsFactory.createDataSetFilterConfiguration();
 		if (settings == null) {
@@ -123,9 +135,15 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		config.loadConfigurationInDialog(settings, spec);
 		m_dataSetFilterPanel.loadConfiguration(config, spec);
 		
-		return spec.getNumColumns() == 0;
+		return spec.getNumColumns() != 0;
 	}
 
+	/**
+	 * Updates the configuration for importing the hdf attributes.
+	 * 
+	 * @param settings the node settings to read from
+	 * @return if the specs are not empty
+	 */
 	private boolean updateAttributeConfig(NodeSettingsRO settings) {
 		DataColumnSpecFilterConfiguration config = SettingsFactory.createAttributeFilterConfiguration();
 		if (settings == null) {
@@ -150,25 +168,23 @@ class HDF5ReaderNodeDialog extends DefaultNodeSettingsPane {
 		config.loadConfigurationInDialog(settings, spec);
 		m_attributeFilterPanel.loadConfiguration(config, spec);
 
-		return spec.getNumColumns() == 0;
+		return spec.getNumColumns() != 0;
 	}
 
 	/**
-	 * Calls the update method of the underlying filter panel.
+	 * Updates the dataSet and attribute configs.
 	 * 
-	 * @param settings
-	 *            the node settings to read from
-	 * @param specs
-	 *            the input specs
-	 * @throws NotConfigurableException
-	 *             if no columns are available for filtering
+	 * @param settings the node settings to read from
+	 * @param specs the input specs
 	 */
 	@Override
-	public void loadAdditionalSettingsFrom(final NodeSettingsRO settings, final DataTableSpec[] specs)
-			throws NotConfigurableException {
+	public void loadAdditionalSettingsFrom(final NodeSettingsRO settings, final DataTableSpec[] specs) {
 		updateConfigs(settings);
 	}
 
+	/**
+	 * Save the settings of the dataSet and attribute configs.
+	 */
 	@Override
 	public void saveAdditionalSettingsTo(final NodeSettingsWO settings) {
 		DataColumnSpecFilterConfiguration dataSetConfig = SettingsFactory.createDataSetFilterConfiguration();

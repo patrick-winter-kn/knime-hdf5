@@ -20,9 +20,11 @@ import hdf.hdf5lib.exceptions.HDF5Exception;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
 /**
- * Representer of an attribute for Hdf5 and the respective flow variable for KNIME.
+ * Representer of an attribute for HDF5 (accessed through {@code H5A} in the hdf api)
+ * and the respective flow variable for KNIME.
+ * <br>
  * The generic parameter, which can be {@code Integer}, {@code Double} or {@code String},
- * represents the type of the attribute.
+ * represents the type of the attribute in KNIME. 
  */
 public class Hdf5Attribute<Type> {
 
@@ -41,23 +43,28 @@ public class Hdf5Attribute<Type> {
 	private long m_dimension;
 	
 	private String m_pathFromFile = "";
-	
+
+	/**
+	 * Manages the access to the opening and closing process of this attribute
+	 * to guarantee that no thread closes an open attribute while another
+	 * thread is reading it.
+	 */
 	private final ReentrantReadWriteLock m_openLock = new ReentrantReadWriteLock(true);
 	
-	private Hdf5Attribute(final String name, final Hdf5DataType type) {
+	private Hdf5Attribute(String name, Hdf5DataType type) {
 		if (name == null) {
 			throw new IllegalArgumentException("name cannot be null");
 			
 		} else if (name.equals("")) {
-			throw new IllegalArgumentException("name cannot be the Empty String");
+			throw new IllegalArgumentException("name cannot be the empty String");
 		}
 		
 		m_name = name;
 		m_type = type;
 	}
 	
-	private static Hdf5Attribute<?> getInstance(final Hdf5TreeElement parent, final String name,
-			final Hdf5DataType type) throws IllegalStateException {
+	private static Hdf5Attribute<?> getInstance(Hdf5TreeElement parent, String name,
+			Hdf5DataType type) throws IllegalStateException {
 		if (parent == null) {
 			throw new IllegalArgumentException("Parent group of attribute \"" + name + "\" cannot be null");
 			
@@ -76,19 +83,25 @@ public class Hdf5Attribute<Type> {
 		case STRING:
 			return new Hdf5Attribute<String>(name, type);
 		default:
-			NodeLogger.getLogger("HDF5 Files").warn("Attribute \"" + name + "\" in \""
+			NodeLogger.getLogger(Hdf5Attribute.class).warn("Attribute \"" + name + "\" in \""
 					+ parent.getPathFromFileWithName() + "\" has an unknown dataType");
 			return null;
 		}
 	}
 	
-	static Hdf5Attribute<?> createAttribute(final Hdf5TreeElement parent, final String name,
-			final long dimension, final Hdf5DataType type) throws IOException {
+	static Hdf5Attribute<?> createAttribute(Hdf5TreeElement parent, String name,
+			long dimension, Hdf5DataType type) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
 		try {
 			attribute = getInstance(parent, name, type);
-			attribute.createDimension(dimension);
+			attribute.createDataspace(dimension);
+
+			/*
+			 * parent.lockReadOpen() is not needed here because write access
+			 * for the whole file is already needed for creating the attribute,
+			 * so no other readers or writers can access parent anyway
+			 */
         	attribute.setAttributeId(H5.H5Acreate(parent.getElementId(), attribute.getName(),
         			attribute.getType().getConstants()[0], attribute.getDataspaceId(),
                     HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT));
@@ -104,7 +117,7 @@ public class Hdf5Attribute<Type> {
 		return attribute;
 	}
 	
-	static Hdf5Attribute<?> openAttribute(final Hdf5TreeElement parent, final String name) throws IOException {
+	static Hdf5Attribute<?> openAttribute(Hdf5TreeElement parent, String name) throws IOException {
 		Hdf5Attribute<?> attribute = null;
 		
 		try {
@@ -123,6 +136,13 @@ public class Hdf5Attribute<Type> {
 		return attribute;
 	}
 
+	/**
+	 * Returns the value of the flow variable or the array that is represented
+	 * by the String flow variable with the structure '[0, 1, ..., n] (knime data type)'
+	 * 
+	 * @param flowVariable the flow variable
+	 * @return the values of the flow variable
+	 */
 	public static Object[] getFlowVariableValues(FlowVariable flowVariable) {
 		switch (flowVariable.getType()) {
 		case INTEGER:
@@ -134,6 +154,7 @@ public class Hdf5Attribute<Type> {
 		default:
 			String attr = flowVariable.getValueAsString().trim();
 			try {
+				// check if the flow variable represents an array
 				if (attr.matches("\\[.*\\] \\(.*\\) *")) {
 					String[] parts = attr.split("\\] \\(");
 					if (parts.length == 2) {
@@ -171,6 +192,15 @@ public class Hdf5Attribute<Type> {
 		}
 	}
 	
+	/**
+	 * Updates the data type of this attribute.
+	 * 
+	 * @throws UnsupportedDataTypeException if the data type is unsupported now
+	 * @throws IOException if this attribute does not exist or an internal error
+	 * 	occurred
+	 * @see Hdf5TreeElement#findAttributeType(String)
+	 * @see Hdf5Attribute#loadDataspace()
+	 */
 	void updateAttribute() throws UnsupportedDataTypeException, IOException {
 		m_type = m_parent.findAttributeType(m_name);
 	}
@@ -183,11 +213,6 @@ public class Hdf5Attribute<Type> {
 		m_attributeId = attributeId;
 	}
 	
-	/**
-	 * Returns the name of this attribute.
-	 * 
-	 * @return the name of this attribute
-	 */
 	public String getName() {
 		return m_name;
 	}
@@ -201,19 +226,12 @@ public class Hdf5Attribute<Type> {
 	}
 	
 	/**
-	 * Returns the data array as value of this attribute.
-	 * 
-	 * @return the value of this attribute
+	 * @return the data array (value) of this attribute
 	 */
 	public Type[] getValue() {
 		return m_value;
 	}
 	
-	/**
-	 * Returns the dataType of this attribute.
-	 * 
-	 * @return the dataType of this attribute
-	 */
 	public Hdf5DataType getType() {
 		return m_type;
 	}
@@ -223,9 +241,7 @@ public class Hdf5Attribute<Type> {
 	}
 
 	/**
-	 * Returns the length of the value of this attribute.
-	 * 
-	 * @return the dimension of this attribute
+	 * @return the length of the value of this attribute
 	 */
 	public long getDimension() {
 		return m_dimension;
@@ -234,11 +250,9 @@ public class Hdf5Attribute<Type> {
 	public boolean isOpen() {
 		return m_attributeId >= 0;
 	}
-	
+
 	/**
-	 * Returns the path considering the file containing this attribute as root directory.
-	 * 
-	 * @return the path from the file containing this attribute
+	 * @return the path using the hdf file as root directory and '/' as separator
 	 */
 	public String getPathFromFile() {
 		return m_pathFromFile;
@@ -249,26 +263,34 @@ public class Hdf5Attribute<Type> {
 	}
 	
 	/**
-	 * Returns the path from the file containing this attribute concatenated with the name of
-	 * this attribute.
-	 * 
-	 * @return the path from the file containing this attribute with with the name of this
-	 * 			attribute
+	 * @return the concatenation of the path from file with the name of this
+	 * 	attribute (does not change the '/' in the name)
 	 */
 	public String getPathFromFileWithName() {
 		return getPathFromFile() + getName();
 	}
-	
+
+	/**
+	 * @return if this attribute exists in the hdf file
+	 * @throws IOException if an error occurred in the hdf library while
+	 * 	checking the existence
+	 */
 	public boolean exists() throws IOException {
 		return m_parent != null && m_parent.existsAttribute(m_name);
 	}
-	
+
+	/**
+	 * @throws IOException if this attribute does not exist
+	 */
 	private void checkExists() throws IOException {
     	if (!exists()) {
 			throw new IOException("Attribute does not exist");
 		}
 	}
-	
+
+	/**
+	 * @throws IOException if this attribute is not open
+	 */
 	private void checkOpen() throws IOException {
 		checkExists();
     	if (!isOpen()) {
@@ -276,50 +298,56 @@ public class Hdf5Attribute<Type> {
 		}
 	}
 	
+	/**
+	 * Acquires the lock such that no other thread can see/edit if this attribute is
+	 * open.
+	 */
 	private void lockWriteOpen() {
 		m_openLock.writeLock().lock();
 	}
-	
+
+	/**
+	 * @see #lockWriteOpen()
+	 */
 	private void unlockWriteOpen() {
 		m_openLock.writeLock().unlock();
 	}
 
+	/**
+	 * Acquires the lock such that no other thread can edit if this attribute is
+	 * open.
+	 */
 	private void lockReadOpen() {
 		m_openLock.readLock().lock();
 	}
-	
+
+	/**
+	 * @see #lockReadOpen()
+	 */
 	private void unlockReadOpen() {
 		m_openLock.readLock().unlock();
 	}
-	
-	/* TODO maybe find a way to use a construction like this:
-	private void useOpenLock() {
-		try {
-			lockOpen();
-			
-			someMethod();
-		
-		} finally {
-			unlockOpen();
-		}
-	}
-	*/
 
+	/**
+	 * @param prefix the prefix for the name like "temp_"
+	 * @return the instance for the newly created copy of this attribute
+	 * 	in the hdf file
+	 * @throws IOException if an error occurred in the hdf library while creating
+	 */
 	public Hdf5Attribute<?> createBackup(String prefix) throws IOException {
 		return m_parent.copyAttribute(this, Hdf5TreeElement.getUniqueName(Arrays.asList(m_parent.loadAttributeNames()), prefix + m_name));
 	}
 	
 	/**
-	 * Writes {@code value} in this attribute in Hdf5 and saves it as the new value of this
-	 * attribute which can be retrieved with {@code getValue()}
+	 * Writes the knime data to this attribute using the rounding if there is a cast
+	 * from float to int when converting from knime to hdf.
 	 * 
-	 * @param value the new data array which should be written
-	 * @return {@code true} if writing was successful,
-	 * 			{@code false} otherwise
-	 * @throws IOException 
+	 * @param dataIn the new data that should be written to this attribute
+	 * @return if the knime data was successfully written
+	 * @throws IOException if an error occurred in the hdf library
 	 */
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public boolean write(final Type[] dataIn, Rounding rounding) throws IOException {
+	public boolean write(Type[] dataIn, Rounding rounding) throws IOException {
 		Object[] dataWrite = Arrays.copyOf(dataIn, dataIn.length);
 		
 		if (!m_type.isHdfType(HdfDataType.STRING) && !m_type.hdfTypeEqualsKnimeType()) {
@@ -336,7 +364,7 @@ public class Hdf5Attribute<Type> {
 		return writeHdf(dataWrite);
 	}
 	
-	public boolean writeHdf(final Object[] dataWrite) throws IOException {
+	private boolean writeHdf(Object[] dataWrite) throws IOException {
         try {
         	lockReadOpen();
         	checkOpen();
@@ -375,6 +403,16 @@ public class Hdf5Attribute<Type> {
 		}
 	}
 	
+	/**
+	 * Copies the values from {@code attribute} to this attribute using the
+	 * rounding if there is a cast from float to int.
+	 * 
+	 * @param attribute the attribute to be read
+	 * @param rounding the rounding for a cast from float to int
+	 * @return if the data was successfully written
+	 * @throws HDF5DataspaceInterfaceException if the size of
+	 * @throws IOException
+	 */
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public boolean copyValuesFrom(Hdf5Attribute<?> attribute, Rounding rounding) throws HDF5DataspaceInterfaceException, IOException {
 		try {
@@ -415,15 +453,35 @@ public class Hdf5Attribute<Type> {
 					+ attribute.getPathFromFileWithName() + "\": " + hionpe.getMessage(), hionpe);
 	    }
 	}
-	
+
+	/**
+	 * Sets the data of this attribute back to the standard value which is 0
+	 * for numbers and the empty String for Strings.
+	 * 
+	 * @return if the data was successfully reset
+	 * @throws IOException if an error occurred in the hdf library while writing
+	 */
 	@SuppressWarnings("unchecked")
 	public boolean clearData() throws IOException {
-		Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) m_dimension);
-		Arrays.fill(dataIn, (Type) m_type.getKnimeType().getStandardValue());
-		return write(dataIn, Rounding.DOWN);
+		boolean success = false;
+		try {
+			success = true;
+			Type[] dataIn = (Type[]) m_type.getKnimeType().createArray((int) m_dimension);
+			Arrays.fill(dataIn, (Type) m_type.getKnimeType().getStandardValue());
+			return write(dataIn, Rounding.DOWN);
+
+		} catch (UnsupportedDataTypeException udte) {
+			NodeLogger.getLogger(getClass()).error(udte.getMessage(), udte);
+		}
+		
+		return success;
 	}
 	
-	public long getStringLength() throws IOException {
+	/**
+	 * @return the max string length of the values of this attribute
+	 * @throws IOException if the values could not be read
+	 */
+	public long getMaxStringLengthOfValues() throws IOException {
 		long maxStringLength = 0L;
 		
 		if (m_type.isHdfType(HdfDataType.STRING) && !m_type.isVlen()) {
@@ -446,6 +504,14 @@ public class Hdf5Attribute<Type> {
 	 * @return the read value of this attribute
 	 * @throws IOException 
 	 */
+
+	/**
+	 * Reads the data of this attribute.
+	 * Returns the knime data after converting from hdf to knime.
+	 * 
+	 * @return the knime output data
+	 * @throws IOException if an error occurred in the hdf library
+	 */
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public Type[] read() throws IOException {
 		Type[] dataOut = null;
@@ -467,7 +533,7 @@ public class Hdf5Attribute<Type> {
 		return dataOut;
 	}
 	
-	public Object[] readHdf() throws IOException {
+	private Object[] readHdf() throws IOException {
 		try {
 			lockReadOpen();
         	checkOpen();
@@ -513,6 +579,10 @@ public class Hdf5Attribute<Type> {
 		}
 	}
 	
+	/**
+	 * @throws HDF5DataspaceInterfaceException if the length of the dimension of
+	 * 	this attribute overflows the Integer values
+	 */
 	private void checkDimension() throws HDF5DataspaceInterfaceException {
 		long numberOfValues = m_dimension;
 		
@@ -527,11 +597,11 @@ public class Hdf5Attribute<Type> {
 	}
 	
 	/**
-	 * Opens this attribute. Does nothing if it is already open. If the parent is not open, the
-	 * parent will also be opened so that the attribute can be opened too. Also opens the dataSpace
-	 * of this attribute to load the dimension of this attribute.
+	 * Opens this attribute and all of its ancestors (if necessary).
+	 * Does nothing if it is already open.
 	 * 
-	 * @return {@code true} if this attribute is open
+	 * @return if this attribute is open
+	 * @throws IOException if an error occurred in the hdf library
 	 */
 	public boolean open() throws IOException, IllegalStateException {
 		try {
@@ -547,7 +617,7 @@ public class Hdf5Attribute<Type> {
 				m_attributeId = H5.H5Aopen(getParent().getElementId(), getName(),
 						HDF5Constants.H5P_DEFAULT);
 				
-		    	loadDimension();
+		    	loadDataspace();
 			}
 	    	
 			return true;
@@ -560,11 +630,17 @@ public class Hdf5Attribute<Type> {
         	unlockWriteOpen();
         }
 	}
-	
-	private void createDimension(long dimension) throws IOException {
+
+	/**
+	 * Creates the data space with the size of {@code dimension} for this attribute.
+	 * 
+	 * @param dimension the dimension for this attribute
+	 * @throws IOException if an error occurred in the hdf library
+	 */
+	private void createDataspace(long dimension) throws IOException {
 		m_dimension = dimension;
 		
-    	// Create the dataSpace for the dataSet.
+    	// Create the dataSpace for this attribute.
         try {
         	long[] dims = { m_dimension };
         	m_dataspaceId = dimension == 1 ? H5.H5Screate(HDF5Constants.H5S_SCALAR) : H5.H5Screate_simple(1, dims, null);
@@ -574,9 +650,13 @@ public class Hdf5Attribute<Type> {
 					+ getPathFromFileWithName() + "\" could not be created", hnpe);
         }
 	}
-	
-	private void loadDimension() throws IOException, IllegalStateException {
-		// Get dataSpace and allocate memory for read buffer.
+
+	/**
+	 * Loads the data space and updates the dimension.
+	 * 
+	 * @throws IOException if an error occurred in the hdf library
+	 */
+	private void loadDataspace() throws IOException, IllegalStateException {
 		try {
 			m_dataspaceId = H5.H5Aget_space(m_attributeId);
 			
@@ -600,19 +680,12 @@ public class Hdf5Attribute<Type> {
 	}
 	
 	/**
-	 * Closes this attribute. Does nothing if it is already closed. The dataSpace of this attribute
-	 * will also be closed.
+	 * Closes this attribute. Does nothing if it is already closed.
 	 * 
-	 * @return {@code true} if this attribute is closed
-	 * @throws IOException 
+	 * @return if this attribute is closed
+	 * @throws IOException if an error occurred in the hdf library
 	 */
 	public boolean close() throws IOException {
-		/* TODO at the site
-		 * https://support.hdfgroup.org/ftp/HDF5/hdf-java/hdf-java-examples/jnative/h5/
-		 * HDF5AttributeCreate.java
-		 * this (Close the attribute.) is missing after the data was read
-		 * 
-		 */
         try {
         	lockWriteOpen();
         	checkExists();
@@ -644,8 +717,8 @@ public class Hdf5Attribute<Type> {
 	
 	@Override
 	public String toString() {
-		return "{ name=" + m_name + ",pathFromFile=" + m_pathFromFile + ",id=" + m_attributeId
-				+ ", dataspaceId=" + m_dataspaceId + ", dimension=" + m_dimension + ", type=" + m_type
-				+ (m_value != null ? ", value=" + m_value : "") + " }";
+		return "{ name=" + m_name + ",pathFromFile=" + m_pathFromFile + ",open=" + isOpen()
+				+ ",dimension=" + m_dimension + ",type=" + m_type
+				+ (m_value != null ? ",value=" + m_value : "") + " }";
 	}
 }

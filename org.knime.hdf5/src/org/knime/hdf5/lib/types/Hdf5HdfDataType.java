@@ -101,7 +101,7 @@ public class Hdf5HdfDataType {
 		 * data type fits.
 		 * 
 		 * @param values an array of objects
-		 * @param unsigned {@code true} if the data type is unsigned
+		 * @param unsigned if the data type is unsigned
 		 * @return the equivalent hdf type
 		 */
 		public static HdfDataType getHdfDataType(Object[] values, boolean unsigned) {
@@ -185,7 +185,7 @@ public class Hdf5HdfDataType {
 		}
 		
 		/**
-		 * @return {@code true} if the min-max-range of this hdf type fits
+		 * @return if the min-max-range of this hdf type fits
 		 * 	into the min-max-range of the input type
 		 */
 		public boolean fitMinMaxValuesIntoType(HdfDataType type) {
@@ -316,7 +316,7 @@ public class Hdf5HdfDataType {
 		}
 		
 		/**
-		 * Returns {@code true} if the input values can be converted to this hdf
+		 * Returns if the input values can be converted to this hdf
 		 * type (output type). If this hdf type is {@code STRING}, the input
 		 * editDataType is used to check the string length or set the string
 		 * length if the string length is not fixed.
@@ -324,7 +324,7 @@ public class Hdf5HdfDataType {
 		 * @param values the input values
 		 * @param inputType the input hdf type
 		 * @param editDataType more information for the output data type
-		 * @return {@code true} if the input values can be converted to this hdf
+		 * @return if the input values can be converted to this hdf
 		 * 	type
 		 */
 		public boolean areValuesConvertible(Object[] values, HdfDataType inputType, EditDataType editDataType) {
@@ -391,7 +391,7 @@ public class Hdf5HdfDataType {
 	
 	private long m_stringLength;
 	
-	private Hdf5HdfDataType(final HdfDataType type, final Endian endian) {
+	private Hdf5HdfDataType(HdfDataType type, Endian endian) {
 		m_type = type;
 		m_endian = endian;
 		
@@ -456,7 +456,7 @@ public class Hdf5HdfDataType {
 	 * @param endian the endian
 	 * @return the hdf data type with more information
 	 */
-	public static synchronized Hdf5HdfDataType getInstance(final HdfDataType type, final Endian endian) {
+	public static synchronized Hdf5HdfDataType getInstance(HdfDataType type, Endian endian) {
 		if (type != HdfDataType.STRING) {
 			Map<HdfDataType, Hdf5HdfDataType> types = endian == Endian.LITTLE_ENDIAN ? LITTLE_ENDIAN_TYPES : BIG_ENDIAN_TYPES;
 			if (types.containsKey(type)) {
@@ -485,9 +485,9 @@ public class Hdf5HdfDataType {
 	 * 
 	 * @param stringLength the String length for which the String data type
 	 * 	is created for
-	 * @throws IOException if an internal error occurred while creating
+	 * @throws IOException if an error occurred in the hdf library while creating
 	 */
-	void createHdfDataTypeString(final long stringLength) throws IOException {
+	void createHdfDataTypeString(long stringLength) throws IOException {
 		if (m_type == HdfDataType.STRING) {
 			try {
 				// Create file and memory dataTypes. For this example we will save
@@ -517,9 +517,9 @@ public class Hdf5HdfDataType {
 	 * cases, it does nothing.
 	 * 
 	 * @param elementId the id of the hdf object of this String data type
-	 * @throws IOException if an internal error occurred while opening
+	 * @throws IOException if an error occurred in the hdf library while opening
 	 */
-	void openHdfDataTypeString(final long elementId) throws IOException {
+	void openHdfDataTypeString(long elementId) throws IOException {
 		if (m_type == HdfDataType.STRING) {
 			try {
 				long fileTypeId = H5.H5Iget_type(elementId) == HDF5Constants.H5I_DATASET ? H5.H5Dget_type(elementId) : H5.H5Aget_type(elementId);
@@ -568,7 +568,7 @@ public class Hdf5HdfDataType {
 	
 	/**
 	 * @param hdfType the hdf type to compare
-	 * @return {@code true} if type, endian and stringLength are equal, <br>
+	 * @return if type, endian and stringLength are equal, <br>
 	 * 	i.e. {@code toString().equals(hdfType.toString())}
 	 */
 	public boolean isSimilarTo(Hdf5HdfDataType hdfType) {

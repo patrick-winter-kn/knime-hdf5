@@ -11,6 +11,9 @@ import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.nodes.writer.edit.EditOverwritePolicy;
 import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 
+/**
+ * The configuration how to modify/create an hdf file.
+ */
 public class EditTreeConfiguration {
 	
 	private final String m_configRootName;
@@ -21,14 +24,27 @@ public class EditTreeConfiguration {
 		m_configRootName = configRootName;
 	}
 
+	/**
+	 * @return the root file edit
+	 */
 	public FileNodeEdit getFileNodeEdit() {
 		return m_fileEdit;
 	}
 
-	public void setFileNodeEdit(FileNodeEdit fileEdit) {
+	/**
+	 * Sets the root of this config to the new file edit.
+	 * 
+	 * @param fileEdit the new file edit
+	 */
+	void setFileNodeEdit(FileNodeEdit fileEdit) {
 		m_fileEdit = fileEdit;
 	}
 
+	/**
+	 * Checks this configuration for errors.
+	 * 
+	 * @throws InvalidSettingsException if an error occurs
+	 */
 	void checkConfiguration() throws InvalidSettingsException {
 		EditTreeConfiguration checkConfig = new EditTreeConfiguration(m_configRootName + "_check");
 		
@@ -41,6 +57,11 @@ public class EditTreeConfiguration {
 		}
 	}
 	
+	/**
+	 * Save the settings of this configuration.
+	 * 
+	 * @param settings the settings where this configuration is saved
+	 */
 	void saveConfiguration(NodeSettingsWO settings) {
         if (m_fileEdit != null) {
             NodeSettingsWO fileSettings = settings.addNodeSettings(m_configRootName + "_File");
@@ -48,6 +69,14 @@ public class EditTreeConfiguration {
         }
 	}
 	
+	/**
+	 * Loads this configuration from the settings.
+	 * 
+	 * @param settings the settings to be loaded
+	 * @param oldFilePath
+	 * @param policy
+	 * @throws InvalidSettingsException if the settings of the fileEdit are invalid
+	 */
 	void loadConfiguration(final NodeSettingsRO settings, final String oldFilePath, final EditOverwritePolicy policy) throws InvalidSettingsException {
 		FileNodeEdit oldFileEdit = m_fileEdit;
 		m_fileEdit = null;
@@ -58,8 +87,8 @@ public class EditTreeConfiguration {
         } else {
         	filePath = oldFilePath;
         }
+        
         // if filePath is still null, use filePath from settings
-		
 		if (settings.containsKey(m_configRootName + "_File")) {
 	        NodeSettingsRO fileSettings = settings.getNodeSettings(m_configRootName + "_File");
 	        m_fileEdit = FileNodeEdit.useFileSettings(fileSettings, filePath, policy);

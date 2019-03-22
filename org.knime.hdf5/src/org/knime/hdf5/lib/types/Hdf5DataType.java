@@ -151,14 +151,14 @@ public class Hdf5DataType {
 	}
 	
 	/**
-	 * @return {@code true} if the data type has variable length
+	 * @return if the data type has variable length
 	 */
 	public boolean isVlen() {
 		return m_vlen;
 	}
 
 	/**
-	 * @return {@code true} if the data type belongs to a dataSet
+	 * @return if the data type belongs to a dataSet
 	 */
 	private boolean isFromDS() {
 		return m_fromDS;
@@ -181,7 +181,7 @@ public class Hdf5DataType {
 	
 	/**
 	 * @param dataType the data type to compare
-	 * @return {@code true} if their knime types, isVlen() and isFromDS() are equal
+	 * @return if their knime types, isVlen() and isFromDS() are equal
 	 * 	and their hdf types are similar, <br>
 	 * 	i.e. {@code toString().equals(dataType.toString())}
 	 * @see Hdf5HdfDataType#isSimilarTo(Hdf5HdfDataType)
@@ -191,7 +191,7 @@ public class Hdf5DataType {
 	}
 	
 	/**
-	 * @return {@code true} if the type does not change if it gets converted from hdf to knime
+	 * @return if the type does not change if it gets converted from hdf to knime
 	 */
 	public boolean hdfTypeEqualsKnimeType() {
 		return m_hdfType.getType() == m_knimeType.getEquivalentHdfType();
