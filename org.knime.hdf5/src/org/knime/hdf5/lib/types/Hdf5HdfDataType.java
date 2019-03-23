@@ -168,12 +168,20 @@ public class Hdf5HdfDataType {
 		public boolean isUnsigned() {
 			return m_typeId % 10 == 1;
 		}
-		
+
 		/**
 		 * @return the signed data type for this hdf type
 		 */
 		public HdfDataType getSignedType() {
 			return isUnsigned() ? get(m_typeId - 1) : this;
+		}
+		
+		/**
+		 * @return the unsigned data type for this hdf type or {@code null}
+		 * 	if it does not exist
+		 */
+		public HdfDataType getUnsignedType() {
+			return isUnsigned() ? this : get(m_typeId + 1);
 		}
 		
 		public boolean isNumber() {
@@ -343,7 +351,7 @@ public class Hdf5HdfDataType {
 					}
 				}
 			} else if (editDataType != null) {
-				if (editDataType.isFixed()) {
+				if (editDataType.isFixedStringLength()) {
 					// check if no value exceeds the fixed string length 
 					int stringLength = editDataType.getStringLength();
 					for (Object value : values) {

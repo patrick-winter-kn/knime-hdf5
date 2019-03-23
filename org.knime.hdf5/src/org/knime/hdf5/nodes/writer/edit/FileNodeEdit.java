@@ -35,7 +35,7 @@ import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
 
 /**
  * Class for edits on files in an hdf file. The respective hdf
- * source is a {@linkplain Hdf5File}.
+ * source is an {@linkplain Hdf5File}.
  */
 public class FileNodeEdit extends GroupNodeEdit {
 
@@ -781,8 +781,8 @@ public class FileNodeEdit extends GroupNodeEdit {
 	
 	@Override
 	public String toString() {
-		return "{ filePath=" + getFilePath() + ",file=" + getHdfObject() + ",backup=" + getHdfBackup()
+		return "{ filePath=" + getFilePath() + ",action=" + getEditAction() + ",state=" + getEditState()
 				+ ",overwrite=" + getEditOverwritePolicy() + ",valid=" + isValid()
-				+ ",action=" + getEditAction() + ",state=" + getEditState() + " }";
+				+ ",file=" + getHdfObject() + ",backup=" + getHdfBackup() + " }";
 	}
 }

@@ -5,10 +5,9 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import javax.swing.ButtonGroup;
 import javax.swing.DefaultComboBoxModel;
@@ -36,14 +35,6 @@ import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.SettingsKey;
  */
 public class EditDataType {
 
-	private static enum Sign {
-		SIGNED, UNSIGNED;
-		
-		private int value() {
-			return ordinal() + 1;
-		}
-	}
-	
 	/**
 	 * Defines the rounding mode from FLOAT64/double to INT64/long.
 	 */
@@ -68,13 +59,19 @@ public class EditDataType {
 	
 	private HdfDataType m_outputType;
 	
-	private Map<HdfDataType, Integer> m_possibleHdfTypes = new LinkedHashMap<>();
+	private final List<HdfDataType> m_possibleOutputTypes = new ArrayList<>();
 
 	private Endian m_endian = Endian.LITTLE_ENDIAN;
 	
 	private Rounding m_rounding = Rounding.DOWN;
+
+	/**
+	 * Stores if the rounding is possible based on the input type
+	 * (which should be float for that).
+	 */
+	private boolean m_roundingPossible;
 	
-	private boolean m_fixed;
+	private boolean m_fixedStringLength;
 	
 	private int m_stringLength;
 	
@@ -89,6 +86,13 @@ public class EditDataType {
 
 	void setOutputType(HdfDataType outputType) {
 		m_outputType = outputType;
+	}
+
+	/**
+	 * @return the data types that are possible as output data type
+	 */
+	HdfDataType[] getPossibleOutputTypes() {
+		return m_possibleOutputTypes.toArray(new HdfDataType[m_possibleOutputTypes.size()]);
 	}
 
 	public Endian getEndian() {
@@ -106,20 +110,12 @@ public class EditDataType {
 		return m_rounding;
 	}
 
-	private void setRounding(Rounding rounding) {
-		m_rounding = rounding;
-	}
-
 	/**
 	 * @return if the string length is fixed or is set automatically when
 	 * 	checking the string length
 	 */
-	public boolean isFixed() {
-		return m_fixed;
-	}
-
-	private void setFixed(boolean fixed) {
-		m_fixed = fixed;
+	public boolean isFixedStringLength() {
+		return m_fixedStringLength;
 	}
 
 	public int getStringLength() {
@@ -137,43 +133,66 @@ public class EditDataType {
 	public Object getStandardValue() {
 		return m_standardValue;
 	}
+
+	void setValues(EditDataType editDataType) {
+		setValues(editDataType.getOutputType(), editDataType.m_possibleOutputTypes, editDataType.getEndian(), editDataType.getRounding(),
+				editDataType.m_roundingPossible, editDataType.isFixedStringLength(), editDataType.getStringLength(), editDataType.getStandardValue());
+	}
 	
-	private void setStandardValue(Object standardValue) {
+	void setValues(HdfDataType outputType, List<HdfDataType> possibleOutputTypes, Endian endian, Rounding rounding,
+			boolean roundingPossible, boolean fixedStringLength, int stringLength) {
+		setValues(outputType, possibleOutputTypes, endian, rounding, roundingPossible, fixedStringLength, stringLength, m_standardValue);
+	}
+	
+	private void setValues(HdfDataType outputType, List<HdfDataType> possibleOutputTypes, Endian endian, Rounding rounding,
+			boolean roundingPossible, boolean fixedStringLength, int stringLength, Object standardValue) {
+		setValues(outputType, endian, rounding, fixedStringLength, stringLength);
+		m_possibleOutputTypes.clear();
+		m_possibleOutputTypes.addAll(possibleOutputTypes);
+		Collections.sort(m_possibleOutputTypes);
+		m_roundingPossible = roundingPossible;
 		m_standardValue = standardValue;
 	}
 
-	void setValues(EditDataType editDataType) {
-		setValues(editDataType.getOutputType(), editDataType.getEndian(), editDataType.getRounding(),
-				editDataType.isFixed(), editDataType.getStringLength(), editDataType.getStandardValue());
-	}
-	
-	void setValues(HdfDataType outputType, Endian endian, Rounding rounding, boolean fixed, int stringLength) {
-		setValues(outputType, endian, rounding, fixed, stringLength, m_standardValue);
-	}
-	
-	private void setValues(HdfDataType outputType, Endian endian, Rounding rounding, boolean fixed, int stringLength, Object standardValue) {
+	private void setValues(HdfDataType outputType, Endian endian, Rounding rounding, boolean fixedStringLength,
+			int stringLength) {
 		setOutputType(outputType);
 		setEndian(endian);
-		setRounding(rounding);
-		setFixed(fixed);
+		m_rounding = rounding;
+		m_fixedStringLength = fixedStringLength;
 		setStringLength(stringLength);
-		setStandardValue(standardValue);
 	}
 	
 	void saveSettingsTo(NodeSettingsWO settings) {
 		settings.addInt(SettingsKey.OUTPUT_TYPE.getKey(), m_outputType.getTypeId());
+		
+		int[] typeIds = new int[m_possibleOutputTypes.size()];
+		for (int i = 0; i < typeIds.length; i++) {
+			typeIds[i] = m_possibleOutputTypes.get(i).getTypeId();
+		}
+		settings.addIntArray(SettingsKey.POSSIBLE_OUTPUT_TYPES.getKey(), typeIds);
+		
 		settings.addBoolean(SettingsKey.LITTLE_ENDIAN.getKey(), m_endian == Endian.LITTLE_ENDIAN);
 		settings.addInt(SettingsKey.ROUNDING.getKey(), m_rounding.ordinal());
-		settings.addBoolean(SettingsKey.FIXED.getKey(), m_fixed);
+		settings.addBoolean(SettingsKey.ROUNDING_POSSIBLE.getKey(), m_roundingPossible);
+		settings.addBoolean(SettingsKey.FIXED_STRING_LENGTH.getKey(), m_fixedStringLength);
 		settings.addInt(SettingsKey.STRING_LENGTH.getKey(), m_stringLength);
 		settings.addString(SettingsKey.STANDARD_VALUE.getKey(), m_standardValue != null ? m_standardValue.toString() : null);
 	}
 
 	void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException {
 		setOutputType(HdfDataType.get(settings.getInt(SettingsKey.OUTPUT_TYPE.getKey())));
+
+		m_possibleOutputTypes.clear();
+		int[] typeIds = settings.getIntArray(SettingsKey.POSSIBLE_OUTPUT_TYPES.getKey(), new int[0]);
+		for (int typeId : typeIds) {
+			m_possibleOutputTypes.add(HdfDataType.get(typeId));
+		}
+		
 		setEndian(settings.getBoolean(SettingsKey.LITTLE_ENDIAN.getKey()) ? Endian.LITTLE_ENDIAN : Endian.BIG_ENDIAN);
-		setRounding(Rounding.values()[settings.getInt(SettingsKey.ROUNDING.getKey())]);
-		setFixed(settings.getBoolean(SettingsKey.FIXED.getKey()));
+		m_rounding = Rounding.values()[settings.getInt(SettingsKey.ROUNDING.getKey())];
+		m_roundingPossible = settings.getBoolean(SettingsKey.ROUNDING_POSSIBLE.getKey(), true);
+		m_fixedStringLength = settings.getBoolean(SettingsKey.FIXED_STRING_LENGTH.getKey(), false);
 		setStringLength(settings.getInt(SettingsKey.STRING_LENGTH.getKey()));
 		
 		String standardValueString = settings.getString(SettingsKey.STANDARD_VALUE.getKey());
@@ -189,7 +208,7 @@ public class EditDataType {
 				standardValue = Integer.parseInt(standardValueString);
 			}
 		}
-		setStandardValue(standardValue);
+		m_standardValue = standardValue;
 	}
 	
 	/**
@@ -212,9 +231,11 @@ public class EditDataType {
 		private JSpinner m_standardValueFloatSpinner = new JSpinner(new SpinnerNumberModel(0.0, null, null, 0.1));
 		private JTextField m_standardValueStringTextField = new JTextField(15);
 		
-		private boolean m_roundingEnabled;
 		private final boolean m_standardValueEnabled;
 		
+		/**
+		 * @param standardValueEnabled if standard values for missing values are allowed
+		 */
 		protected DataTypeChooser(boolean standardValueEnabled) {
 			// define the field for the data type
 			m_typeField.addActionListener(new ActionListener() {
@@ -263,17 +284,17 @@ public class EditDataType {
 		}
 		
 		/**
-		 * Enables all selectable fields.
+		 * Enables all selectable fields in the dialog.
 		 */
 		private void setSelectableFieldsEnabled() {
 			HdfDataType selectedType = (HdfDataType) m_typeField.getSelectedItem();
+
+			boolean signedSelectable = m_possibleOutputTypes.contains(selectedType.getSignedType());
+			boolean unsignedSelectable = m_possibleOutputTypes.contains(selectedType.getUnsignedType());
+			m_unsignedField.setEnabled(signedSelectable && unsignedSelectable);
+			m_unsignedField.setSelected(!signedSelectable && unsignedSelectable);
 			
-			int possibleSigns = m_possibleHdfTypes.get(selectedType.getSignedType());
-			m_unsignedField.setEnabled(possibleSigns == Sign.UNSIGNED.value() + Sign.SIGNED.value());
-			if (possibleSigns != Sign.UNSIGNED.value() + Sign.SIGNED.value()) {
-				m_unsignedField.setSelected(possibleSigns == Sign.UNSIGNED.value());
-			}
-			m_roundingField.setEnabled(m_roundingEnabled && selectedType.isNumber() && !selectedType.isFloat());
+			m_roundingField.setEnabled(m_roundingPossible && selectedType.isNumber() && !selectedType.isFloat());
 
 			boolean isString = selectedType == HdfDataType.STRING;
 			m_endianField.setEnabled(!isString);
@@ -344,29 +365,24 @@ public class EditDataType {
 		}
 		
 		/**
-		 * Updates the fields with the loaded values of this editDataType
-		 * with more information
-		 * 
-		 * @param possibleHdfTypes what hdf types are possible as output
-		 * @param roundingEnabled if the rounding is enabled
+		 * Updates the fields with the loaded values of this editDataType.
 		 */
-		void loadFromDataType(List<HdfDataType> possibleHdfTypes, boolean roundingEnabled) {
-			m_possibleHdfTypes.clear();
-			Collections.sort(possibleHdfTypes);
-			for (HdfDataType type : possibleHdfTypes) {
+		void loadFromDataType() {
+			List<HdfDataType> signedTypes = new ArrayList<>();
+			for (HdfDataType type : m_possibleOutputTypes) {
 				HdfDataType signedType = type.getSignedType();
-				Integer possibleSigns = m_possibleHdfTypes.get(signedType);
-				m_possibleHdfTypes.put(signedType,
-						(possibleSigns == null ? 0 : possibleSigns) + (type.isUnsigned() ? Sign.UNSIGNED.value() : Sign.SIGNED.value()));
+				if (!signedTypes.contains(signedType)) {
+					signedTypes.add(signedType);
+				}
 			}
 			
-			m_typeField.setModel(new DefaultComboBoxModel<HdfDataType>(m_possibleHdfTypes.keySet().toArray(new HdfDataType[m_possibleHdfTypes.size()])));
+			m_typeField.setModel(new DefaultComboBoxModel<HdfDataType>(signedTypes.toArray(new HdfDataType[signedTypes.size()])));
 			m_typeField.setSelectedItem(getOutputType().getSignedType());
 			m_unsignedField.setSelected(getOutputType().isUnsigned());
 			m_endianField.setSelectedItem(getEndian());
 			m_roundingField.setSelectedItem(getRounding());
-			m_stringLengthAuto.setSelected(!isFixed());
-			m_stringLengthFixed.setSelected(isFixed());
+			m_stringLengthAuto.setSelected(!isFixedStringLength());
+			m_stringLengthFixed.setSelected(isFixedStringLength());
 			m_stringLengthSpinner.setValue(getStringLength());
 			
 			if (m_standardValueEnabled && m_standardValue != null) {
@@ -380,7 +396,6 @@ public class EditDataType {
 						? (Long) m_standardValue : (long) (int) (Integer) m_standardValue) : 0L);
 			}
 			
-			m_roundingEnabled = roundingEnabled;
 			setSelectableFieldsEnabled();
 		}
 		
@@ -406,5 +421,13 @@ public class EditDataType {
 			}
 			m_standardValue = standardValue;
 		}
+	}
+	
+	@Override
+	public String toString() {
+		return "{ outputType=" + m_outputType + ",endian=" + m_endian + ",standardValue=" + m_standardValue
+				+ (m_outputType.isNumber() && !m_outputType.isFloat() ? ",rounding=" + m_rounding : "")
+				+ (!m_outputType.isNumber() ? (m_fixedStringLength ? ",stringLength=" + m_stringLength : ",autoStringLength=true") : "")
+				+ ",possibleOutputTypes=" + m_possibleOutputTypes + " }";
 	}
 }

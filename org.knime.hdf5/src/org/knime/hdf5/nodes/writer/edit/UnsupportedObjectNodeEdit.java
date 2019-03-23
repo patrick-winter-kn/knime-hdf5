@@ -89,6 +89,6 @@ public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 
 	@Override
 	public String toString() {
-		return "{ path=" + getInputPathFromFileWithName() + ",valid=" + isValid() + " }";
+		return "{ input=" + getInputPathFromFileWithName() + ",valid=" + isValid() + " }";
 	}
 }

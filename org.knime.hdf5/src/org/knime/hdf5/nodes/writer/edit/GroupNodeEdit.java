@@ -23,7 +23,7 @@ import org.knime.hdf5.lib.types.Hdf5HdfDataType.HdfDataType;
 
 /**
  * Class for edits on groups in an hdf file. The respective hdf
- * source is a {@linkplain Hdf5Group}.
+ * source is an {@linkplain Hdf5Group}.
  */
 public class GroupNodeEdit extends TreeNodeEdit {
 	
@@ -546,8 +546,8 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	@Override
 	public String toString() {
 		return "{ input=" + getInputPathFromFileWithName() + ",output=" + getOutputPathFromFileWithName()
-				+ ",group=" + getHdfObject() + ",backup=" + getHdfBackup()
-				+ ",overwrite=" + getEditOverwritePolicy() + ",valid=" + isValid()
-				+ ",action=" + getEditAction() + ",state=" + getEditState() + " }";
+				+ ",action=" + getEditAction() + ",state=" + getEditState()
+				+ ",overwrite=" + getEditOverwritePolicy() + ",valid=" + isValid() 
+				+ ",group=" + getHdfObject() + ",backup=" + getHdfBackup()+ " }";
 	}
 }

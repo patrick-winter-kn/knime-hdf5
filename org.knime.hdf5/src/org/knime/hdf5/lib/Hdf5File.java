@@ -724,7 +724,7 @@ public class Hdf5File extends Hdf5Group {
 	
 	@Override
 	public String toString() {
-		return "{ filePath=" + getFilePath() + ",open=" + isOpen() + ",access= "
+		return "{ filePath=" + getFilePath() + ",open=" + isOpen() + ",access="
 				+ (m_access == READ_ONLY_ACCESS ? "READ" : m_access == READ_WRITE_ACCESS ? "WRITE" : "NONE") + " }";
 	}
 }

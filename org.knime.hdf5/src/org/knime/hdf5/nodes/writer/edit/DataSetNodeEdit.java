@@ -58,7 +58,7 @@ import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
 /**
  * Class for edits on dataSets in an hdf file. The respective hdf
- * source is a {@linkplain Hdf5DataSet}.
+ * source is an {@linkplain Hdf5DataSet}.
  */
 public class DataSetNodeEdit extends TreeNodeEdit {
 	
@@ -105,8 +105,9 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	public DataSetNodeEdit(GroupNodeEdit parent, Hdf5DataSet<?> dataSet) {
 		this(parent, dataSet.getPathFromFileWithName(), dataSet.getName(), EditOverwritePolicy.NONE, EditAction.NO_ACTION);
 		Hdf5HdfDataType hdfType = dataSet.getType().getHdfType();
-		m_inputType = hdfType.getType();
-		m_editDataType.setValues(m_inputType, hdfType.getEndian(), Rounding.DOWN, false, (int) hdfType.getStringLength());
+		m_inputType = hdfType.getType(); 
+		m_editDataType.setValues(m_inputType, m_inputType.getPossiblyConvertibleHdfTypes(), hdfType.getEndian(),
+				Rounding.DOWN, m_inputType.isFloat(), false, (int) hdfType.getStringLength());
 		m_numberOfDimensions = dataSet.getDimensions().length;
 		m_numberOfDimensions = m_numberOfDimensions > 2 ? 2 : (m_numberOfDimensions < 1 ? 1 : m_numberOfDimensions);
 		m_compressionLevel = dataSet.getCompressionLevel();
@@ -892,7 +893,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				m_nameField.setText(edit.getName());
 				m_overwriteField.setSelectedItem(edit.getEditOverwritePolicy());
 				m_overwriteWithNewColumnsField.setSelectedValue(edit.isOverwriteWithNewColumns() ? OVERWRITE_WITH_NEW_COLUMNS : INSERT_NEW_COLUMNS);
-				m_dataTypeChooser.loadFromDataType(edit.getInputType().getPossiblyConvertibleHdfTypes(), edit.getInputType().isFloat());
+				m_dataTypeChooser.loadFromDataType();
 				boolean oneDimensionPossible = isOneDimensionPossible();
 				m_useOneDimensionField.setEnabled(oneDimensionPossible);
 				m_useOneDimensionField.setSelected(oneDimensionPossible && edit.getNumberOfDimensions() == 1);
@@ -944,12 +945,12 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	@Override
 	public String toString() {
 		return "{ input=" + getInputPathFromFileWithName() + ",output=" + getOutputPathFromFileWithName()
-				+ ",dataSet=" + getHdfObject() + ",backup=" + getHdfBackup()
-				+ ",overwrite=" + getEditOverwritePolicy() + ",overwriteWithNewColumns=" + m_overwriteWithNewColumns
-				+ ",valid=" + isValid() + ",action=" + getEditAction() + ",state=" + getEditState() 
+				+ ",action=" + getEditAction() + ",state=" + getEditState() 
+				+ ",overwrite=" + getEditOverwritePolicy() + ",overwriteWithNewColumns=" + m_overwriteWithNewColumns + ",valid=" + isValid()
 				+ ",dimension" + (getNumberOfDimensions() > 1 ? "s=[" + m_inputRowCount + ", "
 						+ getNotDeletedColumnNodeEdits().length + "]" : "=" + m_inputRowCount)
 				+ ",inputType=" + m_inputType + ",editDataType=" + m_editDataType
-				+ ",compressionLevel=" + m_compressionLevel + ",chunkRowSize=" + m_chunkRowSize + " }";
+				+ ",compressionLevel=" + m_compressionLevel + ",chunkRowSize=" + m_chunkRowSize 
+				+ ",dataSet=" + getHdfObject() + ",backup=" + getHdfBackup() + " }";
 	}
 }

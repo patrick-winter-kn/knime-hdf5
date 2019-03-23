@@ -1,7 +1,6 @@
 package org.knime.hdf5.nodes.writer.edit;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -27,15 +26,13 @@ import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
 /**
  * Class for edits on attributes in an hdf file. The respective hdf
- * source is a {@linkplain Hdf5Attribute}.
+ * source is an {@linkplain Hdf5Attribute}.
  */
 public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	private InvalidCause m_inputInvalidCause;
 	
 	private HdfDataType m_inputType;
-	
-	private List<HdfDataType> m_possibleOutputTypes;
 	
 	private EditDataType m_editDataType = new EditDataType();
 	
@@ -74,11 +71,13 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				attribute.getType().getHdfType().getType(), EditAction.NO_ACTION);
 
 		m_itemStringLength = (int) attribute.getMaxStringLengthOfValues();
-		m_editDataType.setValues(m_inputType, attribute.getType().getHdfType().getEndian(), Rounding.DOWN, false, m_itemStringLength);
-		m_totalStringLength = (int) Math.max(attribute.getDimension(), 1) * m_itemStringLength;
-		
+
 		Object[] values = attribute.getValue() == null ? attribute.read() : attribute.getValue();
-		m_possibleOutputTypes = HdfDataType.getConvertibleTypes(m_inputType, values);
+		List<HdfDataType> possibleOutputTypes = HdfDataType.getConvertibleTypes(m_inputType, values);
+		
+		m_editDataType.setValues(m_inputType, possibleOutputTypes, attribute.getType().getHdfType().getEndian(),
+				Rounding.DOWN, m_inputType.isFloat(), false, m_itemStringLength);
+		m_totalStringLength = (int) Math.max(attribute.getDimension(), 1) * m_itemStringLength;
 		
 		setHdfObject(attribute);
 	}
@@ -127,7 +126,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	private void updatePropertiesFromFlowVariable(FlowVariable var) {
 		Object[] values = Hdf5Attribute.getFlowVariableValues(var);
 		m_inputType = Hdf5KnimeDataType.getKnimeDataType(values).getEquivalentHdfType();
-		m_possibleOutputTypes = HdfDataType.getConvertibleTypes(m_inputType, values);
 		m_totalStringLength = var.getValueAsString().length();
 		
 		m_itemStringLength = 1;
@@ -137,8 +135,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		}
 		m_flowVariableArrayPossible = m_itemStringLength != m_totalStringLength;
 		m_flowVariableArrayUsed = m_flowVariableArrayPossible;
-		
-		m_editDataType.setValues(m_inputType, Endian.LITTLE_ENDIAN, Rounding.DOWN, false, m_itemStringLength);
+
+		List<HdfDataType> possibleOutputTypes = HdfDataType.getConvertibleTypes(m_inputType, values);
+		m_editDataType.setValues(m_inputType, possibleOutputTypes, Endian.LITTLE_ENDIAN,
+				Rounding.DOWN, m_inputType.isFloat(), false, m_itemStringLength);
 	}
 	
 	InvalidCause getInputInvalidCause() {
@@ -147,10 +147,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	
 	public HdfDataType getInputType() {
 		return m_inputType;
-	}
-
-	private HdfDataType[] getPossibleOutputTypes() {
-		return m_possibleOutputTypes.toArray(new HdfDataType[0]);
 	}
 
 	public EditDataType getEditDataType() {
@@ -197,7 +193,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		if (copyEdit instanceof AttributeNodeEdit) {
 			AttributeNodeEdit copyAttributeEdit = (AttributeNodeEdit) copyEdit;
 			m_inputInvalidCause = copyAttributeEdit.getInputInvalidCause();
-			m_possibleOutputTypes = Arrays.asList(copyAttributeEdit.getPossibleOutputTypes());
 			m_editDataType.setValues(copyAttributeEdit.getEditDataType());
 			m_totalStringLength = copyAttributeEdit.getTotalStringLength();
 			m_itemStringLength = copyAttributeEdit.getItemStringLength();
@@ -261,12 +256,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		}
 		settings.addInt(SettingsKey.INPUT_TYPE.getKey(), m_inputType.getTypeId());
 		
-		int[] typeIds = new int[m_possibleOutputTypes.size()];
-		for (int i = 0; i < typeIds.length; i++) {
-			typeIds[i] = m_possibleOutputTypes.get(i).getTypeId();
-		}
-		settings.addIntArray(SettingsKey.POSSIBLE_OUTPUT_TYPES.getKey(), typeIds);
-		
 		m_editDataType.saveSettingsTo(settings);
 		settings.addInt(SettingsKey.TOTAL_STRING_LENGTH.getKey(), m_totalStringLength);
 		settings.addInt(SettingsKey.ITEM_STRING_LENGTH.getKey(), m_itemStringLength);
@@ -278,12 +267,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	protected void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException {
 		if (settings.containsKey(SettingsKey.INPUT_INVALID_CAUSE.getKey())) {
 			m_inputInvalidCause = InvalidCause.values()[settings.getInt(SettingsKey.INPUT_INVALID_CAUSE.getKey())];
-		}
-		
-		m_possibleOutputTypes = new ArrayList<>();
-		int[] typeIds = settings.getIntArray(SettingsKey.POSSIBLE_OUTPUT_TYPES.getKey());
-		for (int typeId : typeIds) {
-			m_possibleOutputTypes.add(HdfDataType.get(typeId));
 		}
 		
 		m_editDataType.loadSettingsFrom(settings);
@@ -318,8 +301,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				
 				m_inputInvalidCause = m_inputType == testEdit.getInputType() ? null : InvalidCause.INPUT_DATA_TYPE;
 				if (m_inputInvalidCause == null) {
-					m_possibleOutputTypes = testEdit.m_possibleOutputTypes;
-					m_inputInvalidCause = m_possibleOutputTypes.contains(m_editDataType.getOutputType()) ? null : InvalidCause.OUTPUT_DATA_TYPE;
+					List<HdfDataType> possibleOutputTypes = Arrays.asList(testEdit.getEditDataType().getPossibleOutputTypes());
+					m_inputInvalidCause = possibleOutputTypes.contains(m_editDataType.getOutputType()) ? null : InvalidCause.OUTPUT_DATA_TYPE;
 				}
 				if (m_inputInvalidCause == null) {
 					m_totalStringLength = testEdit.getTotalStringLength();
@@ -455,7 +438,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				AttributeNodeEdit edit = AttributeNodeEdit.this;
 				m_nameField.setText(edit.getName());
 				m_overwriteField.setSelectedItem(edit.getEditOverwritePolicy());
-				m_dataTypeChooser.loadFromDataType(m_possibleOutputTypes, m_inputType == HdfDataType.FLOAT32);
+				m_dataTypeChooser.loadFromDataType();
 				m_flowVariableArrayField.setSelected(edit.isFlowVariableArrayUsed());
 			}
 
@@ -476,10 +459,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	@Override
 	public String toString() {
 		return "{ input=" + getInputPathFromFileWithName() + ",output=" + getOutputPathFromFileWithName()
-				+ ",attribute=" + getHdfObject() + ",backup=" + getHdfBackup()
+				+ ",action=" + getEditAction() + ",state=" + getEditState()
 				+ ",overwrite=" + getEditOverwritePolicy() + ",valid=" + isValid()
-				+ ",action=" + getEditAction() + ",state=" + getEditState() 
 				+ ",inputType=" + m_inputType + ",editDataType=" + m_editDataType
-				+ ",flowVariableArrayUsed=" + m_flowVariableArrayUsed + " }";
+				+ ",flowVariableArrayUsed=" + m_flowVariableArrayUsed
+				+ ",attribute=" + getHdfObject() + ",backup=" + getHdfBackup() + " }";
 	}
 }

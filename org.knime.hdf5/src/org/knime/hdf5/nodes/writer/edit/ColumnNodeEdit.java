@@ -237,7 +237,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	public boolean isMaybeInvalid() {
 		EditDataType parentDataType = ((DataSetNodeEdit) getParent()).getEditDataType();
 		return !m_inputType.getAlwaysConvertibleHdfTypes().contains(parentDataType.getOutputType())
-				|| !parentDataType.getOutputType().isNumber() && parentDataType.isFixed();
+				|| !parentDataType.getOutputType().isNumber() && parentDataType.isFixedStringLength();
 	}
 
 	@Override
@@ -302,9 +302,9 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	public String toString() {
 		return "{ input=" + getInputPathFromFileWithName() + ",inputColumnIndex=" + m_inputColumnIndex
 				+ ",output=" + getOutputPathFromFileWithName() + ",outputColumnIndex=" + m_outputColumnIndex
-				+ ",dataSet=" + getHdfObject() + ",backupDataSet=" + getHdfBackup()
+				+ ",action=" + getEditAction() + ",state=" + getEditState()
 				+ ",overwrite=" + getEditOverwritePolicy() + ",valid=" + isValid()
-				+ ",action=" + getEditAction() + ",state=" + getEditState() 
-				+ ",rowSize" + m_inputRowCount + ",inputType=" + m_inputType + " }";
+				+ ",rowSize" + m_inputRowCount + ",inputType=" + m_inputType 
+				+ ",dataSet=" + getHdfObject() + ",backupDataSet=" + getHdfBackup() + " }";
 	}
 }

@@ -53,7 +53,7 @@ import org.knime.hdf5.lib.Hdf5TreeElement;
 
 /**
  * Abstract class for all edits on objects in an hdf file. The respective hdf
- * source is a {@linkplain Hdf5TreeElement} or a {@linkplain Hdf5Attribute}.
+ * source is an {@linkplain Hdf5TreeElement} or an {@linkplain Hdf5Attribute}.
  */
 public abstract class TreeNodeEdit {
 
@@ -73,7 +73,8 @@ public abstract class TreeNodeEdit {
 		OUTPUT_TYPE("outputType"),
 		LITTLE_ENDIAN("littleEndian"),
 		ROUNDING("rounding"),
-		FIXED("fixed"),
+		ROUNDING_POSSIBLE("roundingPossible"),
+		FIXED_STRING_LENGTH("fixedStringLength"),
 		STRING_LENGTH("stringLength"),
 		STANDARD_VALUE("standardValue"),
 		OVERWRITE_WITH_NEW_COLUMNS("overwriteWithNewColumns"),
