@@ -43,7 +43,7 @@ public class EditTreeConfiguration {
 	/**
 	 * Checks this configuration for errors.
 	 * 
-	 * @throws InvalidSettingsException if an error occurs
+	 * @throws InvalidSettingsException if the config is invalid
 	 */
 	void checkConfiguration() throws InvalidSettingsException {
 		EditTreeConfiguration checkConfig = new EditTreeConfiguration(m_configRootName + "_check");
@@ -70,31 +70,46 @@ public class EditTreeConfiguration {
 	}
 	
 	/**
-	 * Loads this configuration from the settings.
+	 * Loads this configuration from the settings. The {@code filePath} will
+	 * be used if the file edit of this config is {@code null}. Otherwise,
+	 * use the file path of the config. If both is null, the file path from
+	 * the settings will be used.
 	 * 
 	 * @param settings the settings to be loaded
-	 * @param oldFilePath
-	 * @param policy
+	 * @param filePath the file path to use if the config does not have a
+	 * 	file edit so far
+	 * @param policy the overwrite policy to use (may only be INTEGRATE,
+	 * 	OVERWRITE or RENAME)
 	 * @throws InvalidSettingsException if the settings of the fileEdit are invalid
 	 */
-	void loadConfiguration(final NodeSettingsRO settings, final String oldFilePath, final EditOverwritePolicy policy) throws InvalidSettingsException {
+	void loadConfiguration(final NodeSettingsRO settings, final String filePath, final EditOverwritePolicy policy) throws InvalidSettingsException {
 		FileNodeEdit oldFileEdit = m_fileEdit;
 		m_fileEdit = null;
 		
-		String filePath = null;
+		String newFilePath = null;
         if (oldFileEdit != null) {
-        	filePath = oldFileEdit.getFilePath();
+        	newFilePath = oldFileEdit.getFilePath();
         } else {
-        	filePath = oldFilePath;
+        	newFilePath = filePath;
         }
         
         // if filePath is still null, use filePath from settings
 		if (settings.containsKey(m_configRootName + "_File")) {
 	        NodeSettingsRO fileSettings = settings.getNodeSettings(m_configRootName + "_File");
-	        m_fileEdit = FileNodeEdit.loadSettingsFrom(fileSettings, filePath, policy);
+	        m_fileEdit = FileNodeEdit.loadSettingsFrom(fileSettings, newFilePath, policy);
 		}
     }
 	
+	/**
+	 * Updates the configuration with the {@code urlPath} and {@code policy}.
+	 * 
+	 * @param urlPath the url path
+	 * @param policy the overwrite policy (may only be INTEGRATE,
+	 * 	OVERWRITE or RENAME)
+	 * @throws IOException if the file of the url path does not exist or could
+	 * 	not be opened/closed
+	 * @throws InvalidSettingsException if the settings of the fileEdit are invalid
+	 */
 	void updateConfiguration(final String urlPath, final EditOverwritePolicy policy) throws IOException, InvalidSettingsException {
 		FileNodeEdit oldFileEdit = m_fileEdit;
 		m_fileEdit = null;
@@ -120,6 +135,23 @@ public class EditTreeConfiguration {
 		}
 	}
 	
+	/**
+	 * Initializes the config with the {@code filePath} and {@code overwriteFile}.
+	 * <br>
+	 * If {@code keepConfig} is {@code true} and a config already exists, the
+	 * config within the file edit will be kept. Otherwise, the config of the
+	 * file edit of {@code filePath} will be used.
+	 * <br>
+	 * <br>
+	 * Also initializes the {@code tree} with this config.
+	 * 
+	 * @param filePath the new file path for this config
+	 * @param overwriteFile if the new file edit should be in OVERWRITE policy
+	 * @param keepConfig if the old config within the file edit should be kept
+	 * @param tree the {@linkplain JTree} to be initialized with the new config
+	 * @throws IOException if an hdf object of the hdf file could not be
+	 * 	opened/closed
+	 */
 	void initConfigOfFile(String filePath, boolean overwriteFile, boolean keepConfig, JTree tree) throws IOException {
 		Hdf5File file = null;
 		

@@ -459,8 +459,8 @@ public class FileNodeEdit extends GroupNodeEdit {
 	}
 	
 	/**
-	 * Resets the {@code resetEdits} to the initialization state with their
-	 * hdf objects.
+	 * Resets the {@code resetEdits} back to their initialization states with
+	 * their hdf objects.
 	 * 
 	 * @param resetEdits the edits to be reset
 	 */
@@ -584,7 +584,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 				try {
 					file.close();
 				} catch (IOException ioe) {
-					NodeLogger.getLogger("HDF5 Files").error(ioe.getMessage(), ioe);
+					NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
 				}
 			}
 		}

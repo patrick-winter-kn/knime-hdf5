@@ -306,11 +306,17 @@ public class HDF5ReaderNodeModel extends NodeModel {
         }
 	}
 
+	/**
+	 * Not needed here.
+	 */
 	@Override
 	protected void loadInternals(File nodeInternDir, ExecutionMonitor exec)
 			throws IOException, CanceledExecutionException {
 	}
 
+	/**
+	 * Not needed here.
+	 */
 	@Override
 	protected void saveInternals(File nodeInternDir, ExecutionMonitor exec)
 			throws IOException, CanceledExecutionException {

@@ -73,6 +73,10 @@ import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit;
 import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.InvalidCause;
 
+/**
+ * The {@link NodeDialogPane} for the hdf writer in order to
+ * export to hdf files.
+ */
 class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 
 	private SettingsModelString m_filePathSettings;
@@ -89,11 +93,8 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 	
 	private EditTreePanel m_editTreePanel = new EditTreePanel();
 	
-    /**
-     * Creates a new {@link NodeDialogPane} for the column filter in order to
-     * set the desired columns.
-     */
     public HDF5WriterNodeDialog() {
+    	// initialize the 'Options' tab
     	m_filePathSettings = SettingsFactory.createFilePathSettings();
 		FlowVariableModel filePathFvm = super.createFlowVariableModel(m_filePathSettings);
 		DialogComponentFileChooser fileChooser = new DialogComponentFileChooser(m_filePathSettings, "outputFilePathHistory",
@@ -119,6 +120,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		addDialogComponent(fileOverwritePolicy);
         closeCurrentGroup();
 		
+        // initialize the 'Select data configuration' dialog
 		JPanel inputPanel = new JPanel();
 		inputPanel.setLayout(new BoxLayout(inputPanel, BoxLayout.Y_AXIS));
 		inputPanel.setBorder(BorderFactory.createTitledBorder(" Input "));
@@ -152,23 +154,26 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				showRemoveInvalidsDialog();
+				showResetInvalidsDialog();
 			}
 			
-			private void showRemoveInvalidsDialog() {
+			private void showResetInvalidsDialog() {
 				TreeMap<TreeNodeEdit, InvalidCause> removableEdits = m_editTreePanel.getResettableEdits();
-				RemoveDialog removeDialog = new RemoveDialog(buttonPanel, "Reset invalid edits", removableEdits);
+				ResetDialog removeDialog = new ResetDialog(buttonPanel, "Reset invalid edits", removableEdits);
 				removeDialog.setLocationRelativeTo((Frame) SwingUtilities.getAncestorOfClass(Frame.class, buttonPanel));
 				removeDialog.setVisible(true);
 			}
 
-			class RemoveDialog extends JDialog {
+			/**
+			 * A {@code JDialog} to reset invalid edits in the config.
+			 */
+			class ResetDialog extends JDialog {
 				
 				private static final long serialVersionUID = -4327493810031381994L;
 				
 				private int m_selectedCount;
 
-				protected RemoveDialog(Component comp, String title, TreeMap<TreeNodeEdit, InvalidCause> removableEdits) {
+				protected ResetDialog(Component comp, String title, TreeMap<TreeNodeEdit, InvalidCause> resettableEdits) {
 					super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, comp), title, true);
 					setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
 					// setLocation(400, 400);
@@ -179,14 +184,16 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 					
 					JPanel listPanel = new JPanel(new BorderLayout());
 					panel.add(listPanel, BorderLayout.CENTER);
-					
+
+					// initialize the list model of all resettable edits
 					DefaultListModel<JCheckBox> listModel = new DefaultListModel<>();
-					for (TreeNodeEdit edit : removableEdits.keySet()) {
-						InvalidCause cause = removableEdits.get(edit);
+					for (TreeNodeEdit edit : resettableEdits.keySet()) {
+						InvalidCause cause = resettableEdits.get(edit);
 						JCheckBox checkBox = new JCheckBox(edit.getSummary() + " - " + cause.getMessage());
 						listModel.addElement(checkBox);
 					}
 					
+					// initialize the list of all resettable edits
 					JList<JCheckBox> checkList = new JList<>(listModel);
 					checkList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 					checkList.setCellRenderer(new DefaultListCellRenderer() {
@@ -203,6 +210,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 						}
 					});
 
+					// add a check box to select all resettable edits
 					JCheckBox selectAllBox = new JCheckBox("select all");
 					listPanel.add(selectAllBox, BorderLayout.PAGE_START);
 					selectAllBox.addMouseListener(new MouseAdapter() {
@@ -219,6 +227,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 						}
 					});
 					
+					// be able to update all check boxes
 					checkList.addMouseListener(new MouseAdapter() {
 						
 						@Override
@@ -235,10 +244,12 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 						}
 					});
 					
+					// add the list to the panel
 					final JScrollPane jsp = new JScrollPane(checkList);
 					jsp.setPreferredSize(new Dimension(500, 300));
 					listPanel.add(jsp, BorderLayout.CENTER);
 					
+					// add the 'OK' button
 					JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
 					panel.add(buttonPanel, BorderLayout.PAGE_END);
 					JButton okButton = new JButton("OK");
@@ -248,7 +259,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 						public void actionPerformed(ActionEvent e) {
 							List<TreeNodeEdit> resetEdits = new ArrayList<>();
 
-							List<TreeNodeEdit> listEdits = new ArrayList<>(removableEdits.keySet());
+							List<TreeNodeEdit> listEdits = new ArrayList<>(resettableEdits.keySet());
 							for (int i = 0; i < listModel.getSize(); i++) {
 								JCheckBox checkBox = listModel.getElementAt(i);
 								TreeNodeEdit edit = listEdits.get(i);
@@ -257,12 +268,14 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 								}
 							}
 							
+							// reset the selected edits
 							m_editTreePanel.resetEdits(resetEdits);
 							setVisible(false);
 						}
 					});
 					buttonPanel.add(okButton);
-					
+
+					// add the 'Cancel' button
 					JButton cancelButton = new JButton("Cancel");
 					cancelButton.addActionListener(new ActionListener() {
 						
@@ -301,6 +314,9 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 				dataDialog.setVisible(true);
 			}
 
+			/**
+			 * A {@code JDialog} to select the config.
+			 */
 			class DataDialog extends JDialog {
 
 				private static final long serialVersionUID = 5449228141905592744L;
@@ -353,6 +369,10 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
         closeCurrentGroup();
 	}
     
+    /**
+     * Updates the file path in the config with the file path and overwrite
+     * policy of this dialog.
+     */
     private void updateFilePath() {
     	updateFileInfo();
     	
@@ -368,6 +388,9 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		}
     }
     
+    /**
+     * Updates the file info shown below the file chooser in this dialog.
+     */
     private void updateFileInfo() {
     	String errorInfo = null;
     	
@@ -393,6 +416,13 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		}
     }
     
+    /**
+     * Get the file path to use for the config considering the overwrite policy
+     * and the fact that the file path of the file chooser might be a knime url.
+     * 
+     * @return the file path to use for the config
+     * @throws InvalidSettingsException if no correct file path could be found
+     */
     private String getFilePathFromSettings() throws InvalidSettingsException {
     	String filePath = HDF5WriterNodeModel.getFilePathFromUrlPath(m_filePathSettings.getStringValue(), false);
     	
@@ -407,6 +437,13 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     	return filePath;
     }
     
+    /**
+     * Adds the list for the respective specs of the {@code specInfo} to the
+     * {@code panel}.
+     * 
+     * @param specInfo specifies which list should be added
+     * @param panel the panel where the list should be added
+     */
     private void addListToPanel(SpecInfo specInfo, JPanel panel) {
     	ListPanel listPanel = specInfo == SpecInfo.COLUMN_SPECS ? m_columnSpecPanel
 				: (specInfo == SpecInfo.FLOW_VARIABLE_SPECS ? m_flowVariableSpecPanel : null);
@@ -475,6 +512,11 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			protected Transferable createTransferable(JComponent comp) {
                 if (comp instanceof JList) {
                 	JList<?> list = (JList<?>) comp;
+                	
+                	/* 
+                	 * add the selected specs to the list and transfer the info
+                	 * to which list the specs have been added
+                	 */
                 	specInfo.setSpecList((List<SpecInfo>) list.getSelectedValuesList());
                 	return new StringSelection(specInfo.getSpecName());
                 }
@@ -483,6 +525,13 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		});
     }
     
+    /**
+     * Initializes the list model for the respective list for the {@code specInfo}
+     * with the {@code listElements}.
+     * 
+     * @param specInfo specifies which list model should be initialized
+     * @param listElements the specs for the list
+     */
 	private void initListModel(SpecInfo specInfo, Object[] listElements) {
 		ListPanel listPanel = specInfo == SpecInfo.COLUMN_SPECS ? m_columnSpecPanel : m_flowVariableSpecPanel;
 		DefaultListModel<Object> listModel = new DefaultListModel<>();
@@ -491,6 +540,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		}
 		listPanel.getList().setModel(listModel);
 		
+		// add the search field to the list
 		JTextField searchField = listPanel.getSearchField();
 		JLabel searchErrorLabel = listPanel.getSearchErrorLabel();
 
@@ -498,6 +548,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
             searchField.removeCaretListener(searchField.getCaretListeners()[0]);
         }
 
+        // add the functionality as regex filter to the search field
 		searchField.addCaretListener(new CaretListener() {
 			
 			@Override
@@ -525,13 +576,10 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			}
 		});
     }
-    
-    /**
-     * @param settings the node settings to read from
-     * @param specs the input specs
-     * @throws NotConfigurableException if no columns are available for
-     *             filtering
-     */
+
+	/**
+	 * @throws NotConfigurableException if the config could not be loaded correctly
+	 */
     @Override
 	public void loadAdditionalSettingsFrom(final NodeSettingsRO settings,
             final DataTableSpec[] specs) throws NotConfigurableException {
@@ -554,8 +602,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 			
 			boolean fileEditExists = editTreeConfig.getFileNodeEdit() != null;
 	    	if (!m_filePathSettings.getStringValue().trim().isEmpty() || fileEditExists) {
-				//m_editTreePanel.updateTreeWithResetConfig(fileEditExists ? editTreeConfig.getFilePathToUpdate(policy == EditOverwritePolicy.RENAME)
-				//		: getFilePathFromSettings(), false, policy == EditOverwritePolicy.OVERWRITE);
 	    		FileNodeEdit fileEdit = editTreeConfig.getFileNodeEdit();
 	    		m_editTreePanel.updateTreeWithFile(fileEdit.getFilePath(), fileEdit.isOverwriteHdfFile(), false);
 	    		
@@ -568,13 +614,20 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		}
     }
     
+    /**
+     * Saves the config to the settings.
+     */
     @Override
 	public void saveAdditionalSettingsTo(final NodeSettingsWO settings) {
 		EditTreeConfiguration editTreeConfig = SettingsFactory.createEditTreeConfiguration();
 		m_editTreePanel.saveConfiguration(editTreeConfig);
 		editTreeConfig.saveConfiguration(settings);
     }
-    
+
+	/**
+	 * The {@linkplain JPanel} where the input knime specs (visualized
+	 * as {@linkplain JList}) can be filtered and copied from.
+	 */
     private static class ListPanel extends JPanel {
     	
 		private static final long serialVersionUID = -4510553262535977610L;
@@ -604,6 +657,11 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
     		return m_list;
     	}
     	
+    	/**
+    	 * Sets the list of this panel.
+    	 * 
+    	 * @param list the new list to be set
+    	 */
     	private void setList(JList<Object> list) {
     		if (m_list != null) {
     			remove(m_list);

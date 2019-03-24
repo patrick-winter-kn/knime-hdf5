@@ -26,6 +26,10 @@ import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.nodes.writer.edit.EditOverwritePolicy;
 import org.knime.hdf5.nodes.writer.edit.FileNodeEdit;
 
+/**
+ * The {@link NodeModel} for the hdf writer in order to
+ * export hdf files.
+ */
 public class HDF5WriterNodeModel extends NodeModel {
 
 	private SettingsModelString m_filePathSettings;
@@ -99,19 +103,32 @@ public class HDF5WriterNodeModel extends NodeModel {
 		return null;
     }
 	
+	/**
+	 * Checks for errors in the {@code editTreeConfig} which is the case if
+	 * elements of its {@linkplain FileNodeEdit}s are invalid.
+	 * 
+	 * @param editTreeConfig the config to be checked
+	 * @throws InvalidSettingsException if the config is not valid or could not
+	 * 	be checked
+	 */
 	static void checkForErrors(EditTreeConfiguration editTreeConfig) throws InvalidSettingsException {
 		checkForErrors(editTreeConfig, null, false);
 	}
 	
 	/**
-	 * Checks if there are errors in the configuration {@code editTreeConfig}.
-	 * If the table {@code inputTable} is not null, it also considers the OverwritePolicy of {@code editTreeConfig}.
+	 * Checks for errors in the {@code editTreeConfig} which is the case if
+	 * elements of its {@linkplain FileNodeEdit}s are invalid.
+	 * If the table {@code inputTable} is not null, it will also be used to
+	 * validate the data types and row sizes of the dataSet edits that should
+	 * create new hdf dataSets.
 	 * 
-	 * @param editTreeConfig
-	 * @param inputTable
-	 * @throws InvalidSettingsException
+	 * @param editTreeConfig the config to be checked
+	 * @param inputTable the knime input table to use for validation
+	 * @throws InvalidSettingsException if the config is not valid or could not
+	 * 	be checked
 	 */
-	private static void checkForErrors(EditTreeConfiguration editTreeConfig, BufferedDataTable inputTable, boolean lastValidationBeforeExecution) throws InvalidSettingsException {
+	private static void checkForErrors(EditTreeConfiguration editTreeConfig,
+			BufferedDataTable inputTable, boolean lastValidationBeforeExecution) throws InvalidSettingsException {
 		FileNodeEdit fileEdit = editTreeConfig.getFileNodeEdit();
 		if (fileEdit == null) {
 			throw new InvalidSettingsException("No file selected");
@@ -144,12 +161,21 @@ public class HDF5WriterNodeModel extends NodeModel {
 				try {
 					file.close();
 				} catch (IOException ioe) {
-					NodeLogger.getLogger("HDF5 Files").error(ioe.getMessage(), ioe);
+					NodeLogger.getLogger(HDF5WriterNodeModel.class).error(ioe.getMessage(), ioe);
 				}
 			}
 		}
 	}
 	
+	/**
+	 * Get the file path out of the {@code urlPath}.
+	 * 
+	 * @param urlPath the knime url path
+	 * @param mustExist if the file must exist
+	 * @return the file path
+	 * @throws InvalidSettingsException if the file path is invalid or the
+	 * 	respective file does not exist
+	 */
 	static String getFilePathFromUrlPath(String urlPath, boolean mustExist) throws InvalidSettingsException {
 		if (urlPath == null || urlPath.trim().isEmpty()) {
 			throw new InvalidSettingsException("No file selected");
@@ -170,13 +196,21 @@ public class HDF5WriterNodeModel extends NodeModel {
         }
 	}
 
+	/**
+	 * Not needed here.
+	 */
 	@Override
 	protected void loadInternals(File nodeInternDir, ExecutionMonitor exec)
-			throws IOException, CanceledExecutionException {}
+			throws IOException, CanceledExecutionException {
+	}
 
+	/**
+	 * Not needed here.
+	 */
 	@Override
 	protected void saveInternals(File nodeInternDir, ExecutionMonitor exec)
-			throws IOException, CanceledExecutionException {}
+			throws IOException, CanceledExecutionException {
+	}
 
 	@Override
 	protected void saveSettingsTo(NodeSettingsWO settings) {
@@ -223,7 +257,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 			m_editTreeConfig.updateConfiguration(m_filePathSettings.getStringValue(),
 					EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()));
 		} catch (IOException | InvalidSettingsException ioise) {
-			NodeLogger.getLogger("HDF5 Files").error("Reset failed: " + ioise.getMessage(), ioise);
+			NodeLogger.getLogger(getClass()).error("Reset failed: " + ioise.getMessage(), ioise);
 		}
 	}
 }

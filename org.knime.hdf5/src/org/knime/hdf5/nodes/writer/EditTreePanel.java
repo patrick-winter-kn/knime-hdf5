@@ -43,6 +43,10 @@ import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.EditAction;
 import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.InvalidCause;
 import org.knime.hdf5.nodes.writer.edit.UnsupportedObjectNodeEdit;
 
+/**
+ * The {@linkplain JPanel} where the {@linkplain FileNodeEdit} (visualized
+ * as {@linkplain JTree}) can be modified.
+ */
 public class EditTreePanel extends JPanel {
 
 	private static final long serialVersionUID = -9129152385004241047L;
@@ -58,6 +62,7 @@ public class EditTreePanel extends JPanel {
 		final JScrollPane jsp = new JScrollPane(m_tree);
 		add(jsp, BorderLayout.CENTER);
 		
+		// set the visual representation of all nodes in the tree
     	m_tree.setCellRenderer(new DefaultTreeCellRenderer() {
 
 			private static final long serialVersionUID = -2424225988962935310L;
@@ -76,7 +81,8 @@ public class EditTreePanel extends JPanel {
 				for (int i = 0; i < itemNames.length; i++) {
 					for (int j = 0; j < stateNames.length; j++) {
 						String iconName = itemNames[i] + "_" + stateNames[j];
-						if (!iconName.equals("file_delete") && (!stateNames[j].equals("unsupported") || itemNames[i].equals("attribute") || itemNames[i].equals("dataSet"))) {
+						if (!iconName.equals("file_delete")
+								&& (!stateNames[j].equals("unsupported") || itemNames[i].equals("attribute") || itemNames[i].equals("dataSet"))) {
 							loadedIcons[i][j] = loadIcon(EditTreePanel.class, "/icon/" + iconName + ".png");
 						}
 					}
@@ -85,24 +91,31 @@ public class EditTreePanel extends JPanel {
 				return loadedIcons;
 			}
 			
-			private Icon loadIcon(
-		            final Class<?> className, final String path) {
-		        ImageIcon icon;
+			/**
+			 * Loads the icon on the relative {@code path} to the path of the
+			 * {@code rootClass} (without its name).
+			 * 
+			 * @param rootClass the class in the root path
+			 * @param path the path from the root path
+			 * @return the icon in the concatenated path
+			 */
+			private Icon loadIcon(final Class<?> rootClass, final String path) {
+		        ImageIcon icon = null;
+		        
 		        try {
-		            ClassLoader loader = className.getClassLoader();
-		            String packagePath =
-		                className.getPackage().getName().replace('.', '/');
+		            ClassLoader loader = rootClass.getClassLoader();
+		            String packagePath = rootClass.getPackage().getName().replace('.', '/');
 		            String correctedPath = path;
 		            if (!path.startsWith("/")) {
 		                correctedPath = "/" + path;
 		            }
-		            icon = new ImageIcon(
-		                    loader.getResource(packagePath + correctedPath));
+		            icon = new ImageIcon(loader.getResource(packagePath + correctedPath));
+		            
 		        } catch (Exception e) {
-		            NodeLogger.getLogger(EditTreePanel.class).debug(
-		                    "Unable to load icon at path " + path, e);
-		            icon = null;
+		            NodeLogger.getLogger(EditTreePanel.class).debug("Unable to load icon at path \""
+		            		+ path + "\": " + e.getMessage(), e);
 		        }
+		        
 		        return icon;
 		    }
 			
@@ -149,13 +162,15 @@ public class EditTreePanel extends JPanel {
 								ColumnNodeEdit columnEdit = (ColumnNodeEdit) edit;
 								if (columnEdit.getEditAction() == EditAction.CREATE && columnEdit.isMaybeInvalid()) {
 									border = BorderFactory.createLineBorder(Color.ORANGE);
-									tree.setToolTipText(tree.getToolTipText() + " (type is maybe invalid - will be checked directly before execution)");
+									tree.setToolTipText(tree.getToolTipText()
+											+ " (type is maybe invalid - will be checked directly before execution)");
 								}
 							}
 						} else {
 							border = BorderFactory.createLineBorder(Color.RED);
 						}
 						setBorder(border);
+						
 					} else {
 						setText(userObject.toString());
 					}
@@ -165,6 +180,7 @@ public class EditTreePanel extends JPanel {
 			}
 		});
 		
+    	// set the drag-and-drop actions of all nodes in the tree
     	m_tree.setDragEnabled(true);
     	m_tree.setTransferHandler(new TransferHandler() {
 
@@ -181,6 +197,7 @@ public class EditTreePanel extends JPanel {
 			protected Transferable createTransferable(JComponent comp) {
                 if (comp instanceof JTree) {
                 	JTree tree = (JTree) comp;
+                	// store the dragged nodes in the JTree
                 	for (TreePath path : tree.getSelectionPaths()) {
         				m_copyEdits.add((TreeNodeEdit) ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject());
                 	}
@@ -202,12 +219,14 @@ public class EditTreePanel extends JPanel {
 					return false;
                 }
                 
+                // an unsupported object cannot be target of a drag-and-drop action
         		DefaultMutableTreeNode parent = (DefaultMutableTreeNode) path.getLastPathComponent();
             	TreeNodeEdit dropLocationEdit = (TreeNodeEdit) parent.getUserObject();
     			if (dropLocationEdit instanceof UnsupportedObjectNodeEdit) {
     				return false;
             	}
     			
+    			// load the transfered data
     			String specListKey = null;
             	try {
             		specListKey = (String) info.getTransferable().getTransferData(DataFlavor.stringFlavor);
@@ -215,18 +234,25 @@ public class EditTreePanel extends JPanel {
 					return false;
 				}
     			
+            	/* 
+            	 * check if the source of the data is the JTree itself or the
+            	 * JLists of the input specs
+            	 */
             	if (specListKey.isEmpty()) {
             		for (TreeNodeEdit copyEdit : m_copyEdits) {
+            			// check if all edits are supported and if no edits add them to themselves
             			if (!copyEdit.isSupported() || copyEdit instanceof GroupNodeEdit && copyEdit.isEditDescendantOf(dropLocationEdit)) {
             				return false;
             			}
             			
+            			// check if the target is supported
             			TreeNodeEdit parentEdit = findEditToAddTo(copyEdit.getClass(), dropLocationEdit, false);
                     	if (parentEdit == null || !parentEdit.isSupported()) {
             				return false;
                     	}
             		}
             		
+            		// check if all edits are instances from the same class
             		boolean allEqual = true;
             		if (!m_copyEdits.isEmpty()) {
                 		Class editClass = m_copyEdits.get(0).getClass();
@@ -235,6 +261,7 @@ public class EditTreePanel extends JPanel {
                 		}
             		}
             		
+            		// if not, check if the edits can be pasted anyway
             		if (!allEqual) {
         				boolean pasteToDataSet = dropLocationEdit instanceof DataSetNodeEdit;
         				boolean pasteToGroup = dropLocationEdit instanceof GroupNodeEdit;
@@ -249,11 +276,14 @@ public class EditTreePanel extends JPanel {
             	} else {
             		Class<? extends TreeNodeEdit> editClass = specListKey.equals(SpecInfo.COLUMN_SPECS.getSpecName()) ? ColumnNodeEdit.class
             				: (specListKey.equals(SpecInfo.FLOW_VARIABLE_SPECS.getSpecName()) ? AttributeNodeEdit.class : null);
+
+        			// check if the target is supported
             		TreeNodeEdit parentEdit = findEditToAddTo(editClass, dropLocationEdit, false);
             		if (parentEdit == null || !parentEdit.isSupported()) {
 						return false;
 					}
             		
+            		// get the knime input specs to add
             		List<?> data = SpecInfo.get(specListKey).getSpecList();
 	            	if (data == null || data.isEmpty()) {
 	            		return false;
@@ -263,6 +293,21 @@ public class EditTreePanel extends JPanel {
             	return true;
 			}
 			
+			/**
+			 * Finds the next ancestor of {@code dropLocationEdit} (or the
+			 * edit itself) where instances of edits with the class copyEditClass
+			 * {@code copyEditClass} can be added. Creates a new dataSet edit
+			 * (with the name of the first column spec) if
+			 * {@code createDataSetForColumns} is {@code true} and the
+			 * column cannot be added otherwise.
+			 * 
+			 * @param copyEditClass the class of edits to add to
+			 * @param dropLocationEdit the edit where the user released the
+			 *  the mouse
+			 * @param createDataSetForColumns if a new dataSet edit may be
+			 * 	created 
+			 * @return the target edit
+			 */
 			private TreeNodeEdit findEditToAddTo(Class<? extends TreeNodeEdit> copyEditClass, TreeNodeEdit dropLocationEdit, boolean createDataSetForColumns) {
 				if (dropLocationEdit instanceof GroupNodeEdit) {
 					if (copyEditClass == GroupNodeEdit.class || copyEditClass == DataSetNodeEdit.class || copyEditClass == AttributeNodeEdit.class) {
@@ -307,17 +352,25 @@ public class EditTreePanel extends JPanel {
                 	return false;
                 }
                 
-                return specListKey.isEmpty() ? importFromTree(path) : importFromList(path, specListKey);
+                return specListKey.isEmpty() ? importFromTree(path) : importFromList(path, SpecInfo.get(specListKey));
             }
 			
-			private boolean importFromList(TreePath path, String specListKey) {
+			/**
+			 * Imports the knime column specs/flow variables to the target edit.
+			 * 
+			 * @param path the path to the edit where the user released the mouse
+			 * @param specInfo the info if the specs are from columns or flow
+			 * 	variables
+			 * @return if the import was successful
+			 */
+			private boolean importFromList(TreePath path, SpecInfo specInfo) {
 				TreeNodeEdit dropLocationEdit = (TreeNodeEdit) ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject();
 				TreeNodeEdit parentEdit = dropLocationEdit;
                 if (dropLocationEdit instanceof ColumnNodeEdit || dropLocationEdit instanceof AttributeNodeEdit) {
                 	parentEdit = dropLocationEdit.getParent();
                 }
 
-        		List<?> data = SpecInfo.get(specListKey).getSpecList();
+        		List<?> data = specInfo.getSpecList();
                 if (data.get(0) instanceof DataColumnSpec) {
                 	if (!(parentEdit instanceof DataSetNodeEdit)) {
                 		String newName = TreeNodeEdit.getUniqueName(parentEdit, DataSetNodeEdit.class, ((DataColumnSpec) data.get(0)).getName());
@@ -343,7 +396,13 @@ public class EditTreePanel extends JPanel {
                 
                 return true;
 			}
-			
+
+			/**
+			 * Imports the source edits to the target edit.
+			 * 
+			 * @param path the path to the edit where the user released the mouse
+			 * @return if the import was successful
+			 */
 			private boolean importFromTree(TreePath path) {
 				DefaultMutableTreeNode parent = (DefaultMutableTreeNode) path.getLastPathComponent();
             	TreeNodeEdit dropLocationEdit = (TreeNodeEdit) parent.getUserObject();
@@ -394,6 +453,7 @@ public class EditTreePanel extends JPanel {
         });
     	m_tree.setDropMode(DropMode.ON_OR_INSERT);
 
+    	// add a popup menu for all nodes in the tree
     	m_tree.addMouseListener(new MouseAdapter() {
 
     		@Override
@@ -427,25 +487,52 @@ public class EditTreePanel extends JPanel {
 		});
 	}
 	
+	/**
+	 * @return the {@linkplain JTree} of this panel
+	 */
 	JTree getTree() {
 		return m_tree;
 	}
 	
+	/**
+	 * @return the file path of the file edit in the root of the tree
+	 */
 	String getFilePathOfRoot() {
 		return m_editTreeConfig.getFileNodeEdit() != null ? m_editTreeConfig.getFileNodeEdit().getFilePath() : null;
 	}
 
+	/**
+	 * Resets the file edit in the config and updates the tree.
+	 * 
+	 * @throws IOException if an hdf object of the hdf file could not be opened/closed
+	 */
 	void updateTreeWithResetConfig() throws IOException {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
 		if (fileEdit != null) {
 			updateTreeWithFile(fileEdit.getFilePath(), fileEdit.isOverwriteHdfFile(), false);
 		}
 	}
-	
+
+	/**
+	 * Update this tree with the an initialized config. See
+	 * {@linkplain EditTreeConfiguration#initConfigOfFile(String, boolean, boolean, JTree)}
+	 * for more information.
+	 * 
+	 * @param filePath the new file path for the config
+	 * @param overwriteFile if the new file edit should be in OVERWRITE policy
+	 * @param keepConfig if the old config within the file edit should be kept
+	 * @throws IOException if an hdf object of the hdf file could not be
+	 * 	opened/closed
+	 * @see EditTreeConfiguration#initConfigOfFile(String, boolean, boolean, JTree)
+	 */
 	void updateTreeWithFile(String filePath, boolean overwriteFile, boolean keepConfig) throws IOException {
 		m_editTreeConfig.initConfigOfFile(filePath, overwriteFile, keepConfig, m_tree);
 	}
 	
+	/**
+	 * @return all edits in the config that are resettable because they are
+	 * 	invalid
+	 */
 	TreeMap<TreeNodeEdit, InvalidCause> getResettableEdits() {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
 		if (fileEdit != null) {
@@ -455,23 +542,44 @@ public class EditTreePanel extends JPanel {
 		return new TreeMap<>();
 	}
 	
-	void resetEdits(List<TreeNodeEdit> removeEdits) {
+	/**
+	 * Resets the {@code resetEdits} of the config back to their initialization
+	 * states with their hdf objects.
+	 * 
+	 * @param resetEdits the edits to be reset
+	 */
+	void resetEdits(List<TreeNodeEdit> resetEdits) {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
 		if (fileEdit != null) {
-			fileEdit.resetEdits(removeEdits);
+			fileEdit.resetEdits(resetEdits);
 		}
 	}
 	
+	/**
+	 * Checks the configuation of this tree
+	 * 
+	 * @throws InvalidSettingsException if the config is invalid
+	 */
 	void checkConfiguration() throws InvalidSettingsException {
 		m_editTreeConfig.checkConfiguration();
 	}
 
+	/**
+	 * Saves this config to {@code editTreeConfig}.
+	 * 
+	 * @param editTreeConfig the config to save this config
+	 */
 	void saveConfiguration(EditTreeConfiguration editTreeConfig) {
 		if (m_editTreeConfig.getFileNodeEdit() != null) {
 			editTreeConfig.setFileNodeEdit(m_editTreeConfig.getFileNodeEdit());
 		}
 	}
-	
+
+	/**
+	 * Loads the {@code editTreeConfig} to this config
+	 * 
+	 * @param editTreeConfig the config to load from
+	 */
 	void loadConfiguration(EditTreeConfiguration editTreeConfig) {
 		FileNodeEdit fileEdit = m_editTreeConfig.getFileNodeEdit();
 		fileEdit.integrateAndValidate(editTreeConfig.getFileNodeEdit());
