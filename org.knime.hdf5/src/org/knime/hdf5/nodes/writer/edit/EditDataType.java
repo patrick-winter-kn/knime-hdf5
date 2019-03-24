@@ -94,6 +94,12 @@ public class EditDataType {
 	HdfDataType[] getPossibleOutputTypes() {
 		return m_possibleOutputTypes.toArray(new HdfDataType[m_possibleOutputTypes.size()]);
 	}
+	
+	void setPossibleOutputTypes(final List<HdfDataType> possibleOutputTypes) {
+		m_possibleOutputTypes.clear();
+		m_possibleOutputTypes.addAll(possibleOutputTypes);
+		Collections.sort(m_possibleOutputTypes);
+	}
 
 	public Endian getEndian() {
 		return m_endian;
@@ -147,9 +153,7 @@ public class EditDataType {
 	private void setValues(HdfDataType outputType, List<HdfDataType> possibleOutputTypes, Endian endian, Rounding rounding,
 			boolean roundingPossible, boolean fixedStringLength, int stringLength, Object standardValue) {
 		setValues(outputType, endian, rounding, fixedStringLength, stringLength);
-		m_possibleOutputTypes.clear();
-		m_possibleOutputTypes.addAll(possibleOutputTypes);
-		Collections.sort(m_possibleOutputTypes);
+		setPossibleOutputTypes(possibleOutputTypes);
 		m_roundingPossible = roundingPossible;
 		m_standardValue = standardValue;
 	}
@@ -184,15 +188,15 @@ public class EditDataType {
 		setOutputType(HdfDataType.get(settings.getInt(SettingsKey.OUTPUT_TYPE.getKey())));
 
 		m_possibleOutputTypes.clear();
-		int[] typeIds = settings.getIntArray(SettingsKey.POSSIBLE_OUTPUT_TYPES.getKey(), new int[0]);
+		int[] typeIds = settings.getIntArray(SettingsKey.POSSIBLE_OUTPUT_TYPES.getKey());
 		for (int typeId : typeIds) {
 			m_possibleOutputTypes.add(HdfDataType.get(typeId));
 		}
 		
 		setEndian(settings.getBoolean(SettingsKey.LITTLE_ENDIAN.getKey()) ? Endian.LITTLE_ENDIAN : Endian.BIG_ENDIAN);
 		m_rounding = Rounding.values()[settings.getInt(SettingsKey.ROUNDING.getKey())];
-		m_roundingPossible = settings.getBoolean(SettingsKey.ROUNDING_POSSIBLE.getKey(), true);
-		m_fixedStringLength = settings.getBoolean(SettingsKey.FIXED_STRING_LENGTH.getKey(), false);
+		m_roundingPossible = settings.getBoolean(SettingsKey.ROUNDING_POSSIBLE.getKey());
+		m_fixedStringLength = settings.getBoolean(SettingsKey.FIXED_STRING_LENGTH.getKey());
 		setStringLength(settings.getInt(SettingsKey.STRING_LENGTH.getKey()));
 		
 		String standardValueString = settings.getString(SettingsKey.STANDARD_VALUE.getKey());
@@ -216,20 +220,20 @@ public class EditDataType {
 	 */
 	protected class DataTypeChooser {
 		
-		private JComboBox<HdfDataType> m_typeField = new JComboBox<>();
-		private JCheckBox m_unsignedField = new JCheckBox();
-		private JComboBox<Endian> m_endianField = new JComboBox<>(Endian.values());
-		private JComboBox<Rounding> m_roundingField = new JComboBox<>(Rounding.values());
-		private JPanel m_stringLengthField = new JPanel();
+		private final JComboBox<HdfDataType> m_typeField;
+		private final JCheckBox m_unsignedField = new JCheckBox();
+		private final JComboBox<Endian> m_endianField = new JComboBox<>(Endian.values());
+		private final JComboBox<Rounding> m_roundingField = new JComboBox<>(Rounding.values());
+		private final JPanel m_stringLengthField = new JPanel(new GridBagLayout());
 		private JCheckBox m_standardValueCheckBox;
-		private JPanel m_standardValueField = new JPanel(new BorderLayout());
+		private final JPanel m_standardValueField = new JPanel(new BorderLayout());
 		
-		private JRadioButton m_stringLengthAuto = new JRadioButton("auto");
-		private JRadioButton m_stringLengthFixed = new JRadioButton("fixed");
-		private JSpinner m_stringLengthSpinner = new JSpinner(new SpinnerNumberModel(1, 1, Integer.MAX_VALUE, 1));
-		private JSpinner m_standardValueIntSpinner = new JSpinner(new SpinnerNumberModel((Long) 0L, (Long) Long.MIN_VALUE, (Long) Long.MAX_VALUE, (Long) 1L));
-		private JSpinner m_standardValueFloatSpinner = new JSpinner(new SpinnerNumberModel(0.0, null, null, 0.1));
-		private JTextField m_standardValueStringTextField = new JTextField(15);
+		private final JRadioButton m_stringLengthAuto = new JRadioButton("auto");
+		private final JRadioButton m_stringLengthFixed = new JRadioButton("fixed");
+		private final JSpinner m_stringLengthSpinner = new JSpinner(new SpinnerNumberModel(1, 1, Integer.MAX_VALUE, 1));
+		private final JSpinner m_standardValueIntSpinner = new JSpinner(new SpinnerNumberModel((Long) 0L, (Long) Long.MIN_VALUE, (Long) Long.MAX_VALUE, (Long) 1L));
+		private final JSpinner m_standardValueFloatSpinner = new JSpinner(new SpinnerNumberModel(0.0, null, null, 0.1));
+		private final JTextField m_standardValueStringTextField = new JTextField(15);
 		
 		private final boolean m_standardValueEnabled;
 		
@@ -238,6 +242,15 @@ public class EditDataType {
 		 */
 		protected DataTypeChooser(boolean standardValueEnabled) {
 			// define the field for the data type
+			List<HdfDataType> signedTypes = new ArrayList<>();
+			for (HdfDataType type : m_possibleOutputTypes) {
+				HdfDataType signedType = type.getSignedType();
+				if (!signedTypes.contains(signedType)) {
+					signedTypes.add(signedType);
+				}
+			}
+			m_typeField = new JComboBox<>(new DefaultComboBoxModel<HdfDataType>(signedTypes.toArray(new HdfDataType[signedTypes.size()])));
+			m_typeField.setSelectedIndex(0);
 			m_typeField.addActionListener(new ActionListener() {
 				
 				@Override
@@ -247,9 +260,7 @@ public class EditDataType {
 			});
 			
 			// define the field for the String length
-			m_stringLengthField = new JPanel();
 			ButtonGroup stringLengthGroup = new ButtonGroup();
-			m_stringLengthField.setLayout(new GridBagLayout());
 			GridBagConstraints constraints = new GridBagConstraints();
 			constraints.fill = GridBagConstraints.HORIZONTAL;
 			constraints.gridx = 0;
@@ -368,15 +379,6 @@ public class EditDataType {
 		 * Updates the fields with the loaded values of this editDataType.
 		 */
 		void loadFromDataType() {
-			List<HdfDataType> signedTypes = new ArrayList<>();
-			for (HdfDataType type : m_possibleOutputTypes) {
-				HdfDataType signedType = type.getSignedType();
-				if (!signedTypes.contains(signedType)) {
-					signedTypes.add(signedType);
-				}
-			}
-			
-			m_typeField.setModel(new DefaultComboBoxModel<HdfDataType>(signedTypes.toArray(new HdfDataType[signedTypes.size()])));
 			m_typeField.setSelectedItem(getOutputType().getSignedType());
 			m_unsignedField.setSelected(getOutputType().isUnsigned());
 			m_endianField.setSelectedItem(getEndian());

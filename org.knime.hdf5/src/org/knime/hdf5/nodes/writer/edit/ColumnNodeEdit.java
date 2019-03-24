@@ -3,6 +3,8 @@ package org.knime.hdf5.nodes.writer.edit;
 import java.io.IOException;
 import java.util.Map;
 
+import javax.swing.JPopupMenu;
+
 import org.knime.core.data.DataColumnSpec;
 import org.knime.core.node.ExecutionContext;
 import org.knime.core.node.InvalidSettingsException;
@@ -23,7 +25,7 @@ import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
  */
 public class ColumnNodeEdit extends TreeNodeEdit {
 
-	public static final long UNKNOWN_ROW_COUNT = -1;
+	public static final long UNKNOWN_ROW_SIZE = -1;
 	
 	private static final int NO_COLUMN_INDEX = -1;
 	
@@ -35,25 +37,57 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	
 	private final HdfDataType m_inputType;
 	
-	private long m_inputRowCount;
-	
+	private long m_inputRowSize;
+
+	/**
+	 * Copies the column edit {@code copyColumn} to {@code parent} with all
+	 * properties.
+	 * <br>
+	 * <br>
+	 * If {@code needsCopySource} is {@code true}, the action of this edit
+	 * will be set to COPY, except if {@code copyColumn}'s edit action is CREATE.
+	 * In all other cases, the action of this edit is the same as of {@code copyColumn}.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param copyColumn the column edit to copy from
+	 * @param needsCopySource if the {@code copyColumn} is needed to execute a COPY action
+	 * 	with this edit later
+	 */
 	private ColumnNodeEdit(DataSetNodeEdit parent, ColumnNodeEdit copyColumn, boolean needsCopySource) {
 		this(parent, copyColumn.getInputPathFromFileWithName(), copyColumn.getInputColumnIndex(),
-				copyColumn.getName(), copyColumn.getInputType(), copyColumn.getInputRowCount(),
+				copyColumn.getName(), copyColumn.getInputType(), copyColumn.getInputRowSize(),
 				needsCopySource ? (copyColumn.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY) : copyColumn.getEditAction());
 		copyAdditionalPropertiesFrom(copyColumn);
 		if (needsCopySource && getEditAction() == EditAction.COPY) {
 			setCopyEdit(copyColumn.getParent());
 		}
+		
+		/* 
+		 * is needed to set the edit action of the parent dataSet edit to MODIFY
+		 * instead of MODIFY_CHILDREN_ONLY
+		 */
 		updateDataSetEditAction(parent);
 	}
 
+	/**
+	 * Initializes a new column edit with the input knime {@code columnSpec}.
+	 * The edit action is set to CREATE.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param columnSpec the knime column spec for this edit
+	 */
 	public ColumnNodeEdit(DataSetNodeEdit parent, DataColumnSpec columnSpec) {
 		this(parent, columnSpec.getName(), NO_COLUMN_INDEX, columnSpec.getName(), HdfDataType.getHdfDataType(columnSpec.getType()),
-				UNKNOWN_ROW_COUNT, EditAction.CREATE);
+				UNKNOWN_ROW_SIZE, EditAction.CREATE);
 		updateDataSetEditAction(parent);
 	}
 	
+	/**
+	 * Does updates on the edit action of the {@code parent} dataSet edit
+	 * which are not included in the update of a {@linkplain TreeNodeEdit}.
+	 * 
+	 * @param parent the parent dataSet edit for this edit
+	 */
 	private void updateDataSetEditAction(DataSetNodeEdit parent) {
 		/*if (parent.getEditAction().isCreateOrCopyAction()) {
 			parent.setEditAction(EditAction.CREATE);
@@ -61,26 +95,71 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 			parent.setEditAction(EditAction.MODIFY);
 		}
 	}
-	
-	ColumnNodeEdit(DataSetNodeEdit parent, int inputColumnIndex, String name, HdfDataType inputType, long inputRowCount) {
-		this(parent, parent.getInputPathFromFileWithName(), inputColumnIndex, name, inputType, inputRowCount, EditAction.NO_ACTION);
+
+	/**
+	 * Initializes a new column edit for the input hdf dataSet of the
+	 * {@code parent}. The edit action is set to NO_ACTION.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param inputColumnIndex the input column of this edit in the hdf dataSet
+	 * 	of the parent (set to
+	 * 	{@linkplain ColumnNodeEdit#NO_COLUMN_INDEX} if this edit is initialized
+	 * 	from a knime column spec)
+	 * @param name the name of this edit
+	 * @param inputType the input data type of this edit
+	 * @param inputRowSize the input row size of this edit (set to
+	 * 	{@linkplain ColumnNodeEdit#UNKNOWN_ROW_SIZE} if this edit is initialized
+	 * 	from a knime column spec)
+	 */
+	ColumnNodeEdit(DataSetNodeEdit parent, int inputColumnIndex, String name, HdfDataType inputType, long inputRowSize) {
+		this(parent, parent.getInputPathFromFileWithName(), inputColumnIndex, name, inputType, inputRowSize, EditAction.NO_ACTION);
 		setHdfObject((Hdf5TreeElement) parent.getHdfObject());
 	}
-	
+
+	/**
+	 * Initializes a new column edit with all core settings.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param inputPathFromFileWithName the path of the parent's edit's hdf dataSet
+	 * @param inputColumnIndex the input column of this edit in the hdf dataSet
+	 * 	of the parent (set to
+	 * 	{@linkplain ColumnNodeEdit#NO_COLUMN_INDEX} if this edit is initialized
+	 * 	from a knime column spec)
+	 * @param name the output name of this edit
+	 * @param inputType the input data type of this edit
+	 * @param inputRowSize the input row size of this edit (set to
+	 * 	{@linkplain ColumnNodeEdit#UNKNOWN_ROW_SIZE} if this edit is initialized
+	 * 	from a knime column spec)
+	 * @param editAction the action of this edit
+	 */
 	ColumnNodeEdit(DataSetNodeEdit parent, String inputPathFromFileWithName, int inputColumnIndex, String name, HdfDataType inputType,
-			long inputRowCount, EditAction editAction) {
+			long inputRowSize, EditAction editAction) {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, EditOverwritePolicy.NONE, editAction);
 		setTreeNodeMenu(new ColumnNodeMenu());
 		m_inputColumnIndex = inputColumnIndex;
 		m_inputType = inputType;
-		m_inputRowCount = inputRowCount;
+		m_inputRowSize = inputRowSize;
 		parent.addColumnNodeEdit(this);
 	}
 
+	/**
+	 * Copies this edit to {@code parent}.
+	 * 
+	 * @param parent the destination of the new copy
+	 * @return the new copy
+	 */
 	public ColumnNodeEdit copyColumnEditTo(DataSetNodeEdit parent) {
 		return copyColumnEditTo(parent, true);
 	}
-	
+
+	/**
+	 * Copies this edit to {@code parent}.
+	 * 
+	 * @param parent the destination of the new copy
+	 * @param needsCopySource if the information about this edit is needed for
+	 * 	the new edit
+	 * @return the new copy
+	 */
 	ColumnNodeEdit copyColumnEditTo(DataSetNodeEdit parent, boolean needsCopySource) {
 		ColumnNodeEdit newColumnEdit = new ColumnNodeEdit(parent, this, needsCopySource);
 		newColumnEdit.addEditToParentNodeIfPossible();
@@ -88,35 +167,65 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		return newColumnEdit;
 	}
 	
+	/**
+	 * @return if the input column specs contradict with this edit
+	 */
 	InvalidCause getInputInvalidCause() {
 		return m_inputInvalidCause;
 	}
 
+	/**
+	 * @return the column index of the column in the parent's hdf dataSet
+	 * 	(or {@linkplain ColumnNodeEdit#NO_COLUMN_INDEX} if this edit was
+	 * 	initialized from a knime column spec)
+	 */
 	int getInputColumnIndex() {
 		return m_inputColumnIndex;
 	}
 
+	/**
+	 * @return the column index for the parent's hdf dataSet
+	 */
 	int getOutputColumnIndex() {
 		return m_outputColumnIndex;
 	}
 
+	/**
+	 * @return the input type of the source (either the knime column spec or
+	 * 	the hdf dataSet)
+	 */
 	public HdfDataType getInputType() {
 		return m_inputType;
 	}
 
-	long getInputRowCount() {
-		return m_inputRowCount;
+	/**
+	 * @return the input row size of this column edit (or
+	 * {@linkplain ColumnNodeEdit#UNKNOWN_ROW_SIZE} if this edit was initialized
+	 * from a knime column spec)
+	 */
+	long getInputRowSize() {
+		return m_inputRowSize;
 	}
 	
-	void setInputRowCount(long inputRowCount) {
-		if (m_inputRowCount == UNKNOWN_ROW_COUNT) {
-			m_inputRowCount = inputRowCount;
-			if (((DataSetNodeEdit) getParent()).getInputRowCount() == UNKNOWN_ROW_COUNT) {
-				((DataSetNodeEdit) getParent()).setInputRowCount(inputRowCount);
+	/**
+	 * Only changes the input row size if it is still unknown.
+	 * 
+	 * @param inputRowSize the new input row size
+	 */
+	void setInputRowSize(long inputRowSize) {
+		if (m_inputRowSize == UNKNOWN_ROW_SIZE) {
+			m_inputRowSize = inputRowSize;
+			if (((DataSetNodeEdit) getParent()).getInputRowSize() == UNKNOWN_ROW_SIZE) {
+				((DataSetNodeEdit) getParent()).setInputRowSize(inputRowSize);
 			}
 		}
 	}
 	
+	/**
+	 * The properties of a column edit will never change.
+	 * 
+	 * @return false
+	 */
 	@Override
 	protected boolean havePropertiesChanged(Object hdfSource) {
 		return false;
@@ -130,7 +239,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	@Override
 	public String getToolTipText() {
 		return "(" + m_inputType.toString()
-				+ (m_inputRowCount != ColumnNodeEdit.UNKNOWN_ROW_COUNT ? ", rows: " + m_inputRowCount : "")
+				+ (m_inputRowSize != ColumnNodeEdit.UNKNOWN_ROW_SIZE ? ", rows: " + m_inputRowSize : "")
 				+ ") " + super.getToolTipText();
 	}
 	
@@ -171,7 +280,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		settings.addInt(SettingsKey.INPUT_COLUMN_INDEX.getKey(), m_inputColumnIndex);
 		settings.addInt(SettingsKey.OUTPUT_COLUMN_INDEX.getKey(), ((DataSetNodeEdit) getParent()).getIndexOfColumnEdit(this));
 		settings.addInt(SettingsKey.INPUT_TYPE.getKey(), m_inputType.getTypeId());
-		settings.addLong(SettingsKey.INPUT_ROW_COUNT.getKey(), m_inputRowCount);
+		settings.addLong(SettingsKey.INPUT_ROW_SIZE.getKey(), m_inputRowSize);
 	}
 	
 	@Override
@@ -186,8 +295,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	protected InvalidCause validateEditInternal() {
 		DataSetNodeEdit parent = (DataSetNodeEdit) getParent();
 		
-		InvalidCause cause = getEditAction() != EditAction.DELETE && m_inputRowCount != UNKNOWN_ROW_COUNT
-				&& m_inputRowCount != parent.getInputRowCount() ? InvalidCause.ROW_COUNT : null;
+		InvalidCause cause = getEditAction() != EditAction.DELETE && m_inputRowSize != UNKNOWN_ROW_SIZE
+				&& m_inputRowSize != parent.getInputRowSize() ? InvalidCause.ROW_COUNT : null;
 		
 		if (cause == null && parent.isOverwriteWithNewColumns()) {
 			ColumnNodeEdit[] columnEdits = parent.getColumnNodeEdits();
@@ -212,7 +321,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 					dataSet.open();
 					
 					// only supported for dataSets with max. 2 dimensions
-					if (m_inputRowCount == dataSet.numberOfRows()) {
+					if (m_inputRowSize == dataSet.numberOfRows()) {
 						values = dataSet.readColumn(dataSet.getDimensions().length > 1 ? new long[] { getInputColumnIndex() } : new long[0]);
 					} else {
 						cause = InvalidCause.INPUT_ROW_SIZE;
@@ -234,6 +343,10 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		return cause;
 	}
 	
+	/**
+	 * @return if the output data type may be used for this edit, but it
+	 * 	depends on the input data
+	 */
 	public boolean isMaybeInvalid() {
 		EditDataType parentDataType = ((DataSetNodeEdit) getParent()).getEditDataType();
 		return !m_inputType.getAlwaysConvertibleHdfTypes().contains(parentDataType.getOutputType())
@@ -245,6 +358,14 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		return false;
 	}
 	
+	/**
+	 * Validates the CREATE action of this edit based on the knime input
+	 * {@code columnSpecs} (not based on the data) such that it will be
+	 * noticed if some knime input is different from the one when the
+	 * settings were defined.
+	 * 
+	 * @param colSpecs the knime column specs of the input table
+	 */
 	void validateCreateAction(DataColumnSpec[] colSpecs) {
 		m_inputInvalidCause = null;
 		for (DataColumnSpec colSpec : colSpecs) {
@@ -257,22 +378,38 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		m_inputInvalidCause = InvalidCause.NO_COPY_SOURCE;
 	}
 
+	/**
+	 * Not supported here.
+	 */
 	@Override
 	protected void createAction(Map<String, FlowVariable> flowVariables, ExecutionContext exec, long totalProgressToDo) {
 	}
-	
+
+	/**
+	 * Not supported here.
+	 */
 	@Override
 	protected void copyAction(ExecutionContext exec, long totalProgressToDo) {
 	}
 
+	/**
+	 * Not supported here.
+	 */
 	@Override
 	protected void deleteAction() {
 	}
 
+	/**
+	 * Not supported here.
+	 */
 	@Override
 	protected void modifyAction(ExecutionContext exec, long totalProgressToDo) {
 	}
 	
+	/**
+	 * The class for the {@linkplain JPopupMenu} which can be accessed through
+	 * a right mouse click on this column edit.
+	 */
 	public class ColumnNodeMenu extends TreeNodeMenu {
 
 		private static final long serialVersionUID = 7696321716083384515L;
@@ -304,7 +441,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 				+ ",output=" + getOutputPathFromFileWithName() + ",outputColumnIndex=" + m_outputColumnIndex
 				+ ",action=" + getEditAction() + ",state=" + getEditState()
 				+ ",overwrite=" + getEditOverwritePolicy() + ",valid=" + isValid()
-				+ ",rowSize" + m_inputRowCount + ",inputType=" + m_inputType 
+				+ ",rowSize=" + m_inputRowSize + ",inputType=" + m_inputType 
 				+ ",dataSet=" + getHdfObject() + ",backupDataSet=" + getHdfBackup() + " }";
 	}
 }

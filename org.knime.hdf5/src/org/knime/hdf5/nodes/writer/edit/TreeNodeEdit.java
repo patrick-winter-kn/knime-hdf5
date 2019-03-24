@@ -64,7 +64,6 @@ public abstract class TreeNodeEdit {
 		NAME("name"),
 		INPUT_PATH_FROM_FILE_WITH_NAME("inputPathFromFileWithName"),
 		EDIT_OVERWRITE_POLICY("editOverwritePolicy"),
-		OVERWRITE_HDF_FILE("overwriteHdfFile"),
 		EDIT_ACTION("editAction"),
 		FILE_PATH("filePath"),
 		INPUT_INVALID_CAUSE("inputInvalidCause"),
@@ -81,7 +80,7 @@ public abstract class TreeNodeEdit {
 		NUMBER_OF_DIMENSIONS("numberOfDimensions"),
 		COMPRESSION("compression"),
 		CHUNK_ROW_SIZE("chunkRowSize"),
-		INPUT_ROW_COUNT("inputRowCount"),
+		INPUT_ROW_SIZE("inputRowSize"),
 		INPUT_COLUMN_INDEX("inputColumnIndex"),
 		OUTPUT_COLUMN_INDEX("outputColumnIndex"),
 		TOTAL_STRING_LENGTH("totalStringLength"),
@@ -274,6 +273,16 @@ public abstract class TreeNodeEdit {
 	
 	private EditSuccess m_editSuccess = EditSuccess.UNDECIDED;
 
+	/**
+	 * Initializes a new edit with all core settings.
+	 * 
+	 * @param inputPathFromFileWithName the input path from file or the name of
+	 * 	the input knime spec
+	 * @param outputPathFromFile the output path from file
+	 * @param name the output name of this edit
+	 * @param editOverwritePolicy the overwrite policy for this edit
+	 * @param editAction the action of this edit
+	 */
 	TreeNodeEdit(String inputPathFromFileWithName, String outputPathFromFile, String name, EditOverwritePolicy editOverwritePolicy, EditAction editAction) {
 		m_inputPathFromFileWithName = inputPathFromFileWithName;
 		m_outputPathFromFile = outputPathFromFile;
@@ -284,7 +293,8 @@ public abstract class TreeNodeEdit {
 	
 	/**
 	 * Get a name of a new child hdf object of {@code parent} that does not have
-	 * a name conflict with any other child hdf object of {@code parent}.
+	 * a name conflict with any other child of {@code parent} depending on the
+	 * {@code editClass}.
 	 * <br>
 	 * See {@linkplain Hdf5TreeElement#getUniqueName(List, String)} for more
 	 * details on the construction of the unique name.
@@ -294,6 +304,7 @@ public abstract class TreeNodeEdit {
 	 * @param name the name for the new child edit
 	 * @return the unique name for the new child edit
 	 * @see Hdf5TreeElement#getUniqueName(List, String)
+	 * @see TreeNodeEdit#getNamesOfChildrenWithNameConflictPossible(Class)
 	 */
 	public static String getUniqueName(TreeNodeEdit parent, Class<? extends TreeNodeEdit> editClass, String name) {
 		return Hdf5TreeElement.getUniqueName(parent.getNamesOfChildrenWithNameConflictPossible(editClass), name);
@@ -301,7 +312,7 @@ public abstract class TreeNodeEdit {
 	
 	/**
 	 * @return the input path where this edit's hdf object was located
-	 * 	including its name
+	 * 	within the hdf file including its name
 	 */
 	public String getInputPathFromFileWithName() {
 		return m_inputPathFromFileWithName;
@@ -309,6 +320,7 @@ public abstract class TreeNodeEdit {
 	
 	/**
 	 * @return the output path where this edit's hdf object should be located
+	 * 	within the hdf file
 	 */
 	public String getOutputPathFromFile() {
 		return m_outputPathFromFile;
@@ -585,10 +597,10 @@ public abstract class TreeNodeEdit {
 		TreeNodeEdit copyEdit = null;
 		
 		if (this instanceof GroupNodeEdit) {
-			copyEdit = ((GroupNodeEdit) this).copyGroupEditTo((GroupNodeEdit) parent, false, true);
+			copyEdit = ((GroupNodeEdit) this).copyGroupEditTo((GroupNodeEdit) parent, false);
 			
 		} else if (this instanceof DataSetNodeEdit) {
-			copyEdit = ((DataSetNodeEdit) this).copyDataSetEditTo((GroupNodeEdit) parent, false, true);
+			copyEdit = ((DataSetNodeEdit) this).copyDataSetEditTo((GroupNodeEdit) parent, false);
 			
 		} else if (this instanceof ColumnNodeEdit) {
 			copyEdit = ((ColumnNodeEdit) this).copyColumnEditTo((DataSetNodeEdit) parent, false);
@@ -1083,7 +1095,8 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
-	 * @return the total progress to do in this edit
+	 * @return the total progress which will be done during the execution for
+	 * 	this edit
 	 * @throws IOException if the hdf source is needed and cannot be found
 	 */
 	protected abstract long getProgressToDoInEdit() throws IOException;
@@ -1284,6 +1297,7 @@ public abstract class TreeNodeEdit {
 	 * 
 	 * @param editClass the class to be checked
 	 * @return the names of the children that might have a name conflict
+	 * @see TreeNodeEdit#isNameConflictPossible(Class)
 	 */
 	private List<String> getNamesOfChildrenWithNameConflictPossible(Class<? extends TreeNodeEdit> editClass) {
 		List<String> usedNames = new ArrayList<>();
@@ -1368,8 +1382,9 @@ public abstract class TreeNodeEdit {
 	protected abstract void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException;
 
 	/**
-	 * Adds the tree node of this edit to the parent tree node in the
-	 * {@linkplain JTree} if possible. Otherwise, this method does nothing.
+	 * Creates (if none exists) and adds the tree node of this edit to the
+	 * parent tree node in the {@linkplain JTree} if possible. Otherwise,
+	 * this method does nothing.
 	 * 
 	 * @return if the tree node of this edit was added successfully
 	 */
@@ -1403,7 +1418,13 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
-	 * Uses the overwrite policy of {@code newEdit} to add it in this edit.
+	 * Uses the overwrite policy of {@code newEdit} to add it in this edit,
+	 * but does not actually add it. Also uses the overwrite policy for columns
+	 * if this is a dataSet edit.
+	 * <br>
+	 * Only does the changes on children of this edit and {@code newEdit}
+	 * which are needed to do a successful {@code integrate(newEdit.getParent())}
+	 * such that this edit will still be valid afterwards.
 	 * 
 	 * @param newEdit the new edit which should be added to this edit
 	 */
@@ -1427,9 +1448,9 @@ public abstract class TreeNodeEdit {
 					} else {
 						TreeNodeEdit deleteEdit = null;
 						if (oldEdit instanceof GroupNodeEdit) {
-							deleteEdit = ((GroupNodeEdit) oldEdit).copyGroupEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
+							deleteEdit = ((GroupNodeEdit) oldEdit).copyGroupEditTo((GroupNodeEdit) parentOfNewEdit, false);
 						} else if (oldEdit instanceof DataSetNodeEdit) {
-							deleteEdit = ((DataSetNodeEdit) oldEdit).copyDataSetEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
+							deleteEdit = ((DataSetNodeEdit) oldEdit).copyDataSetEditTo((GroupNodeEdit) parentOfNewEdit, false);
 						} else if (oldEdit instanceof AttributeNodeEdit) {
 							deleteEdit = ((AttributeNodeEdit) oldEdit).copyAttributeEditTo(parentOfNewEdit, false);
 						}
@@ -1450,7 +1471,7 @@ public abstract class TreeNodeEdit {
 						
 						TreeNodeEdit integrateEdit = null;
 						if (oldEdit instanceof GroupNodeEdit) {
-							integrateEdit = ((GroupNodeEdit) oldEdit).copyGroupEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
+							integrateEdit = ((GroupNodeEdit) oldEdit).copyGroupEditTo((GroupNodeEdit) parentOfNewEdit, false);
 							if (editToOverwrite != null) {
 								((GroupNodeEdit) integrateEdit).integrate((GroupNodeEdit) editToOverwrite);
 								integrateEdit.copyPropertiesFrom(editToOverwrite);
@@ -1461,7 +1482,7 @@ public abstract class TreeNodeEdit {
 							((GroupNodeEdit) integrateEdit).integrate((GroupNodeEdit) newEdit);
 							
 						} else if (oldEdit instanceof DataSetNodeEdit) {
-							integrateEdit = ((DataSetNodeEdit) oldEdit).copyDataSetEditTo((GroupNodeEdit) parentOfNewEdit, false, true);
+							integrateEdit = ((DataSetNodeEdit) oldEdit).copyDataSetEditTo((GroupNodeEdit) parentOfNewEdit, false);
 							if (editToOverwrite != null) {
 								((DataSetNodeEdit) integrateEdit).integrate((DataSetNodeEdit) editToOverwrite, true);
 								integrateEdit.copyPropertiesFrom(editToOverwrite);
@@ -1496,7 +1517,8 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
-	 * Validates this edit internally and externally (based on the input).
+	 * Validates this edit internally and/or externally (based on if the validation
+	 * result depends on the respective hdf file).
 	 * 
 	 * @param internalCheck if an internal check should be done
 	 * @param externalCheck if an external check should be done
@@ -1544,7 +1566,8 @@ public abstract class TreeNodeEdit {
 	 * Checks if this edit is valid in all properties those validation is not
 	 * dependent on the respective hdf file where this edit is executed.
 	 * 
-	 * @return check if this edit is valid internally
+	 * @return the cause why this edit is invalid internally (or {@code null}
+	 * 	if it is valid)
 	 */
 	protected abstract InvalidCause validateEditInternal();
 	
@@ -1558,9 +1581,10 @@ public abstract class TreeNodeEdit {
 	protected abstract boolean isInConflict(TreeNodeEdit edit);
 	
 	/**
-	 * Executes the edit defined by {@linkplain EditAction} properties of this edit.
-	 * The edit actions of all descendants are also executed in this method. It
-	 * also independently from each other sets the success of all executed edits.
+	 * Executes the edit defined by {@linkplain EditAction} and the properties
+	 * of this edit. The edit actions of all descendants are also executed in
+	 * this method. It also independently from each other sets the success of
+	 * all executed edits.
 	 * 
 	 * @param inputTable the knime input table
 	 * @param flowVariables the knime flow variables

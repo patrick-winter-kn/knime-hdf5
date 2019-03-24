@@ -91,7 +91,7 @@ public class EditTreeConfiguration {
         // if filePath is still null, use filePath from settings
 		if (settings.containsKey(m_configRootName + "_File")) {
 	        NodeSettingsRO fileSettings = settings.getNodeSettings(m_configRootName + "_File");
-	        m_fileEdit = FileNodeEdit.useFileSettings(fileSettings, filePath, policy);
+	        m_fileEdit = FileNodeEdit.loadSettingsFrom(fileSettings, filePath, policy);
 		}
     }
 	

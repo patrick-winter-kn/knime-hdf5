@@ -129,7 +129,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 				oldFileEdit = new FileNodeEdit(fileEdit.getFilePath(), fileEdit.isOverwriteHdfFile());
 			}
 			
-			boolean valid = lastValidationBeforeExecution ? oldFileEdit.doLastValidationBeforeExecution(fileEdit, inputTable) : oldFileEdit.integrateAndValidate(fileEdit);
+			boolean valid = lastValidationBeforeExecution ? oldFileEdit.finalIntegrateAndValidate(fileEdit, inputTable) : oldFileEdit.integrateAndValidate(fileEdit);
 			if (!valid) {
 				// TODO change after testing
 				// System.out.println(inputTable == null ? "1." : "2.");

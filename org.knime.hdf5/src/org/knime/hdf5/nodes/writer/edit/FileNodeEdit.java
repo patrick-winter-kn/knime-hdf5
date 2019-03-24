@@ -30,6 +30,7 @@ import org.knime.hdf5.lib.Hdf5File;
 import org.knime.hdf5.lib.Hdf5Group;
 import org.knime.hdf5.lib.Hdf5TreeElement;
 import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
+import org.knime.hdf5.nodes.writer.edit.TreeNodeEdit.EditAction;
 
 import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
 
@@ -45,29 +46,55 @@ public class FileNodeEdit extends GroupNodeEdit {
 	
 	private final String m_filePath;
 	
-	private final boolean m_overwriteHdfFile;
-	
 	private JTree m_tree;
 	
+	/**
+	 * Initializes a new file edit for the input hdf {@code file}.
+	 * The edit action is set to NO_ACTION.
+	 * 
+	 * @param file the hdf file for this edit
+	 */
 	public FileNodeEdit(Hdf5File file) {
 		this(file.getFilePath(), false, EditAction.NO_ACTION);
 		setHdfObject(file);
 	}
-	
+
+	/**
+	 * Initializes a new file edit to CREATE a new file at the {@code filePath}.
+	 * 
+	 * @param filePath the file path for the new file
+	 * @param overwriteFile if an existing file should be overwritten or if
+	 * 	there should be an error then
+	 */
 	public FileNodeEdit(String filePath, boolean overwriteFile) {
 		this(filePath, overwriteFile, EditAction.CREATE);
 	}
 	
+	/**
+	 * Initializes a new file edit with all core settings.
+	 * 
+	 * @param filePath the file path for the new file
+	 * @param overwriteFile if an existing file should be overwritten or if
+	 * 	there should be an error then
+	 * @param editAction the action of this edit
+	 */
 	private FileNodeEdit(String filePath, boolean overwriteFile, EditAction editAction) {
-		super(null, null, filePath.substring(filePath.lastIndexOf(File.separator) + 1), EditOverwritePolicy.NONE, editAction);
-		m_filePath = filePath;
-		m_overwriteHdfFile = overwriteFile;
+		super(null, null, filePath.substring(filePath.lastIndexOf(File.separator) + 1),
+				overwriteFile ? EditOverwritePolicy.OVERWRITE : EditOverwritePolicy.NONE, editAction);
+		m_filePath = new File(filePath).getAbsolutePath();
 	}
 	
+	/**
+	 * Copies this file edit with only those descendants that have an action
+	 * (i.e. the edit action is not NO_ACTION).
+	 * 
+	 * @return the new file edit
+	 * @throws IOException if the hdf file of this edit could not be opened
+	 */
 	public FileNodeEdit copyWithoutNoActionEdits() throws IOException {
 		FileNodeEdit copyFileEdit = null;
 		if (getEditAction().isCreateOrCopyAction()) {
-			copyFileEdit = new FileNodeEdit(m_filePath, m_overwriteHdfFile);
+			copyFileEdit = new FileNodeEdit(m_filePath, isOverwriteHdfFile());
 		} else {
 			Hdf5File file = null;
 			try {
@@ -95,15 +122,29 @@ public class FileNodeEdit extends GroupNodeEdit {
 		
 		return copyFileEdit;
 	}
-	
+
+	/**
+	 * @return the absolute file path of this edit's hdf file
+	 */
 	public String getFilePath() {
 		return m_filePath;
 	}
 	
+	/**
+	 * @return if an already existing file on the file path should be overwritten
+	 */
 	public boolean isOverwriteHdfFile() {
-		return m_overwriteHdfFile;
+		return getEditOverwritePolicy() == EditOverwritePolicy.OVERWRITE;
 	}
 	
+	/**
+	 * Get the descendant group edit with the specified input path within the
+	 * hdf file of this edit or {@code null} if none exists. Every group edit
+	 * in between the path also has to exist in the same way (recursively).
+	 * 
+	 * @param inputPathFromFileWithName the input path from file
+	 * @return the searched descendant group edit
+	 */
 	GroupNodeEdit getGroupEditByPath(String inputPathFromFileWithName) {
 		if (!inputPathFromFileWithName.isEmpty()) {
 			int pathLength = inputPathFromFileWithName.lastIndexOf("/");
@@ -116,6 +157,14 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 
+	/**
+	 * Get the descendant dataSet edit with the specified input path within the
+	 * hdf file of this edit or {@code null} if none exists. Every group edit
+	 * in between the path also has to exist in the same way (recursively).
+	 * 
+	 * @param inputPathFromFileWithName the input path from file
+	 * @return the searched descendant dataSet edit
+	 */
 	DataSetNodeEdit getDataSetEditByPath(String inputPathFromFileWithName) {
 		int pathLength = inputPathFromFileWithName.lastIndexOf("/");
 		GroupNodeEdit parent = pathLength >= 0 ? getGroupEditByPath(inputPathFromFileWithName.substring(0, pathLength)) : this;
@@ -123,12 +172,33 @@ public class FileNodeEdit extends GroupNodeEdit {
 		return parent != null ? parent.getDataSetNodeEdit(inputPathFromFileWithName) : null;
 	}
 
+	/**
+	 * Get the descendant column edit which is a child of a dataSet with the
+	 * specified input path within a hdf file of this edit or {@code null}
+	 * if none exists. Every group edit in between the path also has to exist
+	 * in the same way (recursively).
+	 * <br>
+	 * Finds the column edit within the
+	 * dataSet edit by using the {@code inputColumnIndex}.
+	 * 
+	 * @param inputPathFromFileWithName the input path from file
+	 * @return the searched descendant column edit
+	 */
 	ColumnNodeEdit getColumnEditByPath(String inputPathFromFileWithName, int inputColumnIndex) {
 		DataSetNodeEdit parent = getDataSetEditByPath(inputPathFromFileWithName);
 		
 		return parent != null ? parent.getColumnNodeEdit(inputPathFromFileWithName, inputColumnIndex) : null;
 	}
 
+	/**
+	 * Get the descendant attribute edit with the specified input path within the
+	 * hdf file of this edit or {@code null} if none exists. Every group edit
+	 * and dataSet edit in between the path also has to exist in the same way
+	 * (recursively).
+	 * 
+	 * @param inputPathFromFileWithName the input path from file
+	 * @return the searched descendant attribute edit
+	 */
 	AttributeNodeEdit getAttributeEditByPath(String inputPathFromFileWithName) {
 		AttributeNodeEdit attributeEdit = null;
 		
@@ -145,29 +215,12 @@ public class FileNodeEdit extends GroupNodeEdit {
 		
 		return attributeEdit;
 	}
-	
-	public static FileNodeEdit useFileSettings(final NodeSettingsRO settings, String filePath, final EditOverwritePolicy policy) throws InvalidSettingsException {
-		FileNodeEdit edit = null;
-		
-		if (filePath == null || filePath.trim().isEmpty()) {
-			filePath = settings.getString(SettingsKey.FILE_PATH.getKey());
-		}
-		try {
-			String renamedFilePath = policy == EditOverwritePolicy.RENAME ? Hdf5File.getUniqueFilePath(filePath) : filePath;
-			// TODO check this part again: note that SettingsKey.EDIT_ACTION is not used here
-			EditAction editAction = policy != EditOverwritePolicy.INTEGRATE || !Hdf5File.existsHdf5File(filePath)
-					? EditAction.CREATE : EditAction.NO_ACTION;
-			
-			edit = new FileNodeEdit(renamedFilePath, policy == EditOverwritePolicy.OVERWRITE, editAction);
-			
-		} catch (IOException ioe) {
-			throw new InvalidSettingsException(ioe.getMessage(), ioe);
-		}
-	    
-		edit.loadSettingsFrom(settings);
-		return edit;
-	}
 
+	/**
+	 * @return the total progress which will be done during the execution for
+	 * 	this edit and its descendants
+	 * @throws IOException if a hdf source is needed and cannot be found
+	 */
 	private long getTotalProgressToDo() throws IOException {
 		long progressToDo = 0;
 		
@@ -183,7 +236,61 @@ public class FileNodeEdit extends GroupNodeEdit {
 		return 1L + (getEditAction().isCreateOrCopyAction() ? 195L : 0L);
 	}
 
-	public boolean doLastValidationBeforeExecution(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
+	/**
+	 * Integrates {@code copyEdit} to this file edit specified by
+	 * {@linkplain FileNodeEdit#integrate(FileNodeEdit)}. Also updates
+	 * its copy sources and validates this edit.
+	 * <br>
+	 * <br>
+	 * For more information
+	 * why the validation failed, see
+	 * {@linkplain FileNodeEdit#getInvalidCauseMessages(TreeNodeEdit)}.
+	 * 
+	 * @param copyEdit the file edit to be integrated
+	 * @return if this file edit is valid
+	 * @see FileNodeEdit#getInvalidCauseMessages(TreeNodeEdit)
+	 */
+	public boolean integrateAndValidate(FileNodeEdit copyEdit) {
+		integrate(copyEdit);
+		updateCopySources();
+		validate();
+		return isValid();
+	}
+
+	/**
+	 * Integrates the children (and descendants) of {@code copyEdit}
+	 * (not those with {@code editAction == NO_ACTION}) in this file edit. The
+	 * properties of this file edit will stay the same. The properties
+	 * of this edit's children will be overwritten for those with an
+	 * action (not for those with {@code editAction == MODIFY_CHILDREN_ONLY}).
+	 * 
+	 * @param copyEdit the file edit to be integrated
+	 */
+	public void integrate(FileNodeEdit copyEdit) {
+		super.integrate(copyEdit);
+	}
+
+	/**
+	 * First applies the overwrites policies of this file and its descendants.
+	 * <br>
+	 * <br>
+	 * Then integrates {@code copyEdit} to this file edit specified by
+	 * {@linkplain FileNodeEdit#integrate(FileNodeEdit)}. Also updates
+	 * its copy sources and validates this edit, also considering
+	 * the data and row size of the {@code inputTable}.
+	 * <br>
+	 * <br>
+	 * For more information
+	 * why the validation failed, see
+	 * {@linkplain FileNodeEdit#getInvalidCauseMessages(TreeNodeEdit)}.
+	 * 
+	 * @param copyEdit the file edit to be integrated
+	 * @param inputTable the knime data table that will be used to create
+	 * 	dataSets with help of the dataSet edits
+	 * @return if this file edit is valid
+	 * @see FileNodeEdit#getInvalidCauseMessages(TreeNodeEdit)
+	 */
+	public boolean finalIntegrateAndValidate(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
 		useOverwritePolicyForFile(copyEdit);
 		integrate(copyEdit);
 		updateCopySources();
@@ -191,6 +298,13 @@ public class FileNodeEdit extends GroupNodeEdit {
 		return isValid() && copyEdit.isValid();
 	}
 	
+	/**
+	 * Uses the overwrite policies of all children of this file edit to add
+	 * them in this edit, but does not actually add them.
+	 * 
+	 * @param fileEdit the new edit which should be integrated to this edit
+	 * @see TreeNodeEdit#useOverwritePolicy(TreeNodeEdit)
+	 */
 	private void useOverwritePolicyForFile(FileNodeEdit fileEdit) {
 		for (TreeNodeEdit edit : fileEdit.getAllChildren()) {
 			useOverwritePolicy(edit);
@@ -204,23 +318,48 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 
-	public boolean integrateAndValidate(FileNodeEdit copyEdit) {
-		integrate(copyEdit);
-		updateCopySources();
-		validate();
-		return isValid();
-	}
-	
-	public void integrate(FileNodeEdit copyEdit) {
-		super.integrate(copyEdit);
-	}
-
 	@Override
 	public void saveSettingsTo(NodeSettingsWO settings) {
 		super.saveSettingsTo(settings);
 		
         settings.addString(SettingsKey.FILE_PATH.getKey(), m_filePath);
-        settings.addBoolean(SettingsKey.OVERWRITE_HDF_FILE.getKey(), m_overwriteHdfFile);
+	}
+
+	/**
+	 * Loads the stored file edit from {@code settings}. Uses the input
+	 * {@code filePath} if not {@code null} or empty. Otherwise, uses the
+	 * file path stored in the {@code settings}. Same for {@code policy}.
+	 * 
+	 * @param settings the settings to be load from
+	 * @param filePath the file path to use if a different one from the
+	 * 	{@code settings} should be used
+	 * @param policy the overwrite policy to use if a different one from the
+	 * 	{@code settings} should be used
+	 * @return the loaded file edit
+	 * @throws InvalidSettingsException if a required property does not exist
+	 */
+	public static FileNodeEdit loadSettingsFrom(final NodeSettingsRO settings, String filePath, EditOverwritePolicy policy) throws InvalidSettingsException {
+		FileNodeEdit edit = null;
+		
+		if (filePath == null || filePath.trim().isEmpty()) {
+			filePath = settings.getString(SettingsKey.FILE_PATH.getKey());
+		}
+		if (policy == null) {
+			policy = EditOverwritePolicy.get(settings.getString(SettingsKey.EDIT_OVERWRITE_POLICY.getKey()));
+		}
+		try {
+			String renamedFilePath = policy == EditOverwritePolicy.RENAME ? Hdf5File.getUniqueFilePath(filePath) : filePath;
+			EditAction editAction = policy != EditOverwritePolicy.INTEGRATE || !Hdf5File.existsHdf5File(filePath)
+					? EditAction.CREATE : EditAction.NO_ACTION;
+			
+			edit = new FileNodeEdit(renamedFilePath, policy == EditOverwritePolicy.OVERWRITE, editAction);
+			
+		} catch (IOException ioe) {
+			throw new InvalidSettingsException(ioe.getMessage(), ioe);
+		}
+	    
+		edit.loadSettingsFrom(settings);
+		return edit;
 	}
 	
 	@Override
@@ -229,6 +368,12 @@ public class FileNodeEdit extends GroupNodeEdit {
 		validate();
 	}
 	
+	/**
+	 * Loads the hdf objects of all descendants of the hdf file.
+	 * The hdf must already be loaded.
+	 * 
+	 * @throws IOException if a hdf object could not be loaded
+	 */
 	private void loadAllHdfObjectsOfFile() throws IOException {
 		List<TreeNodeEdit> descendants = getAllDecendants();
 		descendants.remove(this);
@@ -237,7 +382,14 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 
-	private void loadHdfObjectOf(TreeNodeEdit edit) throws IOException {
+	/**
+	 * Loads the hdf object of {@code edit}.
+	 * 
+	 * @param edit the edit for which the hdf object should be loaded
+	 * @throws IOException if the hdf object of {@code edit} could not be loaded
+	 * @throws NullPointerException if the parent hdf object has not been loaded
+	 */
+	private void loadHdfObjectOf(TreeNodeEdit edit) throws IOException, NullPointerException {
 		if (edit.getEditAction() != EditAction.CREATE && edit.getInputPathFromFileWithName() != null) {
 			if (edit instanceof GroupNodeEdit) {
 				edit.setHdfObject(((Hdf5File) getHdfObject()).getGroupByPath(edit.getInputPathFromFileWithName()));
@@ -249,12 +401,26 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 	
+	/**
+	 * Does nothing because no parent of a file edit can exist.
+	 * To set the tree node of this edit as a root of a {@linkplain JTree}, use
+	 * {@linkplain FileNodeEdit#setEditAsRootOfTree(JTree)}.
+	 * 
+	 * @return {@code false}
+	 * @see FileNodeEdit#setEditAsRootOfTree(JTree)
+	 */
 	@Override
 	public boolean addEditToParentNodeIfPossible() {
 		return false;
 		// not needed here; instead use setEditAsRootOfTree[JTree]
 	}
 	
+	/**
+	 * Creates (if none exists) and sets the tree node of this file edit as the
+	 * root of the {@linkplain JTree}. 
+	 * 
+	 * @param tree the tree to set the root
+	 */
 	public void setEditAsRootOfTree(JTree tree) {
 		if (m_treeNode == null) {
 			m_treeNode = new DefaultMutableTreeNode(this);
@@ -265,12 +431,23 @@ public class FileNodeEdit extends GroupNodeEdit {
 		reloadTree();
 	}
 
+	/**
+	 * Updates the {@linkplain JTree} where this file edit is the root of.
+	 */
 	public void reloadTree() {
 		validate();
 		((DefaultTreeModel) (m_tree.getModel())).reload();
 	}
 	
-	public void makeTreeNodeVisible(TreeNodeEdit edit) {
+	/**
+	 * Makes the tree node of {@code edit} visible or its tries to make its
+	 * parent (including the children) visible if the tree node of {@code edit}
+	 * is no descendant (anymore) of this edit's root node.
+	 * 
+	 * @param edit the edit to make visible
+	 * @throws NullPointerException if no tree node for {@code edit} exists
+	 */
+	public void makeTreeNodeVisible(TreeNodeEdit edit) throws NullPointerException {
 		if (edit.getTreeNode().isNodeAncestor(getTreeNode())) {
 			m_tree.makeVisible(new TreePath(edit.getTreeNode().getPath()));
 		} else if (edit.getParent().getTreeNode().getChildCount() != 0) {
@@ -281,6 +458,12 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 	
+	/**
+	 * Resets the {@code resetEdits} to the initialization state with their
+	 * hdf objects.
+	 * 
+	 * @param resetEdits the edits to be reset
+	 */
 	public void resetEdits(List<TreeNodeEdit> resetEdits) {
 		Hdf5File file = null;
 		try {
@@ -307,6 +490,11 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 	
+	/**
+	 * Resets the {@code edit} to the initialization state with its hdf object.
+	 * 
+	 * @param edit the edit to be reset
+	 */
 	private void resetEdit(TreeNodeEdit edit) {
 		Object hdfObject = null;
 		if (!edit.getEditAction().isCreateOrCopyAction()) {
@@ -346,10 +534,20 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 
+	/**
+	 * Validates this file edit internally and externally.
+	 */
 	private void validate() {
 		validate(null, true, true);
 	}
 	
+	/**
+	 * Validates this file edit externally and {@code copyEdit} internally with
+	 * help of the {@code inputTable}.
+	 * 
+	 * @param copyEdit edit for internal validation
+	 * @param inputTable
+	 */
 	private void doLastValidation(FileNodeEdit copyEdit, BufferedDataTable inputTable) {
 		// external validation
 		validate(null, false, true);
@@ -357,6 +555,15 @@ public class FileNodeEdit extends GroupNodeEdit {
 		copyEdit.validate(inputTable, true, false);
 	}
 	
+	/**
+	 * Validates this edit internally and/or externally (based on if the validation
+	 * result depends on the respective hdf file). Also uses the {@code inputTable}
+	 * in an internal validation.
+	 * 
+	 * @param inputTable
+	 * @param internalCheck if an internal check should be done
+	 * @param externalCheck if an external check should be done
+	 */
 	protected void validate(BufferedDataTable inputTable, boolean internalCheck, boolean externalCheck) {
 		Hdf5File file = null;
 		try {
@@ -392,13 +599,17 @@ public class FileNodeEdit extends GroupNodeEdit {
 		return cause;
 	}
 	
+	/**
+	 * @return the cause why the creation of new hdf file for this edit is
+	 * 	invalid (or {@code null} if it is valid)
+	 */
 	InvalidCause validateFileCreation() {
 		InvalidCause cause = null;
 		
 		if (getEditAction() == EditAction.CREATE) {
-			cause = !m_overwriteHdfFile && Hdf5File.existsHdf5File(m_filePath) ? InvalidCause.FILE_ALREADY_EXISTS : cause;
+			cause = !isOverwriteHdfFile() && Hdf5File.existsHdf5File(m_filePath) ? InvalidCause.FILE_ALREADY_EXISTS : cause;
 			
-			cause = cause == null && !Hdf5File.isHdf5FileCreatable(m_filePath, m_overwriteHdfFile) ? InvalidCause.NO_DIR_FOR_FILE : cause;
+			cause = cause == null && !Hdf5File.isHdf5FileCreatable(m_filePath, isOverwriteHdfFile()) ? InvalidCause.NO_DIR_FOR_FILE : cause;
 		}
 		
 		return cause;
@@ -410,6 +621,14 @@ public class FileNodeEdit extends GroupNodeEdit {
 				&& edit.getName().equals(getName());
 	}
 	
+	/**
+	 * Validates all descendants with a CREATE action based on the knime input
+	 * specs (not based on the data) such that it will be noticed if some knime
+	 * input is different from the one when the settings were defined.
+	 * 
+	 * @param colSpecs the knime column specs of the input table
+	 * @param flowVariables the knime flow variables
+	 */
 	public void validateCreateActions(DataColumnSpec[] colSpecs, Map<String, FlowVariable> flowVariables) {
 		for (TreeNodeEdit edit : getAllDecendants()) {
 			if (edit.getEditAction() == EditAction.CREATE) {
@@ -422,6 +641,12 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 	
+	/**
+	 * Validate the column edits on the data and row size of the knime input
+	 * table.
+	 * 
+	 * @param inputTable the knime input table
+	 */
 	private void lastValidationOfColumnEdits(BufferedDataTable inputTable) {
 		long inputRowCount = inputTable.size();
 		List<ColumnNodeEdit> validateEdits = new ArrayList<>();
@@ -429,7 +654,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 			if (edit instanceof ColumnNodeEdit && edit.getEditAction() == EditAction.CREATE) {
 				ColumnNodeEdit columnEdit = (ColumnNodeEdit) edit;
 				validateEdits.add(columnEdit);
-				columnEdit.setInputRowCount(inputRowCount);
+				columnEdit.setInputRowSize(inputRowCount);
 			}
 		}
 
@@ -479,7 +704,25 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 	
-	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec) throws IOException, CanceledExecutionException {
+	/**
+	 * Executes the edit defined by {@linkplain EditAction} and the properties
+	 * of this edit. The edit actions of all descendants are also executed in
+	 * this method. It also independently from each other sets the success of
+	 * all executed edits.
+	 * 
+	 * @param inputTable the knime input table
+	 * @param flowVariables the knime flow variables
+	 * @param saveColumnProperties if the column properties of the input table
+	 * 	should be stored as attributes in the respective dataSets in hdf
+	 * @param exec the knime execution context
+	 * @return if the execution of this edit and all descendants was successful
+	 * @throws CanceledExecutionException if the user cancelled the node while
+	 * 	executing this edit
+	 * @throws IOException if an error occurred
+	 * @throws NullPointerException if {@code inputTable} is {@code null}
+	 * 	although dataSets need to be written with its data
+	 */
+	public boolean doAction(BufferedDataTable inputTable, Map<String, FlowVariable> flowVariables, boolean saveColumnProperties, ExecutionContext exec) throws CanceledExecutionException, IOException, NullPointerException {
 		boolean preparationSuccess = false;
 		setEditState(EditState.IN_PROGRESS);
 		try {
@@ -492,7 +735,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 				if (preparationSuccess) {
 					loadAllHdfObjectsOfFile();
 				}
-			} else if (m_overwriteHdfFile && Hdf5File.existsHdf5File(m_filePath)) {
+			} else if (isOverwriteHdfFile() && Hdf5File.existsHdf5File(m_filePath)) {
 				setHdfObject(Hdf5File.openFile(m_filePath, Hdf5File.READ_WRITE_ACCESS));
 				createBackup();
 				preparationSuccess = deleteActionAndResetEditSuccess();
@@ -523,6 +766,9 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 
+	/**
+	 * Not supported here.
+	 */
 	@Override
 	protected void copyAction(ExecutionContext exec, long totalProgressToDo) {
 	}
@@ -539,12 +785,34 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 	}
 
+	/**
+	 * Not supported here.
+	 */
 	@Override
 	protected void modifyAction(ExecutionContext exec, long totalProgressToDo) {
 	}
 	
+	/**
+	 * Executes the actions of the dataSets which have already been created by
+	 * the regular action, but could not be written with the input data. So
+	 * in this method, the dataSets will be written with the data of
+	 * {@code inputTable}.
+	 * 
+	 * @param inputTable the knime input table
+	 * @param saveColumnProperties if the column properties of the input table
+	 * 	should be stored as attributes in the respective dataSets in hdf
+	 * @param exec the knime execution context
+	 * @param totalProgressToDo the total progress to do while executing the
+	 * 	hdf writer
+	 * @return if the execution of this edit and all descendants was successful
+	 * @throws CanceledExecutionException if the user cancelled the node while
+	 * 	executing this edit
+	 * @throws IOException if an error occurred
+	 * @throws NullPointerException if {@code inputTable} is {@code null}
+	 * 	although dataSets need to be written with its data
+	 */
 	@SuppressWarnings("unchecked")
-	private boolean doPostponedDataSetActions(BufferedDataTable inputTable, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws IOException, CanceledExecutionException, NullPointerException {
+	private boolean doPostponedDataSetActions(BufferedDataTable inputTable, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException, IOException, NullPointerException {
 		List<DataSetNodeEdit> dataSetEditList = new ArrayList<>();
 		for (TreeNodeEdit edit : getAllDecendants()) {
 			if (edit.getEditState() == EditState.CREATE_SUCCESS_WRITE_POSTPONED) {
@@ -581,7 +849,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 					ColumnNodeEdit edit = columnEdits[j];
 					if (edit.getEditAction() == EditAction.CREATE) {
 						specIndices[i][j] = tableSpec.findColumnIndex(edit.getName());
-						edit.setInputRowCount(inputRowCount);
+						edit.setInputRowSize(inputRowCount);
 						
 					} else {
 						specIndices[i][j] = -1;
@@ -695,6 +963,11 @@ public class FileNodeEdit extends GroupNodeEdit {
 		return success;
 	}
 	
+	/**
+	 * Deletes all backups in this file edit.
+	 * 
+	 * @return if all backups are deleted
+	 */
 	public boolean deleteAllBackups() {
 		boolean success = true;
 		
@@ -705,24 +978,32 @@ public class FileNodeEdit extends GroupNodeEdit {
 		return success;
 	}
 	
+	/**
+	 * Executes the all rollback actions of edits which have already been
+	 * executed successfully before an error occurred.
+	 * 
+	 * @return if the hdf file is the same as before its execution
+	 */
 	public boolean doRollbackAction() {
 		boolean success = true;
 		
 		if (getEditAction().isCreateOrCopyAction()) {
-			if (Hdf5File.existsHdf5File(m_filePath)) {
+			if (getEditState() == EditState.SUCCESS) {
 				try {
 					success &= deleteActionAndResetEditSuccess();
 					if (getHdfBackup() != null) {
 						setHdfObject(((Hdf5File) getHdfBackup()).copyFile(m_filePath));
 						success &= getHdfObject() != null;
 					}
-				} catch (IOException ioe) {
+				} catch (Exception e) {
 					success = false;
-					NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+					NodeLogger.getLogger(getClass()).error(e.getMessage(), e);
 					
 				} finally {
 					setEditState(success ? EditState.ROLLBACK_SUCCESS : EditState.ROLLBACK_FAIL);
 				}
+			} else {
+				setEditState(EditState.ROLLBACK_NOTHING_TODO);
 			}
 		} else {
 			List<TreeNodeEdit> rollbackEdits = getAllDecendants();
@@ -734,7 +1015,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 				if (!edit.getEditState().isExecutedState()) {
 					rollbackEdits.remove(edit);
 				} else if (edit.getEditState() == EditState.SUCCESS && edit.getEditAction() == EditAction.MODIFY_CHILDREN_ONLY
-						|| edit.getEditState() == EditState.FAIL && edit.getEditAction().isCreateOrCopyAction() /*&& edit.getHdfObject() == null*/) {
+						|| edit.getEditState() == EditState.FAIL && edit.getEditAction().isCreateOrCopyAction()) {
 					edit.setEditState(EditState.ROLLBACK_NOTHING_TODO);
 				} else if (edit.getEditAction() == EditAction.MODIFY || edit.getEditAction() == EditAction.DELETE) {
 					(edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).add(edit.getInputPathFromFileWithName());
@@ -782,7 +1063,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	@Override
 	public String toString() {
 		return "{ filePath=" + getFilePath() + ",action=" + getEditAction() + ",state=" + getEditState()
-				+ ",overwrite=" + getEditOverwritePolicy() + ",valid=" + isValid()
+				+ ",overwriteFile=" + isOverwriteHdfFile() + ",valid=" + isValid()
 				+ ",file=" + getHdfObject() + ",backup=" + getHdfBackup() + " }";
 	}
 }

@@ -452,7 +452,7 @@ public class EditTreePanel extends JPanel {
 			return fileEdit.getResettableEdits();
 		}
 		
-		return null;
+		return new TreeMap<>();
 	}
 	
 	void resetEdits(List<TreeNodeEdit> removeEdits) {

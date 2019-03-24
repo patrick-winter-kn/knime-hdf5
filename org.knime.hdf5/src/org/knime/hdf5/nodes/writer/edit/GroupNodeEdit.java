@@ -9,6 +9,8 @@ import java.util.Map;
 
 import javax.activation.UnsupportedDataTypeException;
 import javax.swing.JComboBox;
+import javax.swing.JDialog;
+import javax.swing.JPopupMenu;
 import javax.swing.JTextField;
 
 import org.knime.core.node.ExecutionContext;
@@ -35,10 +37,31 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	
 	private final List<AttributeNodeEdit> m_attributeEdits = new ArrayList<>();
 
+	/**
+	 * Creates a new group edit to CREATE a new group with the {@code name}
+	 * in the hdf group of {@code parent}.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param name the output name of this edit
+	 */
 	public GroupNodeEdit(GroupNodeEdit parent, String name) {
 		this(parent, null, name, EditOverwritePolicy.NONE, EditAction.CREATE);
 	}
 	
+	/**
+	 * Copies the group edit {@code copyGroup} to {@code parent} with all
+	 * properties, but without its child edits.
+	 * <br>
+	 * <br>
+	 * If {@code needsCopySource} is {@code true}, the action of this edit
+	 * will be set to COPY, except if {@code copyGroup}'s edit action is CREATE.
+	 * In all other cases, the action of this edit is the same as of {@code copyGroup}.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param copyGroup the group edit to copy from
+	 * @param needsCopySource if the {@code copyGroup} is needed to execute a COPY action
+	 * 	with this edit later
+	 */
 	private GroupNodeEdit(GroupNodeEdit parent, GroupNodeEdit copyGroup, boolean needsCopySource) {
 		this(parent, copyGroup.getInputPathFromFileWithName(), copyGroup.getName(), copyGroup.getEditOverwritePolicy(),
 				needsCopySource ? (copyGroup.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY) : copyGroup.getEditAction());
@@ -47,11 +70,34 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		}
 	}
 	
-	public GroupNodeEdit(GroupNodeEdit parent, Hdf5Group group) {
+	/**
+	 * Initializes a new group edit for the input hdf {@code group}.
+	 * The edit action is set to NO_ACTION.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param group the hdf group for this edit
+	 * @throws IllegalArgumentException if the parent of {@code group} and the
+	 * 	hdf object of {@code parent} are not the same hdf group
+	 */
+	public GroupNodeEdit(GroupNodeEdit parent, Hdf5Group group) throws IllegalArgumentException {
 		this(parent, group.getPathFromFileWithName(), group.getName(), EditOverwritePolicy.NONE, EditAction.NO_ACTION);
+		
+		if (group.getParent() != parent.getHdfObject()) {
+			throw new IllegalArgumentException("Hdf group cannot be added to this edit.");
+		}
+			
 		setHdfObject(group);
 	}
 	
+	/**
+	 * Initializes a new group edit with all core settings.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param inputPathFromFileWithName the path of this edit's hdf group
+	 * @param name the output name of this edit
+	 * @param editOverwritePolicy the overwrite policy for this edit
+	 * @param editAction the action of this edit
+	 */
 	protected GroupNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name, EditOverwritePolicy editOverwritePolicy, EditAction editAction) {
 		super(inputPathFromFileWithName, parent != null && !(parent instanceof FileNodeEdit)
 				? parent.getOutputPathFromFileWithName() : "", name, editOverwritePolicy, editAction);
@@ -62,87 +108,98 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 	
 	/**
-	 * Copies this {@code GroupNodeEdit} to {@code parent}.
+	 * Copies this edit to {@code parent} with all descendants.
 	 * 
-	 * @param parent					the destination of the new copy
-	 * @return							the new copy
-	 * @throws IllegalArgumentException	if {@code parent} is already a descendant of this
+	 * @param parent the destination of the new copy
+	 * @return the new copy
+	 * @throws IllegalArgumentException	if {@code parent} is already a
+	 * 	descendant of this edit
 	 */
 	public GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent) throws IllegalArgumentException {
-		return copyGroupEditTo(parent, true, true);
+		return copyGroupEditTo(parent, true);
 	}
 	
 	/**
-	 * Copies this {@code GroupNodeEdit} to {@code parent}.
+	 * Copies this edit to {@code parent} with all descendants.
 	 * 
-	 * @param parent					the destination of the new copy
-	 * @param needsCopySource			{@code true} if this (respective the copy source of this) should be added to the new copy
-	 * @param copyWithAllChildren		{@code true} if all children should be copied,
-	 * 		{@code false} if on children with {@code EditAction.COPY} or {@code EditAction.CREATE} should be copied
-	 * @return							the new copy
-	 * @throws IllegalArgumentException	if {@code parent} is already a descendant of this
+	 * @param parent the destination of the new copy
+	 * @param needsCopySource if the information about this edit is needed for
+	 * 	the new edit
+	 * @return the new copy
+	 * @throws IllegalArgumentException	if {@code parent} is already a
+	 * 	descendant of this edit
 	 */
-	GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent, boolean needsCopySource, boolean copyWithAllChildren) throws IllegalArgumentException {
+	GroupNodeEdit copyGroupEditTo(GroupNodeEdit parent, boolean needsCopySource) throws IllegalArgumentException {
 		if (isEditDescendantOf(parent)) {
-			throw new IllegalArgumentException("Cannot add group to ifself");
+			throw new IllegalArgumentException("Cannot copy this group to a descendant");
 		}
 		
 		GroupNodeEdit newGroupEdit = new GroupNodeEdit(parent, this, needsCopySource);
 		newGroupEdit.addEditToParentNodeIfPossible();
 		
 		for (GroupNodeEdit groupEdit : getGroupNodeEdits()) {
-			if (copyWithAllChildren || groupEdit.getEditAction().isCreateOrCopyAction()) {
-				groupEdit.copyGroupEditTo(newGroupEdit, needsCopySource, true);
-			}
+			groupEdit.copyGroupEditTo(newGroupEdit, needsCopySource);
 		}
 		
 		for (DataSetNodeEdit dataSetEdit : getDataSetNodeEdits()) {
-			if (copyWithAllChildren || dataSetEdit.getEditAction().isCreateOrCopyAction()) {
-				dataSetEdit.copyDataSetEditTo(newGroupEdit, needsCopySource, true);
-			}
+			dataSetEdit.copyDataSetEditTo(newGroupEdit, needsCopySource);
 		}
 		
 		for (AttributeNodeEdit attributeEdit : getAttributeNodeEdits()) {
-			if (copyWithAllChildren || attributeEdit.getEditAction().isCreateOrCopyAction()) {
-				attributeEdit.copyAttributeEditTo(newGroupEdit, needsCopySource);
-			}
+			attributeEdit.copyAttributeEditTo(newGroupEdit, needsCopySource);
 		}
 		
 		return newGroupEdit;
 	}
 
+	/**
+	 * @return the children of this edit which are group edits
+	 */
 	public GroupNodeEdit[] getGroupNodeEdits() {
 		return m_groupEdits.toArray(new GroupNodeEdit[] {});
 	}
-	
+
+	/**
+	 * @return the children of this edit which are dataSet edits
+	 */
 	public DataSetNodeEdit[] getDataSetNodeEdits() {
 		return m_dataSetEdits.toArray(new DataSetNodeEdit[] {});
 	}
-	
+
+	/**
+	 * @return the children of this edit which are attribute edits
+	 */
 	public AttributeNodeEdit[] getAttributeNodeEdits() {
 		return m_attributeEdits.toArray(new AttributeNodeEdit[] {});
 	}
 
-	public void addGroupNodeEdit(GroupNodeEdit edit) {
+	private void addGroupNodeEdit(GroupNodeEdit edit) {
 		m_groupEdits.add(edit);
 		edit.setParent(this);
 	}
 
-	public void addDataSetNodeEdit(DataSetNodeEdit edit) {
+	void addDataSetNodeEdit(DataSetNodeEdit edit) {
 		m_dataSetEdits.add(edit);
 		edit.setParent(this);
 	}
 	
-	public void addUnsupportedObjectNodeEdit(UnsupportedObjectNodeEdit edit) {
+	void addUnsupportedObjectNodeEdit(UnsupportedObjectNodeEdit edit) {
 		m_unsupportedObjectEdits.add(edit);
 		edit.setParent(this);
 	}
 	
-	public void addAttributeNodeEdit(AttributeNodeEdit edit) {
+	void addAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.add(edit);
 		edit.setParent(this);
 	}
 	
+	/**
+	 * Get the child group edit with the specified input path within the hdf file
+	 * of this edit's root or {@code null} if none exists.
+	 * 
+	 * @param inputPathFromFileWithName the input path from file
+	 * @return the searched child group edit
+	 */
 	GroupNodeEdit getGroupNodeEdit(String inputPathFromFileWithName) {
 		if (inputPathFromFileWithName != null) {
 			for (GroupNodeEdit groupEdit : m_groupEdits) {
@@ -154,7 +211,14 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		}
 		return null;
 	}
-	
+
+	/**
+	 * Get the child dataSet edit with the specified input path within the hdf file
+	 * of this edit's root or {@code null} if none exists.
+	 * 
+	 * @param inputPathFromFileWithName the input path from file
+	 * @return the searched child dataSet edit
+	 */
 	DataSetNodeEdit getDataSetNodeEdit(String inputPathFromFileWithName) {
 		if (inputPathFromFileWithName != null) {
 			for (DataSetNodeEdit dataSetEdit : m_dataSetEdits) {
@@ -166,7 +230,26 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		}
 		return null;
 	}
-	
+
+	/**
+	 * For {@code editAction == EditAction.CREATE}, get the child attribute edit
+	 * (with CREATE action) for the flowVariable with the name
+	 * {@code inputPathFromFileWithName} or {@code null} if none exists.
+	 * <br>
+	 * <br>
+	 * For {@code editAction == EditAction.COPY}, get the child attribute edit
+	 * with COPY action with the specified input path within the hdf file of
+	 * this edit's root or {@code null} if none exists.
+	 * <br>
+	 * <br>
+	 * For other {@code editAction}s, get the child attribute edit
+	 * without COPY action with the specified input path within the hdf file of
+	 * this edit's root or {@code null} if none exists.
+	 * 
+	 * @param inputPathFromFileWithName the input path from file
+	 * @param editAction the input path from file
+	 * @return the searched child attribute edit
+	 */
 	AttributeNodeEdit getAttributeNodeEdit(String inputPathFromFileWithName, EditAction editAction) {
 		if (inputPathFromFileWithName != null) {
 			for (AttributeNodeEdit attributeEdit : m_attributeEdits) {
@@ -180,7 +263,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		return null;
 	}
 
-	public void removeGroupNodeEdit(GroupNodeEdit edit) {
+	private void removeGroupNodeEdit(GroupNodeEdit edit) {
 		m_groupEdits.remove(edit);
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
@@ -188,7 +271,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		edit.setParent(null);
 	}
 
-	public void removeDataSetNodeEdit(DataSetNodeEdit edit) {
+	void removeDataSetNodeEdit(DataSetNodeEdit edit) {
 		m_dataSetEdits.remove(edit);
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
@@ -196,7 +279,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		edit.setParent(null);
 	}
 	
-	public void removeUnsupportedObjectNodeEdit(UnsupportedObjectNodeEdit edit) {
+	void removeUnsupportedObjectNodeEdit(UnsupportedObjectNodeEdit edit) {
 		m_unsupportedObjectEdits.remove(edit);
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
@@ -204,7 +287,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		edit.setParent(null);
 	}
 	
-	public void removeAttributeNodeEdit(AttributeNodeEdit edit) {
+	void removeAttributeNodeEdit(AttributeNodeEdit edit) {
 		m_attributeEdits.remove(edit);
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
@@ -212,6 +295,15 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		edit.setParent(null);
 	}
 	
+	/**
+	 * Integrates the children (and descendants) of {@code copyEdit}
+	 * (not those with {@code editAction == NO_ACTION}) in this group edit. The
+	 * properties of this group edit will stay the same. The properties
+	 * of this edit's children will be overwritten for those with an
+	 * action (not for those with {@code editAction == MODIFY_CHILDREN_ONLY}).
+	 * 
+	 * @param copyEdit the group edit to be integrated
+	 */
 	void integrate(GroupNodeEdit copyEdit) {
 		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
 			if (copyGroupEdit.getEditAction() != EditAction.NO_ACTION) {
@@ -220,7 +312,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 					DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
 					if (dataSetEdit != null) {
 						dataSetEdit.integrateAttributeEdits(copyGroupEdit);
-						break;
+						continue;
 					}
 				}
 				
@@ -232,7 +324,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 					groupEdit.integrate(copyGroupEdit);
 					
 				} else {
-					copyGroupEdit.copyGroupEditTo(this, false, groupEdit == null);
+					copyGroupEdit.copyGroupEditTo(this, false);
 				}
 			}
 		}
@@ -244,7 +336,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 					GroupNodeEdit groupEdit = getGroupNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
 					if (groupEdit != null) {
 						groupEdit.integrateAttributeEdits(copyDataSetEdit);
-						break;
+						continue;
 					}
 				}
 				
@@ -256,7 +348,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 					dataSetEdit.integrate(copyDataSetEdit, true);
 					
 				} else {
-					copyDataSetEdit.copyDataSetEditTo(this, false, dataSetEdit == null);
+					copyDataSetEdit.copyDataSetEditTo(this, false);
 				}
 			}
 		}
@@ -363,6 +455,13 @@ public class GroupNodeEdit extends TreeNodeEdit {
         }
 	}
 
+	/**
+	 * Loads the children/descendants of the hdf group for which this edit is
+	 * for and adds those as newly initialized child edits to this edit.
+	 * 
+	 * @throws IOException if the hdf group is not loaded or not open or
+	 * 	an error in the hdf library occurred
+	 */
 	void loadChildrenOfHdfObject() throws IOException {
 		Hdf5Group group = (Hdf5Group) getHdfObject();
 		
@@ -382,10 +481,15 @@ public class GroupNodeEdit extends TreeNodeEdit {
     			DataSetNodeEdit childEdit = null;
     			try {
         			Hdf5DataSet<?> child = group.getDataSet(dataSetName);
-        			if (child.getDimensions().length <= 2) {
+        			if (child.getDimensions().length == 0) {
+            			childEdit = new DataSetNodeEdit(this, child.getName(), "Scalar dataSet");
+            			childEdit.addEditToParentNodeIfPossible();
+            			
+        			} else if (child.getDimensions().length <= 2) {
             			childEdit = new DataSetNodeEdit(this, child);
             			childEdit.addEditToParentNodeIfPossible();
             			childEdit.loadChildrenOfHdfObject();
+            			
         			} else {
             			childEdit = new DataSetNodeEdit(this, child.getName(), "More than 2 dimensions");
             			childEdit.addEditToParentNodeIfPossible();
@@ -478,6 +582,10 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		}
 	}
 	
+	/**
+	 * The class for the {@linkplain JPopupMenu} which can be accessed through
+	 * a right mouse click on this group edit.
+	 */
 	public class GroupNodeMenu extends TreeNodeMenu {
 
     	private static final long serialVersionUID = -7709804406752499090L;
@@ -486,11 +594,20 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			super(!(GroupNodeEdit.this instanceof FileNodeEdit), true, !(GroupNodeEdit.this instanceof FileNodeEdit));
     	}
 
+		/**
+		 * Returns the dialog to modify the properties of this group edit.
+		 * 
+		 * @return the properties dialog
+		 */
 		@Override
 		protected PropertiesDialog getPropertiesDialog() {
 			return new GroupPropertiesDialog();
 		}
 
+		/**
+		 * Creates a new group edit as child of this edit to create a new hdf
+		 * group on execution.
+		 */
 		@Override
 		protected void onCreateGroup() {
 			GroupNodeEdit edit = GroupNodeEdit.this;
@@ -508,12 +625,15 @@ public class GroupNodeEdit extends TreeNodeEdit {
             parentOfVisible.reloadTreeWithEditVisible(true);
 		}
 		
+		/**
+		 * A {@linkplain JDialog} to set all properties of this group edit.
+		 */
 		private class GroupPropertiesDialog extends PropertiesDialog {
 	    	
 	    	private static final long serialVersionUID = 1254593831386973543L;
 	    	
-			private JTextField m_nameField = new JTextField(15);
-			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getAvailableValuesForEdit(GroupNodeEdit.this));
+			private final JTextField m_nameField = new JTextField(15);
+			private final JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getAvailableValuesForEdit(GroupNodeEdit.this));
 	    	
 			private GroupPropertiesDialog() {
 				super(GroupNodeMenu.this, "Group properties");

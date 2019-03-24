@@ -8,11 +8,17 @@ import org.knime.core.node.NodeSettingsRO;
 import org.knime.core.node.workflow.FlowVariable;
 
 /**
- * Class for unsupported types of objects in an hdf file. This class is
- * necessary to avoid name conflicts.
+ * Placeholder class for unsupported types of objects in an hdf file.
+ * This class is necessary to avoid name conflicts.
  */
 public class UnsupportedObjectNodeEdit extends TreeNodeEdit {
 
+	/**
+	 * Otherwise, it creates a new placeholder for an invalid object.
+	 * 
+	 * @param parent the parent of this placeholder
+	 * @param name the name of this placeholder
+	 */
 	UnsupportedObjectNodeEdit(GroupNodeEdit parent, String name) {
 		super(null, !(parent instanceof FileNodeEdit) ? parent.getOutputPathFromFileWithName() : "",
 				name, EditOverwritePolicy.NONE, EditAction.NO_ACTION);

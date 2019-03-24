@@ -545,13 +545,16 @@ public class Hdf5File extends Hdf5Group {
 	 * @return if the deletion from the hdf file was successful
 	 * @throws IOException if this file does not exist, is open somewhere on
 	 * the machine or an internal error occurred
-	 * @throws IllegalStateException if this file is not in write access
 	 * @see Hdf5File#isOpenAnywhere()
 	 */
-	public boolean deleteFile() throws IOException, IllegalStateException {
-		// TODO check if some other threads are still waiting for this file
-		if (m_access != READ_WRITE_ACCESS) {
-			throw new IllegalStateException("Write access is needed to delete a file.");
+	public boolean deleteFile() throws IOException {
+		// open this file in write access if it is not already
+		if (!isOpenInThisThread()) {
+			open(READ_WRITE_ACCESS);
+			
+		} else if (m_access != READ_WRITE_ACCESS) {
+			close();
+			open(READ_WRITE_ACCESS);
 		}
 		
 		GLOBAL_W.lock();

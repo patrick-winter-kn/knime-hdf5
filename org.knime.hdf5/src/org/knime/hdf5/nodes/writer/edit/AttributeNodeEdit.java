@@ -7,6 +7,8 @@ import java.util.Map;
 
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
+import javax.swing.JDialog;
+import javax.swing.JPopupMenu;
 import javax.swing.JTextField;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -43,13 +45,21 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	private boolean m_flowVariableArrayPossible;
 	
 	private boolean m_flowVariableArrayUsed;
-	
-	public AttributeNodeEdit(TreeNodeEdit parent, FlowVariable var) {
-		this(parent, var.getName(), var.getName().replaceAll("\\\\/", "/"), EditOverwritePolicy.NONE,
-				HdfDataType.getHdfDataType(var.getType()), EditAction.CREATE);
-		updatePropertiesFromFlowVariable(var);
-	}
 
+	/**
+	 * Copies the attribute edit {@code copyAttribute} to {@code parent} with all
+	 * properties.
+	 * <br>
+	 * <br>
+	 * If {@code needsCopySource} is {@code true}, the action of this edit
+	 * will be set to COPY, except if {@code copyAttribute}'s edit action is CREATE.
+	 * In all other cases, the action of this edit is the same as of {@code copyAttribute}.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param copyAttribute the attribute edit to copy from
+	 * @param needsCopySource if the {@code copyAttribute} is needed to execute a COPY action
+	 * 	with this edit later
+	 */
 	private AttributeNodeEdit(TreeNodeEdit parent, AttributeNodeEdit copyAttribute, boolean needsCopySource) {
 		this(parent, copyAttribute.getInputPathFromFileWithName(), copyAttribute.getName(), copyAttribute.getEditOverwritePolicy(), copyAttribute.getInputType(),
 				needsCopySource ? (copyAttribute.getEditAction() == EditAction.CREATE ? EditAction.CREATE : EditAction.COPY) : copyAttribute.getEditAction());
@@ -58,14 +68,42 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			setCopyEdit(copyAttribute);
 		}
 	}
-	
+
+	/**
+	 * Initializes a new attribute edit with the input knime flow variable {@code var}.
+	 * The edit action is set to CREATE.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param var the knime flow variable for this edit
+	 */
+	public AttributeNodeEdit(TreeNodeEdit parent, FlowVariable var) {
+		this(parent, var.getName(), var.getName().replaceAll("\\\\/", "/"), EditOverwritePolicy.NONE,
+				HdfDataType.getHdfDataType(var.getType()), EditAction.CREATE);
+		updatePropertiesFromFlowVariable(var);
+	}
+
+	/**
+	 * Creates a new placeholder for an invalid attribute with the cause
+	 * {@code unsupportedCause}.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param name the name of this edit
+	 */
 	AttributeNodeEdit(TreeNodeEdit parent, String name, String unsupportedCause) {
 		this(parent, null, name, EditOverwritePolicy.NONE, null, EditAction.NO_ACTION);
-		setUnsupportedCause(unsupportedCause != null ? unsupportedCause : "");
+		setUnsupportedCause(unsupportedCause != null ? unsupportedCause : "Unknown cause");
 		// remove menu to consider the edit is unsupported
 		setTreeNodeMenu(null);
 	}
 
+	/**
+	 * Initializes a new attribute edit for the input hdf {@code attribute}.
+	 * The edit action is set to NO_ACTION.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param attribute the hdf attribute for this edit
+	 * @throws IOException if the hdf attribute could not be read
+	 */
 	public AttributeNodeEdit(TreeNodeEdit parent, Hdf5Attribute<?> attribute) throws IOException {
 		this(parent, attribute.getPathFromFile() + attribute.getName().replaceAll("/", "\\\\/"), attribute.getName(), EditOverwritePolicy.NONE,
 				attribute.getType().getHdfType().getType(), EditAction.NO_ACTION);
@@ -82,7 +120,20 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		setHdfObject(attribute);
 	}
 
-	private AttributeNodeEdit(TreeNodeEdit parent, String inputPathFromFileWithName, String name, EditOverwritePolicy editOverwritePolicy, HdfDataType inputType, EditAction editAction) {
+	/**
+	 * Initializes a new attribute edit with all core settings.
+	 * 
+	 * @param parent the parent of this edit
+	 * @param inputPathFromFileWithName the path of this edit's hdf attribute
+	 * @param name the output name of this edit
+	 * @param editOverwritePolicy the overwrite policy for this edit
+	 * @param inputType the input data type of this edit
+	 * @param editAction the action of this edit
+	 * @throws IllegalArgumentException if {@code parent} is neither a
+	 * 	{@linkplain GroupNodeEdit} nor {@linkplain DataSetNodeEdit}
+	 */
+	private AttributeNodeEdit(TreeNodeEdit parent, String inputPathFromFileWithName, String name,
+			EditOverwritePolicy editOverwritePolicy, HdfDataType inputType, EditAction editAction) throws IllegalArgumentException{
 		super(inputPathFromFileWithName, !(parent instanceof FileNodeEdit) ? parent.getOutputPathFromFileWithName() : "", name, editOverwritePolicy, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
@@ -97,25 +148,62 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 					+ "\": AttributeNodeEdits can only exist in GroupNodeEdits or DataSetNodeEdits");
 		}
 	}
-	
-	AttributeNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name, EditOverwritePolicy editOverwritePolicy, HdfDataType inputType, EditAction editAction) {
+
+	/**
+	 * Initializes a new attribute edit with all core settings.
+	 * 
+	 * @param parent the parent group of this edit
+	 * @param inputPathFromFileWithName the path of this edit's hdf attribute
+	 * @param name the output name of this edit
+	 * @param editOverwritePolicy the overwrite policy for this edit
+	 * @param inputType the input data type of this edit
+	 * @param editAction the action of this edit
+	 */
+	AttributeNodeEdit(GroupNodeEdit parent, String inputPathFromFileWithName, String name,
+			EditOverwritePolicy editOverwritePolicy, HdfDataType inputType, EditAction editAction) {
 		super(inputPathFromFileWithName, !(parent instanceof FileNodeEdit) ? parent.getOutputPathFromFileWithName() : "", name, editOverwritePolicy, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
 		parent.addAttributeNodeEdit(this);
 	}
-	
-	AttributeNodeEdit(DataSetNodeEdit parent, String inputPathFromFileWithName, String name, EditOverwritePolicy editOverwritePolicy, HdfDataType inputType, EditAction editAction) {
+
+
+	/**
+	 * Initializes a new attribute edit with all core settings.
+	 * 
+	 * @param parent the parent dataSet of this edit
+	 * @param inputPathFromFileWithName the path of this edit's hdf attribute
+	 * @param name the output name of this edit
+	 * @param editOverwritePolicy the overwrite policy for this edit
+	 * @param inputType the input data type of this edit
+	 * @param editAction the action of this edit
+	 */
+	AttributeNodeEdit(DataSetNodeEdit parent, String inputPathFromFileWithName, String name,
+			EditOverwritePolicy editOverwritePolicy, HdfDataType inputType, EditAction editAction) {
 		super(inputPathFromFileWithName, parent.getOutputPathFromFileWithName(), name, editOverwritePolicy, editAction);
 		setTreeNodeMenu(new AttributeNodeMenu());
 		m_inputType = inputType;
 		parent.addAttributeNodeEdit(this);
 	}
-	
+
+	/**
+	 * Copies this edit to {@code parent}.
+	 * 
+	 * @param parent the destination of the new copy
+	 * @return the new copy
+	 */
 	public AttributeNodeEdit copyAttributeEditTo(TreeNodeEdit parent) {
 		return copyAttributeEditTo(parent, true);
 	}
-	
+
+	/**
+	 * Copies this edit to {@code parent}.
+	 * 
+	 * @param parent the destination of the new copy
+	 * @param needsCopySource if the information about this edit is needed for
+	 * 	the new edit
+	 * @return the new copy
+	 */
 	AttributeNodeEdit copyAttributeEditTo(TreeNodeEdit parent, boolean needsCopySource) {
 		AttributeNodeEdit newAttributeEdit = new AttributeNodeEdit(parent, this, needsCopySource);
 		newAttributeEdit.addEditToParentNodeIfPossible();
@@ -123,6 +211,12 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		return newAttributeEdit;
 	}
 	
+	/**
+	 * Updates this edit's properties using the value and data type of
+	 * {@code var}.
+	 * 
+	 * @param var the knime flow variable
+	 */
 	private void updatePropertiesFromFlowVariable(FlowVariable var) {
 		Object[] values = Hdf5Attribute.getFlowVariableValues(var);
 		m_inputType = Hdf5KnimeDataType.getKnimeDataType(values).getEquivalentHdfType();
@@ -140,31 +234,57 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		m_editDataType.setValues(m_inputType, possibleOutputTypes, Endian.LITTLE_ENDIAN,
 				Rounding.DOWN, m_inputType.isFloat(), false, m_itemStringLength);
 	}
-	
+
+	/**
+	 * @return if the input flow variables contradict with this edit
+	 */
 	InvalidCause getInputInvalidCause() {
 		return m_inputInvalidCause;
 	}
-	
+
+	/**
+	 * @return the input type of the source (either the knime flow variable or
+	 * 	the hdf attribute)
+	 */
 	public HdfDataType getInputType() {
 		return m_inputType;
 	}
 
+	/**
+	 * @return information on the output data type of this attribute edit
+	 */
 	public EditDataType getEditDataType() {
 		return m_editDataType;
 	}
 	
+	/**
+	 * @return the string length of the flow variable value as string or the
+	 * 	product of the dimension of the hdf attribute and its string length
+	 * 	(of each item)
+	 */
 	private int getTotalStringLength() {
 		return m_totalStringLength;
 	}
 
+	/**
+	 * @return the string length of each item in the hdf attribute
+	 */
 	public int getItemStringLength() {
 		return m_itemStringLength;
 	}
 	
+	/**
+	 * @return if the flow variable has the structure of a flow variable array
+	 * @see Hdf5Attribute#getFlowVariableValues(FlowVariable)
+	 */
 	private boolean isFlowVariableArrayPossible() {
 		return m_flowVariableArrayPossible;
 	}
 
+	/**
+	 * @return if the structure of a flow variable array is used
+	 * @see Hdf5Attribute#getFlowVariableValues(FlowVariable)
+	 */
 	public boolean isFlowVariableArrayUsed() {
 		return m_flowVariableArrayUsed;
 	}
@@ -205,7 +325,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	public String getToolTipText() {
 		return (isSupported() ? "(" + getDataTypeInfo() + ") " : "") + super.getToolTipText();
 	}
-	
+
+	/**
+	 * @return the information about the input and output data type
+	 */
 	private String getDataTypeInfo() {
 		String info = "";
 		
@@ -291,7 +414,15 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		
 		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willBeNameConflictWithIgnoredEdit(edit);
 	}
-	
+
+	/**
+	 * Validates the CREATE action of this edit based on the knime input
+	 * {@code flowVariables} (not based on the data) such that it will be
+	 * noticed if some knime input is different from the one when the
+	 * settings were defined.
+	 * 
+	 * @param flowVariables the knime flow variables
+	 */
 	void validateCreateAction(Map<String, FlowVariable> flowVariables) {
 		m_inputInvalidCause = null;
 		for (String name : flowVariables.keySet()) {
@@ -376,7 +507,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			setEditSuccess(getHdfObject() != null);
 		}
 	}
-	
+	/**
+	 * The class for the {@linkplain JPopupMenu} which can be accessed through
+	 * a right mouse click on this attribute edit.
+	 */
 	public class AttributeNodeMenu extends TreeNodeMenu {
 
 		private static final long serialVersionUID = -6418394582185524L;
@@ -384,7 +518,12 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		private AttributeNodeMenu() {
 			super(AttributeNodeEdit.this.isSupported(), false, true);
     	}
-		
+
+		/**
+		 * Returns the dialog to modify the properties of this attribute edit.
+		 * 
+		 * @return the properties dialog
+		 */
 		@Override
 		protected PropertiesDialog getPropertiesDialog() {
 			return new AttributePropertiesDialog();
@@ -397,7 +536,10 @@ public class AttributeNodeEdit extends TreeNodeEdit {
         	edit.setDeletion(edit.getEditAction() != EditAction.DELETE);
             parentOfVisible.reloadTreeWithEditVisible(true);
 		}
-		
+
+		/**
+		 * A {@linkplain JDialog} to set all properties of this attribute edit.
+		 */
 		private class AttributePropertiesDialog extends PropertiesDialog {
 	    	
 			private static final long serialVersionUID = 9201153080744087510L;
@@ -411,7 +553,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 				super(AttributeNodeMenu.this, "Attribute properties");
 
 				addProperty("Name: ", m_nameField);
-				// TODO avoid that the user changes the overwritePolicy without changing the name (for NO_ACTION and MODIFY)
 				addProperty("Overwrite: ", m_overwriteField);
 				m_dataTypeChooser.addToPropertiesDialog(this);
 				
