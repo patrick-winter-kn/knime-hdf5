@@ -315,6 +315,7 @@ public class EditTreePanel extends JPanel {
 						
 					} else if (copyEditClass == ColumnNodeEdit.class) {
 						if (createDataSetForColumns) {
+							// add the new dataSet edit in the group to add the column edit(s) in it
 							String newName = TreeNodeEdit.getUniqueName(dropLocationEdit, DataSetNodeEdit.class, "dataSet");
                 			DataSetNodeEdit newDataSetEdit = new DataSetNodeEdit((GroupNodeEdit) dropLocationEdit, newName);
                 			newDataSetEdit.addEditToParentNodeIfPossible();
@@ -325,6 +326,7 @@ public class EditTreePanel extends JPanel {
 						}
 					}
         		} else if (dropLocationEdit instanceof DataSetNodeEdit) {
+        			// add the dataSet to the parent if it cannot be added here
         			if (copyEditClass == GroupNodeEdit.class || copyEditClass == DataSetNodeEdit.class) {
 						return dropLocationEdit.getParent();
 						
@@ -332,6 +334,7 @@ public class EditTreePanel extends JPanel {
 						return dropLocationEdit;
 					} 
         		} else if (dropLocationEdit instanceof ColumnNodeEdit || dropLocationEdit instanceof AttributeNodeEdit) {
+        			// no edits can be added here, try again for the parent
         			return findEditToAddTo(copyEditClass, dropLocationEdit.getParent(), createDataSetForColumns);
         		}
 				

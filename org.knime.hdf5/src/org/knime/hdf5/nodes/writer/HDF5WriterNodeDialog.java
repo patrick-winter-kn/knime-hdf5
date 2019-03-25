@@ -115,7 +115,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		
 		m_fileOverwritePolicySettings = SettingsFactory.createFileOverwritePolicySettings();
 		DialogComponentButtonGroup fileOverwritePolicy = new DialogComponentButtonGroup(m_fileOverwritePolicySettings,
-				false, "Overwrite file: ", EditOverwritePolicy.getNames(EditOverwritePolicy.getAvailableValuesForFile()));
+				false, "Overwrite file: ", EditOverwritePolicy.getNames(EditOverwritePolicy.getAvailablePoliciesForFile()));
 		
 		ChangeListener fileChangeListener = new ChangeListener() {
 			@Override
@@ -430,7 +430,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 					});
 					selectDataButtonPanel.add(okButton);
 					
-					m_editTreePanel.getTree().requestFocusInWindow();
 					pack();
 				}
 			}

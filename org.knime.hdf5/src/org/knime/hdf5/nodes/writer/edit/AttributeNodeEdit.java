@@ -545,7 +545,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			private static final long serialVersionUID = 9201153080744087510L;
 	    	
 			private JTextField m_nameField = new JTextField(15);
-			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getAvailableValuesForEdit(AttributeNodeEdit.this));
+			private JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getAvailablePoliciesForEdit(AttributeNodeEdit.this));
 			private DataTypeChooser m_dataTypeChooser = m_editDataType.new DataTypeChooser(false);
 			private JCheckBox m_flowVariableArrayField = new JCheckBox();
 			

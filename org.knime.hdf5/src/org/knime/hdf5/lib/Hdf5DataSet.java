@@ -417,7 +417,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public boolean write(Type[] dataIn, long[] offset, long[] count, Rounding rounding) throws IOException, HDF5DataspaceInterfaceException {
 		Object[] dataWrite = Arrays.copyOf(dataIn, dataIn.length);
-		
+
+		// convert the data from knime to hdf data type
 		if (!m_type.isHdfType(HdfDataType.STRING) && !m_type.hdfTypeEqualsKnimeType()) {
             int numberOfValues = 1;
 			for (int i = 0; i < count.length; i++) {
@@ -499,6 +500,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		int dataSetIndex = 0;
 		
 		for (int i = 0; i < dataWrite.length; i++) {
+			// check if the input for this column is a column of knime or of a hdf dataSet 
 			if (dataRowColumnIndices[i] >= 0) {
 				Type value = (Type) m_type.getKnimeType().getValueFromDataCell(dataRow.getCell(dataRowColumnIndices[i]));
 				value = value == null ? standardValue : value;
@@ -510,6 +512,10 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				Hdf5DataSet<?> dataSet = dataSets[dataSetIndex];
 				long columnIndex = dataSetColumnIndices[dataSetIndex];
 				
+				/*
+				 * convert the column index from 1-dimensional to the number of
+				 * dimensions for the columns of this dataSet
+				 */
 				long[] dims = dataSet.getDimensions();
 				long[] offset = new long[dims.length];
 				long[] count = new long[dims.length];
@@ -632,6 +638,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	public Type[] read(long[] offset, long[] count) throws IOException, HDF5DataspaceInterfaceException {
 		Type[] dataOut = null;
 		
+		// read the data and convert it from hdf to knime data type
 		if (!m_type.isHdfType(HdfDataType.STRING) && !m_type.hdfTypeEqualsKnimeType()) {
 			Object[] dataRead = readHdf(offset, count);
 			dataOut = (Type[]) m_type.getKnimeType().createArray(dataRead.length);
@@ -706,6 +713,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		int colNum = (int) numberOfColumns();
 		
 		String missingValueMessage = "(null) on joining hdf dataSets";
+		// check if this dataSet has a row with the rowIndex
 		if (rowIndex < rowNum) {
 			Type[] dataRead = readRow(rowIndex);
 			
@@ -761,7 +769,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		
 		if (compressionLevel > 0) {
 			if (chunkRowSize > 0) {
-					try {
+				try {
 					propertyListId = H5.H5Pcreate(HDF5Constants.H5P_DATASET_CREATE);
 	                H5.H5Pset_layout(propertyListId, HDF5Constants.H5D_CHUNKED);
 	                
@@ -775,9 +783,8 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	    			m_chunkRowSize = chunkRowSize;
 	    			
 				} catch (HDF5Exception | NullPointerException hlnpe) {
-		            throw new IOException("Chunking could not be created: " + hlnpe.getMessage(), hlnpe);
+		            throw new IOException("Compression could not be created: " + hlnpe.getMessage(), hlnpe);
 		        }
-                
 			} else {
 				throw new IllegalArgumentException("chunkRowSize must be > 0 because of compressionLevel > 0");
 			}
@@ -833,7 +840,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	        H5.H5Pclose(propertyListId);
 	        
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
-            throw new IOException("Chunking could not be loaded: " + hlnpe.getMessage(), hlnpe);
+            throw new IOException("Compression could not be loaded: " + hlnpe.getMessage(), hlnpe);
         }
 	}
 	

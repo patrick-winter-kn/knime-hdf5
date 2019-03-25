@@ -60,7 +60,7 @@ public enum EditOverwritePolicy {
 	 * @param edit the treeNodeEdit
 	 * @return the reasonable policies for the input treeNodeEdit
 	 */
-	static EditOverwritePolicy[] getAvailableValuesForEdit(TreeNodeEdit edit) {
+	static EditOverwritePolicy[] getAvailablePoliciesForEdit(TreeNodeEdit edit) {
 		List<EditOverwritePolicy> values = new ArrayList<>();
 		
 		if (edit instanceof GroupNodeEdit || edit instanceof DataSetNodeEdit || edit instanceof AttributeNodeEdit) {
@@ -81,7 +81,7 @@ public enum EditOverwritePolicy {
 	/**
 	 * @return the reasonable policies for any {@linkplain FileNodeEdit}
 	 */
-	public static EditOverwritePolicy[] getAvailableValuesForFile() {
+	public static EditOverwritePolicy[] getAvailablePoliciesForFile() {
 		return new EditOverwritePolicy[] { INTEGRATE, OVERWRITE, RENAME };
 	}
 	

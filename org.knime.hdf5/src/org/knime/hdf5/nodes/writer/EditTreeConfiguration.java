@@ -62,6 +62,8 @@ public class EditTreeConfiguration {
 		
 		try {
 			FileNodeEdit oldFileEdit = m_fileEdit;
+			
+			// create a new file edit for the changed file path
 			if (!overwriteFile && Hdf5File.existsHdf5File(filePath)) {
 				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
 				m_fileEdit = new FileNodeEdit(file);
@@ -69,6 +71,7 @@ public class EditTreeConfiguration {
 				m_fileEdit = new FileNodeEdit(filePath, overwriteFile);
 			}
 			
+			// integrate the old config and update the tree
 			if (tree != null) {
 				m_fileEdit.setEditAsRootOfTree(tree);
 				if (!m_fileEdit.getEditAction().isCreateOrCopyAction()) {
@@ -94,7 +97,8 @@ public class EditTreeConfiguration {
 	}
 	
 	/**
-	 * Updates the configuration with the {@code urlPath} and {@code policy}.
+	 * Updates the file path of the configuration with the {@code urlPath} and
+	 * {@code policy}.
 	 * 
 	 * @param urlPath the url path
 	 * @param policy the overwrite policy (may only be INTEGRATE,

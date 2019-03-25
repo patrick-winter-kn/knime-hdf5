@@ -158,9 +158,11 @@ public class Hdf5Attribute<Type> {
 				if (attr.matches("\\[.*\\] \\(.*\\) *")) {
 					String[] parts = attr.split("\\] \\(");
 					if (parts.length == 2) {
+						// get the values array
 						String value = parts[0].substring(1);
-						String type = parts[1].substring(0, parts[1].length() - 1);
 						String[] stringValues = value.isEmpty() ? new String[0] : value.split(", ");
+						// get the data type
+						String type = parts[1].substring(0, parts[1].length() - 1);
 						
 						if (type.equals(Hdf5KnimeDataType.INTEGER.toString())) {
 							Integer[] intValues = new Integer[stringValues.length];
@@ -350,6 +352,7 @@ public class Hdf5Attribute<Type> {
 	public boolean write(Type[] dataIn, Rounding rounding) throws IOException {
 		Object[] dataWrite = Arrays.copyOf(dataIn, dataIn.length);
 		
+		// convert the data from knime to hdf data type
 		if (!m_type.isHdfType(HdfDataType.STRING) && !m_type.hdfTypeEqualsKnimeType()) {
             dataWrite = m_type.getHdfType().createArray((int) m_dimension);
             
@@ -373,6 +376,7 @@ public class Hdf5Attribute<Type> {
 			int dim = (int) m_dimension;
         	if (dim > 0) {
             	if (m_type.isHdfType(HdfDataType.STRING)) {
+            		// Strings need to be written as byte array
     	            int stringLength = (int) m_type.getHdfType().getStringLength();
     				byte[] dataByte = new byte[dim * (stringLength + 1)];
     				
@@ -515,7 +519,8 @@ public class Hdf5Attribute<Type> {
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public Type[] read() throws IOException {
 		Type[] dataOut = null;
-		
+
+		// read the data and convert it from hdf to knime data type
 		if (!m_type.isHdfType(HdfDataType.STRING) && !m_type.hdfTypeEqualsKnimeType()) {
 			Object[] dataRead = readHdf();
 			dataOut = (Type[]) m_type.getKnimeType().createArray(dataRead.length);
@@ -550,6 +555,7 @@ public class Hdf5Attribute<Type> {
 						H5.H5Tclose(typeId);
 		                
 		            } else {
+		            	// read the byte array and convert it to String
 		            	int stringLength = (int) m_type.getHdfType().getStringLength();
 						byte[] dataByte = new byte[dim * (stringLength + 1)];
 						H5.H5Aread(m_attributeId, m_type.getConstants()[1], dataByte);

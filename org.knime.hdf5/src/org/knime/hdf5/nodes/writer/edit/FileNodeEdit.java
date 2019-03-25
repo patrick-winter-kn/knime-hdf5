@@ -813,6 +813,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	 */
 	@SuppressWarnings("unchecked")
 	private boolean doPostponedDataSetActions(BufferedDataTable inputTable, boolean saveColumnProperties, ExecutionContext exec, long totalProgressToDo) throws CanceledExecutionException, IOException, NullPointerException {
+		// find the dataSet edits which were created, but no data was written to
 		List<DataSetNodeEdit> dataSetEditList = new ArrayList<>();
 		for (TreeNodeEdit edit : getAllDecendants()) {
 			if (edit.getEditState() == EditState.CREATE_SUCCESS_WRITE_POSTPONED) {
@@ -832,14 +833,16 @@ public class FileNodeEdit extends GroupNodeEdit {
 		
 		DataTableSpec tableSpec = inputTable.getDataTableSpec();
 		long inputRowCount = inputTable.size();
-		
+
+		// define all needed variables when writing the rows to the dataSets
 		int[][] specIndices = new int[dataSetEdits.length][];
 		List<ColumnNodeEdit>[] copyColumnEditLists = (List<ColumnNodeEdit>[]) new ArrayList<?>[dataSetEdits.length];
 		ColumnNodeEdit[][] copyColumnEdits = new ColumnNodeEdit[dataSetEdits.length][];
 		Hdf5DataSet<?>[][] copyDataSets = new Hdf5DataSet<?>[dataSetEdits.length][];
 		long[][] dataSetColumnIndices = new long[dataSetEdits.length][];
 		Hdf5DataSet<Object>[] outputDataSets = (Hdf5DataSet<Object>[]) new Hdf5DataSet<?>[dataSetEdits.length];
-		
+
+		// init all needed variables when writing the rows to the dataSets
 		for (int i = 0; i < dataSetEdits.length; i++) {
 			try {
 				ColumnNodeEdit[] columnEdits = dataSetEdits[i].getNotDeletedColumnNodeEdits();
@@ -989,6 +992,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 		
 		if (getEditAction().isCreateOrCopyAction()) {
 			if (getEditState() == EditState.SUCCESS) {
+				// delete the created file restore the backup file
 				try {
 					success &= deleteActionAndResetEditSuccess();
 					if (getHdfBackup() != null) {
@@ -1009,6 +1013,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 			List<TreeNodeEdit> rollbackEdits = getAllDecendants();
 			rollbackEdits.remove(this);
 			
+			// find out which edits need rollback actions and where could appear name conflicts for that
 			List<String> attributePaths = new ArrayList<>();
 			List<String> objectPaths = new ArrayList<>();
 			for (TreeNodeEdit edit : rollbackEdits.toArray(new TreeNodeEdit[rollbackEdits.size()])) {
@@ -1041,12 +1046,17 @@ public class FileNodeEdit extends GroupNodeEdit {
 							NodeLogger.getLogger(getClass()).error("Fail in rollback of \"" + edit.getOutputPathFromFileWithName() + "\": " + ioe.getMessage(), ioe);
 						}
 					} else {
+						/* 
+						 * if the edit was a CREATE or COPY action, no backup is needed,
+						 * but their deletions need to be first to avoid name conflicts
+						 */
 						rollbackEdits.remove(edit);
 						rollbackEdits.add(0, edit);
 					}
 				}
 			}
 			
+			// execute the edits which need a rollback
 			for (TreeNodeEdit edit : rollbackEdits) {
 				try {
 					success &= edit.rollbackAction();

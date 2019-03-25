@@ -298,6 +298,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		InvalidCause cause = getEditAction() != EditAction.DELETE && m_inputRowSize != UNKNOWN_ROW_SIZE
 				&& m_inputRowSize != parent.getInputRowSize() ? InvalidCause.ROW_COUNT : null;
 		
+		// for column overwrite poicy 'overwrite': check if all new columns have a column to overwrite
 		if (cause == null && parent.isOverwriteWithNewColumns()) {
 			ColumnNodeEdit[] columnEdits = parent.getColumnNodeEdits();
 			for (int i = 0; i < columnEdits.length; i++) {
@@ -309,6 +310,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 			}
 		}
 		
+		// check if the selected output type of the parent dataSet edit fits for the input data of this column
 		if (cause == null && getEditAction() != EditAction.CREATE && getEditAction() != EditAction.DELETE) {
 			Object[] values = null;
 			EditDataType parentDataType = parent.getEditDataType();

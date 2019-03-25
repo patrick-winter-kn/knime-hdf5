@@ -759,6 +759,12 @@ public abstract class TreeNodeEdit {
 				setHdfBackup(((Hdf5File) m_hdfObject).createBackup(BACKUP_PREFIX));
 			} else {
 				Object parentBackup = (this instanceof ColumnNodeEdit ? m_parent.getParent() : m_parent).getHdfBackup();
+				
+				/* 
+				 * only create a new backup if the parent does not already have
+				 * a backup, otherwise find the hdf source for this edit in the
+				 * existing backup
+				 */
 				if (parentBackup != null) {
 					if (this instanceof GroupNodeEdit) {
 						setHdfBackup(((Hdf5Group) parentBackup).getGroup(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
@@ -1023,7 +1029,8 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
-	 * Updates the invalid cause of this edit.
+	 * Updates the invalid cause of this edit. Also the ancestors will know
+	 * if this edit is valid.
 	 * 
 	 * @param cause the invalid cause
 	 */
@@ -1032,7 +1039,8 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
-	 * Updates the invalid cause of the input edit.
+	 * Updates the invalid cause of the input edit. Also the ancestors will know
+	 * if the input edit is valid.
 	 * 
 	 * @param edit the input edit
 	 * @param cause the invalid cause
@@ -1336,10 +1344,12 @@ public abstract class TreeNodeEdit {
 					
 			for (AttributeNodeEdit copyAttributeEdit : copyAttributeEdits) {
 				if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
+					// see if the attribute edit already exists
 					AttributeNodeEdit attributeEdit = this instanceof GroupNodeEdit
 							? ((GroupNodeEdit) this).getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction())
 							: ((DataSetNodeEdit) this).getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
 					
+					// copy the properties or the whole attribute edit into here
 					boolean isCreateOrCopyAction = copyAttributeEdit.getEditAction().isCreateOrCopyAction();
 					if (attributeEdit != null && !isCreateOrCopyAction) {
 						attributeEdit.copyPropertiesFrom(copyAttributeEdit);
@@ -1473,6 +1483,7 @@ public abstract class TreeNodeEdit {
 	protected void validate(boolean internalCheck, boolean externalCheck) {
 		InvalidCause cause = null;
 		
+		// check if all hdf sources exist
 		if (externalCheck && cause == null) {
 			if (m_editAction == EditAction.COPY) {
 				cause = m_copyEdit == null ? InvalidCause.NO_COPY_SOURCE : null;
@@ -1487,6 +1498,7 @@ public abstract class TreeNodeEdit {
 			}
 		}
 		
+		// check if the relationships between this edit and its parent and siblings are valid
 		if (externalCheck && m_parent != null) {
 			cause = cause == null && m_parent.getEditAction() == EditAction.DELETE && m_editAction != EditAction.DELETE ? InvalidCause.PARENT_DELETE : cause;
 			
@@ -1500,8 +1512,10 @@ public abstract class TreeNodeEdit {
 			}
 		}
 		
+		// check if this edit is valid internally
 		cause = cause == null && internalCheck ? validateEditInternal() : cause;
 		
+		// update the information of invalid causes for this edit
 		updateInvalidMap(cause);
 
 		for (TreeNodeEdit edit : getAllChildren()) {
@@ -1543,16 +1557,21 @@ public abstract class TreeNodeEdit {
 			((DataSetNodeEdit) newEdit).useOverwritePolicyOfColumns();
 		}
 		
+		// find the edits to be changed by the overwrite policy
 		TreeNodeEdit parentOfNewEdit = newEdit.getParent();
 		TreeNodeEdit editToOverwrite = parentOfNewEdit.getChildOfClassByInputPath(newEdit.getClass(), newEdit.getOutputPathFromFileWithName(true));
 		TreeNodeEdit oldEdit = getChildOfClass(newEdit.getClass(), newEdit.getName());
+		
+		// check if there exists an edit which may be overwritten
 		if (editToOverwrite != null || oldEdit != null) {
 			if (newEdit.isOverwriteApplicable()) {
-				switch(newEdit.getEditOverwritePolicy()) {
+				switch (newEdit.getEditOverwritePolicy()) {
 				case IGNORE:
+					// ignore the new edit
 					newEdit.removeFromParent();
 					break;
 				case OVERWRITE:
+					// set the edit action of the edit, which should be overwritten, to DELETE
 					if (editToOverwrite != null) {
 						editToOverwrite.setDeletion(true);
 					} else {
@@ -1568,17 +1587,20 @@ public abstract class TreeNodeEdit {
 					}
 					break;
 				case RENAME:
+					// change the name of the new edit
 					List<String> usedNames = getNamesOfChildrenWithNameConflictPossible(newEdit.getClass());
 					usedNames.addAll(parentOfNewEdit.getNamesOfChildrenWithNameConflictPossible(newEdit.getClass()));
 					newEdit.setName(Hdf5TreeElement.getUniqueName(usedNames, newEdit.getName()));
 					break;
 				case INTEGRATE:
 					if (editToOverwrite == null || editToOverwrite.getEditAction() != EditAction.DELETE) {
+						// remove the old edits
 						newEdit.removeFromParent();
 						if (editToOverwrite != null) {
 							editToOverwrite.removeFromParent();
 						}
 						
+						// create new edits for that and integrate the children and properties to it
 						TreeNodeEdit integrateEdit = null;
 						if (oldEdit instanceof GroupNodeEdit) {
 							integrateEdit = ((GroupNodeEdit) oldEdit).copyGroupEditTo((GroupNodeEdit) parentOfNewEdit, false);
@@ -1608,6 +1630,7 @@ public abstract class TreeNodeEdit {
 					break;
 				}
 			} else if (oldEdit != null) {
+				// use the overwrite policies of the children if it was not applicable here
 				for (TreeNodeEdit edit : newEdit.getAllChildren()) {
 					oldEdit.useOverwritePolicy(edit);
 				}
@@ -1712,6 +1735,7 @@ public abstract class TreeNodeEdit {
 			}
 		}
 		
+		// create backups if needed
 		for (TreeNodeEdit edit : children) {
 			if (edit.isBackupNeeded(objectNames, attributeNames)) {
 				edit.createBackup();
@@ -1726,10 +1750,13 @@ public abstract class TreeNodeEdit {
 		}
 
 		boolean success = true;
+		
+		// firstly, execute delete actions
 		for (TreeNodeEdit edit : deleteEdits) {
 			success &= edit.doAction(null, null, false, exec, totalProgressToDo);
 		}
 		
+		// secondly, execute other actions
 		for (TreeNodeEdit edit : otherEdits) {
 			success &= edit.doAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo);
 		}

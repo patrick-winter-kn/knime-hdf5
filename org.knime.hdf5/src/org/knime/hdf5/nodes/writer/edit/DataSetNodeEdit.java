@@ -476,6 +476,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	 */
 	void considerColumnNodeEdit(ColumnNodeEdit newColumnEdit) {
 		if (newColumnEdit.getEditAction() != EditAction.DELETE) {
+			// update the input data type if the new column does not fit in the current one
 			if (m_inputType == null || !newColumnEdit.getInputType().getPossiblyConvertibleHdfTypes().contains(m_inputType)) {
 				setInputType(newColumnEdit.getInputType());
 			}
@@ -483,10 +484,12 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				m_editDataType.setOutputType(m_inputType);
 				setEditAction(EditAction.MODIFY);
 			}
-			
+
+			// use one dimension if the hdf dataSet also has one dimension or does not exist yet
 			m_useOneDimension = isOneDimensionPossible()
 					&& (getEditAction().isCreateOrCopyAction() || ((Hdf5DataSet<?>) getHdfObject()).getDimensions().length == 1);
 			
+			// update the row size if none is known so far
 			m_inputRowSize = m_inputRowSize == ColumnNodeEdit.UNKNOWN_ROW_SIZE ? newColumnEdit.getInputRowSize() : m_inputRowSize;
 		}
 	}
@@ -521,7 +524,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		if (oldColumnEdit.getEditAction() != EditAction.DELETE) {
 			HdfDataType previousInputType = m_inputType;
 			setInputType(null);
-			
+
+			// update the input data type if there are more possible data types after removing the old column edit
 			Set<HdfDataType> uniqueColumnInputTypes = new HashSet<>(Arrays.asList(getColumnInputTypes()));
 			if (!uniqueColumnInputTypes.contains(previousInputType)) {
 				for (HdfDataType possibleInputType : uniqueColumnInputTypes) {
@@ -542,9 +546,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				setInputType(previousInputType);
 			}
 			
+			// use one dimension if the hdf dataSet also has one dimension or does not exist yet
 			m_useOneDimension = isOneDimensionPossible()
 					&& (getEditAction().isCreateOrCopyAction() || ((Hdf5DataSet<?>) getHdfObject()).getDimensions().length == 1);
-			
+
+			// update the row size if there still exists a known one
 			long inputRowSize = ColumnNodeEdit.UNKNOWN_ROW_SIZE;
 			for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
 				if (columnEdit.getEditAction() != EditAction.DELETE && columnEdit != oldColumnEdit
@@ -700,6 +706,10 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			}
 		}
 		
+		/* 
+		 * copy the column edits into here and set the hdf objects to the hdf
+		 * dataSet of this edit for the copy column edits
+		 */
 		for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
 			copyColumnEdit.copyColumnEditTo(this, false).setHdfObject((Hdf5DataSet<?>) getHdfObject());
 		}
@@ -964,7 +974,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			private static final String OVERWRITE_WITH_NEW_COLUMNS = "overwrite";
 
 			private final JTextField m_nameField = new JTextField(15);
-			private final JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getAvailableValuesForEdit(DataSetNodeEdit.this));
+			private final JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getAvailablePoliciesForEdit(DataSetNodeEdit.this));
 			private final RadionButtonPanel<String> m_overwriteWithNewColumnsField = new RadionButtonPanel<>(null, INSERT_NEW_COLUMNS, OVERWRITE_WITH_NEW_COLUMNS);
 			private final DataTypeChooser m_dataTypeChooser = m_editDataType.new DataTypeChooser(true);
 			private final JCheckBox m_useOneDimensionField = new JCheckBox();

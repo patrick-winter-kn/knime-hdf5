@@ -334,15 +334,18 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	void integrate(GroupNodeEdit copyEdit) {
 		for (GroupNodeEdit copyGroupEdit : copyEdit.getGroupNodeEdits()) {
 			if (copyGroupEdit.getEditAction() != EditAction.NO_ACTION) {
+				// see if the group edit already exists
 				GroupNodeEdit groupEdit = getGroupNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
 				if (groupEdit == null) {
+					// see if a dataSet edit already exists to add child attributes into
 					DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyGroupEdit.getInputPathFromFileWithName());
 					if (dataSetEdit != null) {
 						dataSetEdit.integrateAttributeEdits(copyGroupEdit);
 						continue;
 					}
 				}
-				
+
+				// copy the properties or the whole group edit into here
 				boolean isCreateOrCopyAction = copyGroupEdit.getEditAction().isCreateOrCopyAction();
 				if (groupEdit != null && !isCreateOrCopyAction) {
 					if (copyGroupEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
@@ -358,15 +361,18 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		
 		for (DataSetNodeEdit copyDataSetEdit : copyEdit.getDataSetNodeEdits()) {
 			if (copyDataSetEdit.getEditAction() != EditAction.NO_ACTION) {
+				// see if the dataSet edit already exists
 				DataSetNodeEdit dataSetEdit = getDataSetNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
 				if (dataSetEdit == null) {
+					// see if a group edit already exists to add child attributes into
 					GroupNodeEdit groupEdit = getGroupNodeEdit(copyDataSetEdit.getInputPathFromFileWithName());
 					if (groupEdit != null) {
 						groupEdit.integrateAttributeEdits(copyDataSetEdit);
 						continue;
 					}
 				}
-				
+
+				// copy the properties or the whole dataSet edit into here
 				boolean isCreateOrCopyAction = copyDataSetEdit.getEditAction().isCreateOrCopyAction();
 				if (dataSetEdit != null && !isCreateOrCopyAction) {
 					if (copyDataSetEdit.getEditAction() != EditAction.MODIFY_CHILDREN_ONLY) {
@@ -633,7 +639,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	    	private static final long serialVersionUID = 1254593831386973543L;
 	    	
 			private final JTextField m_nameField = new JTextField(15);
-			private final JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getAvailableValuesForEdit(GroupNodeEdit.this));
+			private final JComboBox<EditOverwritePolicy> m_overwriteField = new JComboBox<>(EditOverwritePolicy.getAvailablePoliciesForEdit(GroupNodeEdit.this));
 	    	
 			private GroupPropertiesDialog() {
 				super(GroupNodeMenu.this, "Group properties");
