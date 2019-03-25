@@ -210,30 +210,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 		
 		return newAttributeEdit;
 	}
-	
-	/**
-	 * Updates this edit's properties using the value and data type of
-	 * {@code var}.
-	 * 
-	 * @param var the knime flow variable
-	 */
-	private void updatePropertiesFromFlowVariable(FlowVariable var) {
-		Object[] values = Hdf5Attribute.getFlowVariableValues(var);
-		m_inputType = Hdf5KnimeDataType.getKnimeDataType(values).getEquivalentHdfType();
-		m_totalStringLength = var.getValueAsString().length();
-		
-		m_itemStringLength = 1;
-		for (Object value : values) {
-			int newStringLength = value.toString().length();
-			m_itemStringLength = newStringLength > m_itemStringLength ? newStringLength : m_itemStringLength;
-		}
-		m_flowVariableArrayPossible = m_itemStringLength != m_totalStringLength;
-		m_flowVariableArrayUsed = m_flowVariableArrayPossible;
-
-		List<HdfDataType> possibleOutputTypes = HdfDataType.getConvertibleTypes(m_inputType, values);
-		m_editDataType.setValues(m_inputType, possibleOutputTypes, Endian.LITTLE_ENDIAN,
-				Rounding.DOWN, m_inputType.isFloat(), false, m_itemStringLength);
-	}
 
 	/**
 	 * @return if the input flow variables contradict with this edit
@@ -319,6 +295,30 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			m_flowVariableArrayPossible = copyAttributeEdit.isFlowVariableArrayPossible();
 			m_flowVariableArrayUsed = copyAttributeEdit.isFlowVariableArrayUsed();
 		}
+	}
+	
+	/**
+	 * Updates this edit's properties using the value and data type of
+	 * {@code var}.
+	 * 
+	 * @param var the knime flow variable
+	 */
+	private void updatePropertiesFromFlowVariable(FlowVariable var) {
+		Object[] values = Hdf5Attribute.getFlowVariableValues(var);
+		m_inputType = Hdf5KnimeDataType.getKnimeDataType(values).getEquivalentHdfType();
+		m_totalStringLength = var.getValueAsString().length();
+		
+		m_itemStringLength = 1;
+		for (Object value : values) {
+			int newStringLength = value.toString().length();
+			m_itemStringLength = newStringLength > m_itemStringLength ? newStringLength : m_itemStringLength;
+		}
+		m_flowVariableArrayPossible = m_itemStringLength != m_totalStringLength;
+		m_flowVariableArrayUsed = m_flowVariableArrayPossible;
+
+		List<HdfDataType> possibleOutputTypes = HdfDataType.getConvertibleTypes(m_inputType, values);
+		m_editDataType.setValues(m_inputType, possibleOutputTypes, Endian.LITTLE_ENDIAN,
+				Rounding.DOWN, m_inputType.isFloat(), false, m_itemStringLength);
 	}
 	
 	@Override

@@ -39,6 +39,94 @@ public class EditTreeConfiguration {
 	void setFileNodeEdit(FileNodeEdit fileEdit) {
 		m_fileEdit = fileEdit;
 	}
+	
+	/**
+	 * Initializes the config with the {@code filePath} and {@code overwriteFile}.
+	 * <br>
+	 * If {@code keepConfig} is {@code true} and a config already exists, the
+	 * config within the file edit will be kept. Otherwise, the config of the
+	 * file edit of {@code filePath} will be used.
+	 * <br>
+	 * <br>
+	 * Also initializes the {@code tree} with this config.
+	 * 
+	 * @param filePath the new file path for this config
+	 * @param overwriteFile if the new file edit should be in OVERWRITE policy
+	 * @param keepConfig if the old config within the file edit should be kept
+	 * @param tree the {@linkplain JTree} to be initialized with the new config
+	 * @throws IOException if an hdf object of the hdf file could not be
+	 * 	opened/closed
+	 */
+	void initConfigOfFile(String filePath, boolean overwriteFile, boolean keepConfig, JTree tree) throws IOException {
+		Hdf5File file = null;
+		
+		try {
+			FileNodeEdit oldFileEdit = m_fileEdit;
+			if (!overwriteFile && Hdf5File.existsHdf5File(filePath)) {
+				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+				m_fileEdit = new FileNodeEdit(file);
+			} else {
+				m_fileEdit = new FileNodeEdit(filePath, overwriteFile);
+			}
+			
+			if (tree != null) {
+				m_fileEdit.setEditAsRootOfTree(tree);
+				if (!m_fileEdit.getEditAction().isCreateOrCopyAction()) {
+					m_fileEdit.loadChildrenOfHdfObject();
+				}
+				
+				if (keepConfig && oldFileEdit != null) {
+					m_fileEdit.integrateAndValidate(oldFileEdit);
+				}
+				
+				m_fileEdit.reloadTreeWithEditVisible(true);
+				
+			} else {
+				if (keepConfig && oldFileEdit != null) {
+					m_fileEdit.integrate(oldFileEdit);
+				}
+			}
+		} finally {
+			if (file != null) {
+				file.close();
+			}
+		}
+	}
+	
+	/**
+	 * Updates the configuration with the {@code urlPath} and {@code policy}.
+	 * 
+	 * @param urlPath the url path
+	 * @param policy the overwrite policy (may only be INTEGRATE,
+	 * 	OVERWRITE or RENAME)
+	 * @throws IOException if the file of the url path does not exist or could
+	 * 	not be opened/closed
+	 * @throws InvalidSettingsException if the settings of the fileEdit are invalid
+	 */
+	void updateConfiguration(final String urlPath, final EditOverwritePolicy policy) throws IOException, InvalidSettingsException {
+		FileNodeEdit oldFileEdit = m_fileEdit;
+		m_fileEdit = null;
+		
+		String oldFilePath = oldFileEdit != null ? oldFileEdit.getFilePath() : null;
+		String filePath = urlPath.trim().isEmpty() ? oldFilePath : HDF5WriterNodeModel.getFilePathFromUrlPath(urlPath, false);
+		
+		if (filePath != null) {
+			if (policy == EditOverwritePolicy.RENAME) {
+				filePath = Hdf5File.getUniqueFilePath(filePath);
+			}
+			
+			boolean overwriteFile = policy == EditOverwritePolicy.OVERWRITE;
+			if (!overwriteFile && Hdf5File.existsHdf5File(filePath)) {
+				Hdf5File file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
+				m_fileEdit = new FileNodeEdit(file);
+				file.close();
+			} else {
+				m_fileEdit = new FileNodeEdit(filePath, overwriteFile);
+			}
+			
+			m_fileEdit.integrate(oldFileEdit);
+		}
+	}
 
 	/**
 	 * Checks this configuration for errors.
@@ -99,92 +187,4 @@ public class EditTreeConfiguration {
 	        m_fileEdit = FileNodeEdit.loadSettingsFrom(fileSettings, newFilePath, policy);
 		}
     }
-	
-	/**
-	 * Updates the configuration with the {@code urlPath} and {@code policy}.
-	 * 
-	 * @param urlPath the url path
-	 * @param policy the overwrite policy (may only be INTEGRATE,
-	 * 	OVERWRITE or RENAME)
-	 * @throws IOException if the file of the url path does not exist or could
-	 * 	not be opened/closed
-	 * @throws InvalidSettingsException if the settings of the fileEdit are invalid
-	 */
-	void updateConfiguration(final String urlPath, final EditOverwritePolicy policy) throws IOException, InvalidSettingsException {
-		FileNodeEdit oldFileEdit = m_fileEdit;
-		m_fileEdit = null;
-		
-		String oldFilePath = oldFileEdit != null ? oldFileEdit.getFilePath() : null;
-		String filePath = urlPath.trim().isEmpty() ? oldFilePath : HDF5WriterNodeModel.getFilePathFromUrlPath(urlPath, false);
-		
-		if (filePath != null) {
-			if (policy == EditOverwritePolicy.RENAME) {
-				filePath = Hdf5File.getUniqueFilePath(filePath);
-			}
-			
-			boolean overwriteFile = policy == EditOverwritePolicy.OVERWRITE;
-			if (!overwriteFile && Hdf5File.existsHdf5File(filePath)) {
-				Hdf5File file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-				m_fileEdit = new FileNodeEdit(file);
-				file.close();
-			} else {
-				m_fileEdit = new FileNodeEdit(filePath, overwriteFile);
-			}
-			
-			m_fileEdit.integrate(oldFileEdit);
-		}
-	}
-	
-	/**
-	 * Initializes the config with the {@code filePath} and {@code overwriteFile}.
-	 * <br>
-	 * If {@code keepConfig} is {@code true} and a config already exists, the
-	 * config within the file edit will be kept. Otherwise, the config of the
-	 * file edit of {@code filePath} will be used.
-	 * <br>
-	 * <br>
-	 * Also initializes the {@code tree} with this config.
-	 * 
-	 * @param filePath the new file path for this config
-	 * @param overwriteFile if the new file edit should be in OVERWRITE policy
-	 * @param keepConfig if the old config within the file edit should be kept
-	 * @param tree the {@linkplain JTree} to be initialized with the new config
-	 * @throws IOException if an hdf object of the hdf file could not be
-	 * 	opened/closed
-	 */
-	void initConfigOfFile(String filePath, boolean overwriteFile, boolean keepConfig, JTree tree) throws IOException {
-		Hdf5File file = null;
-		
-		try {
-			FileNodeEdit oldFileEdit = m_fileEdit;
-			if (!overwriteFile && Hdf5File.existsHdf5File(filePath)) {
-				file = Hdf5File.openFile(filePath, Hdf5File.READ_ONLY_ACCESS);
-				m_fileEdit = new FileNodeEdit(file);
-			} else {
-				m_fileEdit = new FileNodeEdit(filePath, overwriteFile);
-			}
-			
-			if (tree != null) {
-				m_fileEdit.setEditAsRootOfTree(tree);
-				if (!m_fileEdit.getEditAction().isCreateOrCopyAction()) {
-					m_fileEdit.loadChildrenOfHdfObject();
-				}
-				
-				if (keepConfig && oldFileEdit != null) {
-					m_fileEdit.integrateAndValidate(oldFileEdit);
-				}
-				
-				m_fileEdit.reloadTreeWithEditVisible(true);
-				
-			} else {
-				if (keepConfig && oldFileEdit != null) {
-					m_fileEdit.integrate(oldFileEdit);
-				}
-			}
-		} finally {
-			if (file != null) {
-				file.close();
-			}
-		}
-	}
 }

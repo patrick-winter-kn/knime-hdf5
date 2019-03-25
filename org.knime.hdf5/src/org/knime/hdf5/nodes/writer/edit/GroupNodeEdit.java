@@ -172,26 +172,6 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	public AttributeNodeEdit[] getAttributeNodeEdits() {
 		return m_attributeEdits.toArray(new AttributeNodeEdit[] {});
 	}
-
-	private void addGroupNodeEdit(GroupNodeEdit edit) {
-		m_groupEdits.add(edit);
-		edit.setParent(this);
-	}
-
-	void addDataSetNodeEdit(DataSetNodeEdit edit) {
-		m_dataSetEdits.add(edit);
-		edit.setParent(this);
-	}
-	
-	void addUnsupportedObjectNodeEdit(UnsupportedObjectNodeEdit edit) {
-		m_unsupportedObjectEdits.add(edit);
-		edit.setParent(this);
-	}
-	
-	void addAttributeNodeEdit(AttributeNodeEdit edit) {
-		m_attributeEdits.add(edit);
-		edit.setParent(this);
-	}
 	
 	/**
 	 * Get the child group edit with the specified input path within the hdf file
@@ -263,6 +243,26 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		return null;
 	}
 
+	private void addGroupNodeEdit(GroupNodeEdit edit) {
+		m_groupEdits.add(edit);
+		edit.setParent(this);
+	}
+
+	void addDataSetNodeEdit(DataSetNodeEdit edit) {
+		m_dataSetEdits.add(edit);
+		edit.setParent(this);
+	}
+	
+	void addUnsupportedObjectNodeEdit(UnsupportedObjectNodeEdit edit) {
+		m_unsupportedObjectEdits.add(edit);
+		edit.setParent(this);
+	}
+	
+	void addAttributeNodeEdit(AttributeNodeEdit edit) {
+		m_attributeEdits.add(edit);
+		edit.setParent(this);
+	}
+
 	private void removeGroupNodeEdit(GroupNodeEdit edit) {
 		m_groupEdits.remove(edit);
 		if (getTreeNode() != null) {
@@ -293,6 +293,33 @@ public class GroupNodeEdit extends TreeNodeEdit {
 			getTreeNode().remove(edit.getTreeNode());
 		}
 		edit.setParent(null);
+	}
+	
+	@Override
+	protected boolean havePropertiesChanged(Object hdfSource) {
+		return false;
+	}
+	
+	@Override
+	protected void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit) {
+		// nothing to do here
+	}
+	
+	@Override
+	protected long getProgressToDoInEdit() {
+		return getEditAction() != EditAction.NO_ACTION && getEditAction() != EditAction.MODIFY_CHILDREN_ONLY && getEditState() != EditState.SUCCESS ? 147L : 0L;
+	}
+	
+	@Override
+	protected TreeNodeEdit[] getAllChildren() {
+		List<TreeNodeEdit> children = new ArrayList<>();
+		
+		children.addAll(m_groupEdits);
+		children.addAll(m_dataSetEdits);
+		children.addAll(m_unsupportedObjectEdits);
+		children.addAll(m_attributeEdits);
+		
+		return children.toArray(new TreeNodeEdit[0]);
 	}
 	
 	/**
@@ -354,33 +381,6 @@ public class GroupNodeEdit extends TreeNodeEdit {
 		}
 		
 		integrateAttributeEdits(copyEdit);
-	}
-	
-	@Override
-	protected boolean havePropertiesChanged(Object hdfSource) {
-		return false;
-	}
-	
-	@Override
-	protected void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit) {
-		// nothing to do here
-	}
-	
-	@Override
-	protected long getProgressToDoInEdit() {
-		return getEditAction() != EditAction.NO_ACTION && getEditAction() != EditAction.MODIFY_CHILDREN_ONLY && getEditState() != EditState.SUCCESS ? 147L : 0L;
-	}
-	
-	@Override
-	protected TreeNodeEdit[] getAllChildren() {
-		List<TreeNodeEdit> children = new ArrayList<>();
-		
-		children.addAll(m_groupEdits);
-		children.addAll(m_dataSetEdits);
-		children.addAll(m_unsupportedObjectEdits);
-		children.addAll(m_attributeEdits);
-		
-		return children.toArray(new TreeNodeEdit[0]);
 	}
 	
 	@Override

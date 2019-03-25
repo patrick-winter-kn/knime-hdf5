@@ -311,6 +311,31 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
+	 * Copies this edit to {@code parent} without copy source.
+	 * 
+	 * @param parent the parent of the new edit
+	 * @return the new edit
+	 */
+	TreeNodeEdit copyWithoutCopySourceTo(TreeNodeEdit parent) {
+		TreeNodeEdit copyEdit = null;
+		
+		if (this instanceof GroupNodeEdit) {
+			copyEdit = ((GroupNodeEdit) this).copyGroupEditTo((GroupNodeEdit) parent, false);
+			
+		} else if (this instanceof DataSetNodeEdit) {
+			copyEdit = ((DataSetNodeEdit) this).copyDataSetEditTo((GroupNodeEdit) parent, false);
+			
+		} else if (this instanceof ColumnNodeEdit) {
+			copyEdit = ((ColumnNodeEdit) this).copyColumnEditTo((DataSetNodeEdit) parent, false);
+			
+		} else if (this instanceof AttributeNodeEdit) {
+			copyEdit = ((AttributeNodeEdit) this).copyAttributeEditTo(parent, false);
+		}
+		
+		return copyEdit;
+	}
+	
+	/**
 	 * @return the input path where this edit's hdf object was located
 	 * 	within the hdf file including its name
 	 */
@@ -353,7 +378,7 @@ public abstract class TreeNodeEdit {
 	 * 
 	 * @param name the new name of this edit
 	 */
-	void setName(String name) {
+	protected void setName(String name) {
 		if (!m_name.equals(name)) {
 			m_name = name;
 			for (TreeNodeEdit edit : getAllChildren()) {
@@ -361,12 +386,29 @@ public abstract class TreeNodeEdit {
 			}
 		}
 	}
+
+	/**
+	 * @return the output path from file with name (without check that there
+	 * 	slashes in name)
+	 */
+	public String getOutputPathFromFileWithName() {
+		return getOutputPathFromFileWithName(false);
+	}
+	
+	/**
+	 * @param checkSlashesInName if it should be checked for slashes in the name
+	 * 	and they should be replaced by '\/'
+	 * @return the output path from file with name
+	 */
+	protected String getOutputPathFromFileWithName(boolean checkSlashesInName) {
+		return (!m_outputPathFromFile.isEmpty() ? m_outputPathFromFile + "/" : "") + (checkSlashesInName ? m_name.replaceAll("/", "\\\\/") : m_name);
+	}
 	
 	/**
 	 * @return the overwrite policy of this edit if an object already exists
 	 * 	on the output location
 	 */
-	EditOverwritePolicy getEditOverwritePolicy() {
+	public EditOverwritePolicy getEditOverwritePolicy() {
 		return m_editOverwritePolicy;
 	}
 
@@ -375,289 +417,16 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
-	 * @return the popup menu which can be accessed through a right mouse click
-	 * 	on the edit
-	 */
-	public TreeNodeMenu getTreeNodeMenu() {
-		return m_treeNodeMenu;
-	}
-	
-	/**
-	 * Sets and updates the tree node menu of this edit.
+	 * Checks if the location of the hdfObject will be changed (but not deleted)
+	 * by execution of this edit.
 	 * 
-	 * @param treeNodeMenu the tree node menu of this edit
+	 * @return if the overwrite policy is applicable
 	 */
-	protected void setTreeNodeMenu(TreeNodeMenu treeNodeMenu) {
-		m_treeNodeMenu = treeNodeMenu;
-		if (m_treeNodeMenu != null) {
-			m_treeNodeMenu.updateMenuItems();
-		}
+	private boolean isOverwriteApplicable() {
+		return m_editAction.isCreateOrCopyAction()
+				|| m_editAction == EditAction.MODIFY && !getOutputPathFromFileWithName(true).equals(m_inputPathFromFileWithName);
 	}
 	
-	/**
-	 * @return the container node for this edit used in the {@linkplain JTree}
-	 * 	which represents all edits
-	 */
-	public DefaultMutableTreeNode getTreeNode() {
-		return m_treeNode;
-	}
-
-	/**
-	 * @return the parent of this edit based on the output path from file
-	 */
-	public TreeNodeEdit getParent() {
-		return m_parent;
-	}
-	
-	/**
-	 * Sets the parent of this edit and updates the invalid map and the edit
-	 * actions of the previous and current parent.
-	 * 
-	 * @param parent the new parent of this edit
-	 */
-	protected void setParent(TreeNodeEdit parent) {
-		if (m_parent != parent) {
-			if (m_parent != null && parent == null) {
-				m_parent.updateInvalidMap(this, null);
-				m_parent.removeModifyChildrenProperty();
-			}
-			m_parent = parent;
-			if (m_parent != null) {
-				updateParentEditAction();
-			}
-		}
-	}
-
-	/**
-	 * @return the hdf object which is edited by this edit
-	 */
-	public Object getHdfObject() {
-		return m_hdfObject;
-	}
-
-	protected void setHdfObject(Hdf5TreeElement hdfObject) {
-		m_hdfObject = hdfObject;
-		if (m_hdfObject != null && m_hdfObject == m_hdfBackup) {
-			m_hdfBackup = null;
-		}
-	}
-	
-	protected void setHdfObject(Hdf5Attribute<?> hdfObject) {
-		m_hdfObject = hdfObject;
-		if (m_hdfObject != null && m_hdfObject == m_hdfBackup) {
-			m_hdfBackup = null;
-		}
-	}
-	
-	/**
-	 * @return the backup for the hdf object if the original version got deleted
-	 */
-	protected Object getHdfBackup() {
-		return m_hdfBackup;
-	}
-
-	private void setHdfBackup(Hdf5TreeElement hdfBackup) {
-		if (m_hdfObject == null || m_hdfObject != m_hdfBackup) {
-			m_hdfBackup = hdfBackup;
-		}
-	}
-	
-	private void setHdfBackup(Hdf5Attribute<?> hdfBackup) {
-		if (m_hdfObject == null || m_hdfObject != m_hdfBackup) {
-			m_hdfBackup = hdfBackup;
-		}
-	}
-
-	/**
-	 * @return the type of action that is executed on this edit's hdf source
-	 */
-	public EditAction getEditAction() {
-		return m_editAction;
-	}
-	
-	/**
-	 * Sets the edit action (if possible) and updates the edit actions of its ancestors.
-	 * <br>
-	 * It is not possible to set the edit action from COPY/CREATE/DELETE back
-	 * to one of the others.
-	 * <br>
-	 * <br>
-	 * <b>Note:</b>When deciding if the edit action should be DELETE or not, use
-	 * {@linkplain TreeNodeEdit#setDeletion(boolean)}
-	 * 
-	 * @param editAction the new edit action
-	 * @see TreeNodeEdit#setDeletion(boolean)
-	 */
-	protected void setEditAction(EditAction editAction) {
-		if (!editAction.isModifyAction() || m_editAction == EditAction.NO_ACTION || m_editAction == EditAction.MODIFY_CHILDREN_ONLY) {
-			m_editAction = editAction;
-			
-			if (m_parent != null && m_parent.getEditAction() == EditAction.NO_ACTION && m_editAction != EditAction.NO_ACTION) {
-				m_parent.setEditAction(EditAction.MODIFY_CHILDREN_ONLY);
-			}
-		}
-	}
-
-	/**
-	 * @return the edit that is used for {@linkplain EditAction#COPY} as copy source
-	 */
-	protected TreeNodeEdit getCopyEdit() {
-		return m_copyEdit;
-	}
-	
-	/**
-	 * Sets the copy edit of this edit to {@code copyEdit} or to the copy edit
-	 * of {@code copyEdit} if it exists such that the copy edit is the proper
-	 * copy source for this edit.
-	 * 
-	 * @param copyEdit the new copy edit
-	 * @throws IllegalArgumentException if this edit and {@code copyEdit} are
-	 * 	the same instance or do not have the same {@linkplain FileNodeEdit}
-	 * 	as root
-	 */
-	protected void setCopyEdit(TreeNodeEdit copyEdit) throws IllegalArgumentException {
-		if (copyEdit != null && getRoot() != copyEdit.getRoot()) {
-			throw new IllegalArgumentException("Copy source must have the same root as this edit");
-			
-		} else if (this == copyEdit) {
-			throw new IllegalArgumentException("Copy source may not be this edit ifself");
-		}
-		
-		m_copyEdit = copyEdit != null && copyEdit.getCopyEdit() != null ? copyEdit.getCopyEdit() : copyEdit;
-	}
-
-	public boolean isSupported() {
-		return m_unsupportedCause == null;
-	}
-	
-	/**
-	 * Sets the cause why this edit is not supported or {@code null} if this
-	 * edit is supported.
-	 * 
-	 * @param unsupportedCause the new unsupported cause
-	 */
-	void setUnsupportedCause(String unsupportedCause) {
-		m_unsupportedCause = unsupportedCause;
-	}
-
-	public EditState getEditState() {
-		return m_editState;
-	}
-	
-	protected void setEditState(EditState editState) {
-		m_editState = editState;
-	}
-	
-	protected void setEditSuccess(boolean success) {
-		m_editSuccess = EditSuccess.getSuccess(success);
-	}
-	
-	/**
-	 * Resets this edit's success to {@linkplain EditSuccess#UNDECIDED}.
-	 */
-	private void resetSuccess() {
-		m_editSuccess = EditSuccess.UNDECIDED;
-	}
-
-	/**
-	 * Integrates the attributeEdits of {@code copyEdit} into this edit.
-	 * 
-	 * @param copyEdit the edit to integrate
-	 */
-	protected void integrateAttributeEdits(TreeNodeEdit copyEdit) {
-		if ((this instanceof GroupNodeEdit || this instanceof DataSetNodeEdit)
-				&& (copyEdit instanceof GroupNodeEdit || copyEdit instanceof DataSetNodeEdit)) {
-			AttributeNodeEdit[] copyAttributeEdits = copyEdit instanceof GroupNodeEdit
-					? ((GroupNodeEdit) copyEdit).getAttributeNodeEdits() : ((DataSetNodeEdit) copyEdit).getAttributeNodeEdits();
-					
-			for (AttributeNodeEdit copyAttributeEdit : copyAttributeEdits) {
-				if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
-					AttributeNodeEdit attributeEdit = this instanceof GroupNodeEdit
-							? ((GroupNodeEdit) this).getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction())
-							: ((DataSetNodeEdit) this).getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
-					
-					boolean isCreateOrCopyAction = copyAttributeEdit.getEditAction().isCreateOrCopyAction();
-					if (attributeEdit != null && !isCreateOrCopyAction) {
-						attributeEdit.copyPropertiesFrom(copyAttributeEdit);
-					} else {
-						copyAttributeEdit.copyAttributeEditTo(this, false);
-					}
-				}
-			}
-		}
-	}
-	
-	/**
-	 * Copies this edit to {@code parent} without copy source.
-	 * 
-	 * @param parent the parent of the new edit
-	 * @return the new edit
-	 */
-	TreeNodeEdit copyWithoutCopySourceTo(TreeNodeEdit parent) {
-		TreeNodeEdit copyEdit = null;
-		
-		if (this instanceof GroupNodeEdit) {
-			copyEdit = ((GroupNodeEdit) this).copyGroupEditTo((GroupNodeEdit) parent, false);
-			
-		} else if (this instanceof DataSetNodeEdit) {
-			copyEdit = ((DataSetNodeEdit) this).copyDataSetEditTo((GroupNodeEdit) parent, false);
-			
-		} else if (this instanceof ColumnNodeEdit) {
-			copyEdit = ((ColumnNodeEdit) this).copyColumnEditTo((DataSetNodeEdit) parent, false);
-			
-		} else if (this instanceof AttributeNodeEdit) {
-			copyEdit = ((AttributeNodeEdit) this).copyAttributeEditTo(parent, false);
-		}
-		
-		return copyEdit;
-	}
-	
-	/**
-	 * Checks if the properties of this edit have changed in a way
-	 * (based on {@code hdfSource}) that the hdf source has to be deleted and
-	 * recreated in the edit's execution.
-	 * 
-	 * @param hdfSource the hdf source to compare with
-	 * @return if the properties of this edit have changed
-	 */
-	protected abstract boolean havePropertiesChanged(Object hdfSource);
-	
-	/**
-	 * Copies the properties from {@code copyEdit} to this edit.
-	 * 
-	 * @param copyEdit the edit with the properties to copy from
-	 */
-	protected void copyPropertiesFrom(TreeNodeEdit copyEdit) {
-		copyCorePropertiesFrom(copyEdit);
-		copyAdditionalPropertiesFrom(copyEdit);
-	}
-	
-	/**
-	 * Copies the core properties (properties which every TreeNodeEdit has)
-	 * from {@code copyEdit} to this edit.
-	 * 
-	 * @param copyEdit the edit with the core properties to copy from
-	 */
-	private void copyCorePropertiesFrom(TreeNodeEdit copyEdit) {
-		m_inputPathFromFileWithName = copyEdit.getInputPathFromFileWithName();
-		m_outputPathFromFile = copyEdit.getOutputPathFromFile();
-		m_name = copyEdit.getName();
-		m_editOverwritePolicy = copyEdit.getEditOverwritePolicy();
-		setEditAction(copyEdit.getEditAction());
-		m_treeNodeMenu.updateMenuItems();
-		if (m_editAction == EditAction.COPY) {
-			setCopyEdit(copyEdit.getCopyEdit());
-		}
-	}
-
-	/**
-	 * Copies additional properties (properties those existence depends on the
-	 * class of the edit) from {@code copyEdit} to this edit.
-	 * 
-	 * @param copyEdit the edit with the additional properties to copy from
-	 */
-	protected abstract void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit);
-
 	/**
 	 * Checks if there is still a name conflict between this edit and {@code edit}
 	 * using the overwrite policies of both.
@@ -741,6 +510,187 @@ public abstract class TreeNodeEdit {
 		return null;
 	}
 	
+	/**
+	 * @return the popup menu which can be accessed through a right mouse click
+	 * 	on the edit
+	 */
+	public TreeNodeMenu getTreeNodeMenu() {
+		return m_treeNodeMenu;
+	}
+	
+	/**
+	 * Sets and updates the tree node menu of this edit.
+	 * 
+	 * @param treeNodeMenu the tree node menu of this edit
+	 */
+	protected void setTreeNodeMenu(TreeNodeMenu treeNodeMenu) {
+		m_treeNodeMenu = treeNodeMenu;
+		if (m_treeNodeMenu != null) {
+			m_treeNodeMenu.updateMenuItems();
+		}
+	}
+	
+	/**
+	 * @return the container node for this edit used in the {@linkplain JTree}
+	 * 	which represents all edits
+	 */
+	public DefaultMutableTreeNode getTreeNode() {
+		return m_treeNode;
+	}
+	
+	/**
+	 * Creates (if none exists) and adds the tree node of this edit to the
+	 * parent tree node in the {@linkplain JTree} if possible. Otherwise,
+	 * this method does nothing.
+	 * 
+	 * @return if the tree node of this edit was added successfully
+	 */
+	@SuppressWarnings("unchecked")
+	public boolean addEditToParentNodeIfPossible() {
+		DefaultMutableTreeNode parentNode = getParent().getTreeNode();
+		if (parentNode != null && !parentNode.isNodeChild(m_treeNode)) {
+			if (m_treeNode == null) {
+				m_treeNode = new DefaultMutableTreeNode(this);
+			}
+			
+			Enumeration<DefaultMutableTreeNode> enumeration = parentNode.children();
+			DefaultMutableTreeNode[] siblings = Collections.list(enumeration).toArray(new DefaultMutableTreeNode[0]);
+			int insert;
+			for (insert = 0; insert < siblings.length; insert++) {
+				TreeNodeEdit edit = (TreeNodeEdit) siblings[insert].getUserObject();
+				if (TreeNodeEditComparator.compareProperties(this, edit) < 0) {
+					break;
+				}
+			}
+			parentNode.insert(m_treeNode, insert);
+			
+			for (TreeNodeEdit edit : getAllChildren()) {
+		        edit.addEditToParentNodeIfPossible();
+			}
+			
+			return true;
+		}
+		
+		return false;
+	}
+
+	/**
+	 * Reloads the {@link JTree} and ensures that this edit is visible.
+	 */
+	public void reloadTreeWithEditVisible() {
+		reloadTreeWithEditVisible(false);
+	}
+
+	/**
+	 * Reloads the {@link JTree} and ensures that this edit is visible and also
+	 * its children if {@code childrenVisible} is set to {@code true}.
+	 * 
+	 * @param childrenVisible if this edit's children should also be visible
+	 */
+	public void reloadTreeWithEditVisible(boolean childrenVisible) {
+		FileNodeEdit root = getRoot();
+		root.reloadTree();
+		if (childrenVisible) {
+			TreeNodeEdit[] childEdits = getAllChildren();
+			root.makeTreeNodeVisible(childEdits.length > 0 ? childEdits[0] : this);
+		} else {
+			root.makeTreeNodeVisible(this);
+		}
+	}
+
+	/**
+	 * @return the parent of this edit based on the output path from file
+	 */
+	public TreeNodeEdit getParent() {
+		return m_parent;
+	}
+	
+	/**
+	 * Sets the parent of this edit and updates the invalid map and the edit
+	 * actions of the previous and current parent.
+	 * 
+	 * @param parent the new parent of this edit
+	 */
+	protected void setParent(TreeNodeEdit parent) {
+		if (m_parent != parent) {
+			if (m_parent != null && parent == null) {
+				m_parent.updateInvalidMap(this, null);
+				m_parent.removeModifyChildrenProperty();
+			}
+			m_parent = parent;
+			if (m_parent != null) {
+				updateParentEditAction();
+			}
+		}
+	}
+	
+	/**
+	 * @return the root of this edit
+	 */
+	public FileNodeEdit getRoot() {
+		return m_parent != null ? m_parent.getRoot() : (FileNodeEdit) this;
+	}
+	
+	/**
+	 * @return the path from the root
+	 */
+	public TreeNodeEdit[] getPath() {
+		List<TreeNodeEdit> editsInPath = new ArrayList<>();
+		editsInPath.add(this);
+		while (editsInPath.get(0).getParent() != null) {
+			editsInPath.add(0, editsInPath.get(0).getParent());
+		}
+		return editsInPath.toArray(new TreeNodeEdit[editsInPath.size()]);
+	}
+	
+	/**
+	 * Checks if this edit is a descendant of {@code other}. It is also a
+	 * descendant if {@code this == other}.
+	 * 
+	 * @param other the possible ancestor
+	 * @return if this edit is a descendant of {@code other}
+	 */
+	public boolean isEditDescendantOf(TreeNodeEdit other) {
+		TreeNodeEdit[] thisPath = getPath();
+		TreeNodeEdit[] otherPath = other.getPath();
+		
+		for (int i = 0; i < thisPath.length; i++) {
+			if (i >= otherPath.length || thisPath[i] != otherPath[i]) {
+				return false;
+			}
+		}
+		
+		return true;
+	}
+
+	/**
+	 * @return the hdf object which is edited by this edit
+	 */
+	public Object getHdfObject() {
+		return m_hdfObject;
+	}
+
+	protected void setHdfObject(Hdf5TreeElement hdfObject) {
+		m_hdfObject = hdfObject;
+		if (m_hdfObject != null && m_hdfObject == m_hdfBackup) {
+			m_hdfBackup = null;
+		}
+	}
+	
+	protected void setHdfObject(Hdf5Attribute<?> hdfObject) {
+		m_hdfObject = hdfObject;
+		if (m_hdfObject != null && m_hdfObject == m_hdfBackup) {
+			m_hdfBackup = null;
+		}
+	}
+	
+	/**
+	 * Get the hdf object of the parent and open it if it is no file and not already opened.
+	 * 
+	 * @return the opened hdf object of the parent
+	 * @throws IOException if the hdf object cannot be opened
+	 * @throws NullPointerException if this edit does not have a parent
+	 */
 	protected Hdf5TreeElement getOpenedHdfObjectOfParent() throws IOException, NullPointerException {
 		Hdf5TreeElement parentObject = (Hdf5TreeElement) m_parent.getHdfObject();
 		
@@ -752,51 +702,50 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
-	 * @return the hdf backup if available, the hdf object otherwise (this
-	 * edit is invalid if this method returns {@code null} and the action
-	 * is neither COPY nor CREATE)
+	 * @return the backup for the hdf object if the original version got deleted
 	 */
-	Object getHdfSource() {
-		return m_hdfBackup != null ? m_hdfBackup : m_hdfObject;
+	protected Object getHdfBackup() {
+		return m_hdfBackup;
+	}
+
+	private void setHdfBackup(Hdf5TreeElement hdfBackup) {
+		if (m_hdfObject == null || m_hdfObject != m_hdfBackup) {
+			m_hdfBackup = hdfBackup;
+		}
+	}
+	
+	private void setHdfBackup(Hdf5Attribute<?> hdfBackup) {
+		if (m_hdfObject == null || m_hdfObject != m_hdfBackup) {
+			m_hdfBackup = hdfBackup;
+		}
 	}
 	
 	/**
-	 * Finds the copy source for the edits with COPY action.
+	 * Checks if a backup of the hdf object is needed because it gets deleted or
+	 * overwritten (based on the {@code objectNames} and {@code attributeNames}).
 	 * 
-	 * @return the copy source for the edits with COPY action
-	 * @throws IOException if no copy source exists
+	 * @param objectNames the object names that will be in the parent hdf
+	 * 	object after executing this edit
+	 * @param attributeNames the attribute names that will be in the parent hdf
+	 * 	object after executing this edit
+	 * @return if a backup of the hdf object is needed
 	 */
-	Object findCopySource() throws IOException {
-		Object copySource = null;
+	private boolean isBackupNeeded(List<String> objectNames, List<String> attributeNames) {
+		boolean backupNeeded = false;
 		
-		FileNodeEdit fileEdit = getRoot();
-		if (this instanceof GroupNodeEdit) {
-			GroupNodeEdit copyGroupEdit = fileEdit.getGroupEditByPath(m_inputPathFromFileWithName);
-			if (copyGroupEdit != null) {
-				copySource = copyGroupEdit.getHdfSource();
-			}
-			if (copySource == null) {
-				copySource = ((Hdf5File) fileEdit.getHdfObject()).getGroupByPath(m_inputPathFromFileWithName);
-			}
-		} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
-			DataSetNodeEdit copyDataSetEdit = fileEdit.getDataSetEditByPath(m_inputPathFromFileWithName);
-			if (copyDataSetEdit != null) {
-				copySource = copyDataSetEdit.getHdfSource();
-			}
-			if (copySource == null) {
-				copySource = ((Hdf5File) fileEdit.getHdfObject()).getDataSetByPath(m_inputPathFromFileWithName);
-			}
-		} else if (this instanceof AttributeNodeEdit) {
-			AttributeNodeEdit copyAttributeEdit = fileEdit.getAttributeEditByPath(m_inputPathFromFileWithName);
-			if (copyAttributeEdit != null) {
-				copySource = copyAttributeEdit.getHdfSource();
-			}
-			if (copySource == null) {
-				copySource = ((Hdf5File) fileEdit.getHdfObject()).getAttributeByPath(m_inputPathFromFileWithName);
+		if (m_editAction == EditAction.DELETE) {
+			backupNeeded = true;
+			
+		} else if (m_editAction == EditAction.MODIFY) {
+			backupNeeded = havePropertiesChanged(m_hdfObject);
+			if (!backupNeeded) {
+				String[] pathAndName = Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName);
+				backupNeeded = getOutputPathFromFile().equals(pathAndName[0])
+						&& (this instanceof AttributeNodeEdit ? attributeNames : objectNames).contains(pathAndName[1]);
 			}
 		}
-
-		return copySource;
+		
+		return backupNeeded;
 	}
 	
 	/**
@@ -882,9 +831,57 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
+	 * @return the hdf backup if available, the hdf object otherwise (this
+	 * 	edit is invalid if this method returns {@code null} and the action
+	 * 	is neither COPY nor CREATE)
+	 */
+	protected Object getHdfSource() {
+		return m_hdfBackup != null ? m_hdfBackup : m_hdfObject;
+	}
+	
+	/**
+	 * Finds the copy source for the edits with COPY action.
+	 * 
+	 * @return the copy source for the edits with COPY action
+	 * @throws IOException if no copy source exists
+	 */
+	protected Object findCopySource() throws IOException {
+		Object copySource = null;
+		
+		FileNodeEdit fileEdit = getRoot();
+		if (this instanceof GroupNodeEdit) {
+			GroupNodeEdit copyGroupEdit = fileEdit.getGroupEditByPath(m_inputPathFromFileWithName);
+			if (copyGroupEdit != null) {
+				copySource = copyGroupEdit.getHdfSource();
+			}
+			if (copySource == null) {
+				copySource = ((Hdf5File) fileEdit.getHdfObject()).getGroupByPath(m_inputPathFromFileWithName);
+			}
+		} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
+			DataSetNodeEdit copyDataSetEdit = fileEdit.getDataSetEditByPath(m_inputPathFromFileWithName);
+			if (copyDataSetEdit != null) {
+				copySource = copyDataSetEdit.getHdfSource();
+			}
+			if (copySource == null) {
+				copySource = ((Hdf5File) fileEdit.getHdfObject()).getDataSetByPath(m_inputPathFromFileWithName);
+			}
+		} else if (this instanceof AttributeNodeEdit) {
+			AttributeNodeEdit copyAttributeEdit = fileEdit.getAttributeEditByPath(m_inputPathFromFileWithName);
+			if (copyAttributeEdit != null) {
+				copySource = copyAttributeEdit.getHdfSource();
+			}
+			if (copySource == null) {
+				copySource = ((Hdf5File) fileEdit.getHdfObject()).getAttributeByPath(m_inputPathFromFileWithName);
+			}
+		}
+
+		return copySource;
+	}
+	
+	/**
 	 * Finds and updates the copy sources for all descendant edits with COPY actions.
 	 */
-	protected void updateCopySources() {
+	void updateCopySources() {
     	if (m_editAction == EditAction.COPY) {
 			setCopyEdit(findCopyEdit());
 		}
@@ -892,6 +889,133 @@ public abstract class TreeNodeEdit {
 		for (TreeNodeEdit edit : getAllChildren()) {
 			edit.updateCopySources();
 		}
+	}
+
+	/**
+	 * @return the type of action that is executed on this edit's hdf source
+	 */
+	public EditAction getEditAction() {
+		return m_editAction;
+	}
+	
+	/**
+	 * Sets the edit action (if possible) and updates the edit actions of its ancestors.
+	 * <br>
+	 * It is not possible to set the edit action from COPY/CREATE/DELETE back
+	 * to one of the others.
+	 * <br>
+	 * <br>
+	 * <b>Note:</b>When deciding if the edit action should be DELETE or not, use
+	 * {@linkplain TreeNodeEdit#setDeletion(boolean)}
+	 * 
+	 * @param editAction the new edit action
+	 * @see TreeNodeEdit#setDeletion(boolean)
+	 */
+	protected void setEditAction(EditAction editAction) {
+		if (!editAction.isModifyAction() || m_editAction == EditAction.NO_ACTION || m_editAction == EditAction.MODIFY_CHILDREN_ONLY) {
+			m_editAction = editAction;
+			
+			if (m_parent != null && m_parent.getEditAction() == EditAction.NO_ACTION && m_editAction != EditAction.NO_ACTION) {
+				m_parent.setEditAction(EditAction.MODIFY_CHILDREN_ONLY);
+			}
+		}
+	}
+	
+	/**
+	 * Updates the edit action of the parent.
+	 */
+	private void updateParentEditAction() {
+		setEditAction(getEditAction());
+	}
+	
+	/**
+	 * Sets the edit action MODIFY_CHILDREN_ONLY back to NO_ACTION if possible.
+	 */
+	private void removeModifyChildrenProperty() {
+		boolean removeModifyChildrenProperty = m_editAction == EditAction.MODIFY_CHILDREN_ONLY;
+		if (removeModifyChildrenProperty) {
+			for (TreeNodeEdit child : getAllChildren()) {
+				if (child.getEditAction() != EditAction.NO_ACTION) {
+					removeModifyChildrenProperty = false;
+					break;
+				}
+			}
+		}
+		if (removeModifyChildrenProperty) {
+			setEditAction(EditAction.NO_ACTION);
+			if (m_parent != null) {
+				m_parent.removeModifyChildrenProperty();
+			}
+		}
+	}
+	
+	/**
+	 * Sets the edit action to DELETE if {@code toDelete == true} and to
+	 * MODIFY/NO_ACTION otherwise. Also does the same for all
+	 * descendants.
+	 * <br>
+	 * <br>
+	 * If this edit has no hdf source, it will be removed from its parent
+	 * instead of letting it be invalid.
+	 * 
+	 * @param toDelete if the edit action should be set to DELETE or not
+	 */
+	protected void setDeletion(boolean toDelete) {
+		if (toDelete != (getEditAction() == EditAction.DELETE)) {
+	    	if (toDelete && getEditAction().isCreateOrCopyAction() || !toDelete && m_invalidEdits.get(this) == InvalidCause.NO_HDF_SOURCE && getEditAction() == EditAction.DELETE) {
+	    		removeFromParentCascade();
+	    		
+	    	} else {
+	    		m_editAction = toDelete ? EditAction.DELETE : (this instanceof ColumnNodeEdit ? EditAction.NO_ACTION : EditAction.MODIFY);
+	    		updateParentEditAction();
+	    		m_treeNodeMenu.updateMenuItems();
+	    	}
+	    	
+	    	for (TreeNodeEdit edit : getAllChildren()) {
+	        	edit.setDeletion(toDelete);
+	    	}
+		}
+	}
+
+	/**
+	 * @return the edit that is used for {@linkplain EditAction#COPY} as copy source
+	 */
+	protected TreeNodeEdit getCopyEdit() {
+		return m_copyEdit;
+	}
+	
+	/**
+	 * Sets the copy edit of this edit to {@code copyEdit} or to the copy edit
+	 * of {@code copyEdit} if it exists such that the copy edit is the proper
+	 * copy source for this edit.
+	 * 
+	 * @param copyEdit the new copy edit
+	 * @throws IllegalArgumentException if this edit and {@code copyEdit} are
+	 * 	the same instance or do not have the same {@linkplain FileNodeEdit}
+	 * 	as root
+	 */
+	protected void setCopyEdit(TreeNodeEdit copyEdit) throws IllegalArgumentException {
+		if (copyEdit != null && getRoot() != copyEdit.getRoot()) {
+			throw new IllegalArgumentException("Copy source must have the same root as this edit");
+			
+		} else if (this == copyEdit) {
+			throw new IllegalArgumentException("Copy source may not be this edit ifself");
+		}
+		
+		m_copyEdit = copyEdit != null && copyEdit.getCopyEdit() != null ? copyEdit.getCopyEdit() : copyEdit;
+	}
+	
+	private TreeNodeEdit findCopyEdit() {
+		if (this instanceof GroupNodeEdit) {
+			return getRoot().getGroupEditByPath(m_inputPathFromFileWithName);
+		} else if (this instanceof DataSetNodeEdit) {
+			return getRoot().getDataSetEditByPath(m_inputPathFromFileWithName);
+		} else if (this instanceof ColumnNodeEdit) {
+			return getRoot().getColumnEditByPath(m_inputPathFromFileWithName, ((ColumnNodeEdit) this).getInputColumnIndex());
+		} else if (this instanceof AttributeNodeEdit) {
+			return getRoot().getAttributeEditByPath(m_inputPathFromFileWithName);
+		}
+		return null;
 	}
 	
 	public boolean isValid() {
@@ -992,56 +1116,27 @@ public abstract class TreeNodeEdit {
 		
 		return messageBuilder.toString();
 	}
-	
-	/**
-	 * @return the information of this edit that is show on the tooltip
-	 */
-	public String getToolTipText() {
-		return (isSupported() ? (this instanceof FileNodeEdit ? ((FileNodeEdit) this).getFilePath() : m_inputPathFromFileWithName != null ? m_inputPathFromFileWithName : "NEW")
-						+ (this instanceof ColumnNodeEdit && m_editAction != EditAction.CREATE ? "/" + m_name : "") : "NOT SUPPORTED [" + m_unsupportedCause + "]")
-				+ (isValid() ? "" : " (invalid" + (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : " children") + ")");
+
+	public boolean isSupported() {
+		return m_unsupportedCause == null;
 	}
 	
 	/**
-	 * Updates the edit state and adds the total progress in this edit if the edit
-	 * state was IN_PROGRESS before.
+	 * Sets the cause why this edit is not supported or {@code null} if this
+	 * edit is supported.
 	 * 
-	 * @param exec the knime execution context
-	 * @param totalProgressToDo the total progress to do while executing the
-	 * 	hdf writer
-	 * @throws IOException if an error occurred while calculating the total
-	 * 	progress to do in this edit
+	 * @param unsupportedCause the new unsupported cause
 	 */
-	private void updateStateAndProgress(ExecutionContext exec, long totalProgressToDo) throws IOException {
-		if (m_editState == EditState.IN_PROGRESS && m_editSuccess.isSuccessDecided()) {
-			if (m_editSuccess == EditSuccess.TRUE) {
-				addProgress(getProgressToDoInEdit(), exec, totalProgressToDo, true);
-				setEditState(EditState.SUCCESS);
-				
-			} else {
-				setEditState(EditState.FAIL);
-			}
-		}
+	protected void setUnsupportedCause(String unsupportedCause) {
+		m_unsupportedCause = unsupportedCause;
+	}
+
+	public EditState getEditState() {
+		return m_editState;
 	}
 	
-	/**
-	 * Adds the done progress to the {@link ExecutionContext} {@code exec}.
-	 * 
-	 * @param progressToAdd the progress to add
-	 * @param exec the knime execution context
-	 * @param totalProgressToDo the total progress to do while executing the
-	 * 	hdf writer
-	 * @param updateMessage if the message in the execution context should be
-	 * 	updated (the message shows the last edit which has added some progress)
-	 */
-	protected void addProgress(long progressToAdd, ExecutionContext exec, long totalProgressToDo, boolean updateMessage) {
-		// TODO change after testing
-		long progressDone = Math.round(exec.getProgressMonitor().getProgress() * totalProgressToDo) + progressToAdd;
-		exec.setProgress((double) progressDone / totalProgressToDo);
-		if (updateMessage) {
-			exec.setMessage(getSummary());
-		}
-		System.out.println("Progress done (Edit " + getOutputPathFromFileWithName() + "): " + progressDone);
+	protected void setEditState(EditState editState) {
+		m_editState = editState;
 	}
 	
 	/**
@@ -1072,6 +1167,63 @@ public abstract class TreeNodeEdit {
 		return summaryBuilder.toString();
 	}
 	
+	protected void setEditSuccess(boolean success) {
+		m_editSuccess = EditSuccess.getSuccess(success);
+	}
+	
+	/**
+	 * Resets this edit's success to {@linkplain EditSuccess#UNDECIDED}.
+	 */
+	protected void resetSuccess() {
+		m_editSuccess = EditSuccess.UNDECIDED;
+	}
+	
+	/**
+	 * Checks if the properties of this edit have changed in a way
+	 * (based on {@code hdfSource}) that the hdf source has to be deleted and
+	 * recreated in the edit's execution.
+	 * 
+	 * @param hdfSource the hdf source to compare with
+	 * @return if the properties of this edit have changed
+	 */
+	protected abstract boolean havePropertiesChanged(Object hdfSource);
+	
+	/**
+	 * Copies the properties from {@code copyEdit} to this edit.
+	 * 
+	 * @param copyEdit the edit with the properties to copy from
+	 */
+	protected void copyPropertiesFrom(TreeNodeEdit copyEdit) {
+		copyCorePropertiesFrom(copyEdit);
+		copyAdditionalPropertiesFrom(copyEdit);
+	}
+	
+	/**
+	 * Copies the core properties (properties which every TreeNodeEdit has)
+	 * from {@code copyEdit} to this edit.
+	 * 
+	 * @param copyEdit the edit with the core properties to copy from
+	 */
+	private void copyCorePropertiesFrom(TreeNodeEdit copyEdit) {
+		m_inputPathFromFileWithName = copyEdit.getInputPathFromFileWithName();
+		m_outputPathFromFile = copyEdit.getOutputPathFromFile();
+		m_name = copyEdit.getName();
+		m_editOverwritePolicy = copyEdit.getEditOverwritePolicy();
+		setEditAction(copyEdit.getEditAction());
+		m_treeNodeMenu.updateMenuItems();
+		if (m_editAction == EditAction.COPY) {
+			setCopyEdit(copyEdit.getCopyEdit());
+		}
+	}
+
+	/**
+	 * Copies additional properties (properties those existence depends on the
+	 * class of the edit) from {@code copyEdit} to this edit.
+	 * 
+	 * @param copyEdit the edit with the additional properties to copy from
+	 */
+	protected abstract void copyAdditionalPropertiesFrom(TreeNodeEdit copyEdit);
+	
 	/**
 	 * @return information about the hdf object type, output file path with name and edit action
 	 */
@@ -1095,161 +1247,126 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
+	 * @return the information of this edit that is show on the tooltip
+	 */
+	public String getToolTipText() {
+		return (isSupported() ? (this instanceof FileNodeEdit ? ((FileNodeEdit) this).getFilePath() : m_inputPathFromFileWithName != null ? m_inputPathFromFileWithName : "NEW")
+						+ (this instanceof ColumnNodeEdit && m_editAction != EditAction.CREATE ? "/" + m_name : "") : "NOT SUPPORTED [" + m_unsupportedCause + "]")
+				+ (isValid() ? "" : " (invalid" + (m_invalidEdits.containsKey(this) ? " - " + m_invalidEdits.get(this).getMessage() : " children") + ")");
+	}
+	
+	/**
 	 * @return the total progress which will be done during the execution for
 	 * 	this edit
 	 * @throws IOException if the hdf source is needed and cannot be found
 	 */
 	protected abstract long getProgressToDoInEdit() throws IOException;
 	
-	private TreeNodeEdit findCopyEdit() {
-		if (this instanceof GroupNodeEdit) {
-			return getRoot().getGroupEditByPath(m_inputPathFromFileWithName);
-		} else if (this instanceof DataSetNodeEdit) {
-			return getRoot().getDataSetEditByPath(m_inputPathFromFileWithName);
-		} else if (this instanceof ColumnNodeEdit) {
-			return getRoot().getColumnEditByPath(m_inputPathFromFileWithName, ((ColumnNodeEdit) this).getInputColumnIndex());
-		} else if (this instanceof AttributeNodeEdit) {
-			return getRoot().getAttributeEditByPath(m_inputPathFromFileWithName);
-		}
-		return null;
-	}
-
 	/**
-	 * @return the output path from file with name (without check that there
-	 * 	slashes in name)
-	 */
-	public String getOutputPathFromFileWithName() {
-		return getOutputPathFromFileWithName(false);
-	}
-	
-	/**
-	 * @param checkSlashesInName if it should be checked for slashes in the name
-	 * 	and they should be replaced by '\/'
-	 * @return the output path from file with name
-	 */
-	String getOutputPathFromFileWithName(boolean checkSlashesInName) {
-		return (!m_outputPathFromFile.isEmpty() ? m_outputPathFromFile + "/" : "") + (checkSlashesInName ? m_name.replaceAll("/", "\\\\/") : m_name);
-	}
-
-	/**
-	 * Reloads the {@link JTree} and ensures that this edit is visible.
-	 */
-	public void reloadTreeWithEditVisible() {
-		reloadTreeWithEditVisible(false);
-	}
-
-	/**
-	 * Reloads the {@link JTree} and ensures that this edit is visible and also
-	 * its children if {@code childrenVisible} is set to {@code true}.
+	 * Adds the done progress to the {@link ExecutionContext} {@code exec}.
 	 * 
-	 * @param childrenVisible if this edit's children should also be visible
+	 * @param progressToAdd the progress to add
+	 * @param exec the knime execution context
+	 * @param totalProgressToDo the total progress to do while executing the
+	 * 	hdf writer
+	 * @param updateMessage if the message in the execution context should be
+	 * 	updated (the message shows the last edit which has added some progress)
 	 */
-	public void reloadTreeWithEditVisible(boolean childrenVisible) {
-		FileNodeEdit root = getRoot();
-		root.reloadTree();
-		if (childrenVisible) {
-			TreeNodeEdit[] childEdits = getAllChildren();
-			root.makeTreeNodeVisible(childEdits.length > 0 ? childEdits[0] : this);
-		} else {
-			root.makeTreeNodeVisible(this);
+	protected void addProgress(long progressToAdd, ExecutionContext exec, long totalProgressToDo, boolean updateMessage) {
+		// TODO change after testing
+		long progressDone = Math.round(exec.getProgressMonitor().getProgress() * totalProgressToDo) + progressToAdd;
+		exec.setProgress((double) progressDone / totalProgressToDo);
+		if (updateMessage) {
+			exec.setMessage(getSummary());
 		}
+		System.out.println("Progress done (Edit " + getOutputPathFromFileWithName() + "): " + progressDone);
 	}
 	
 	/**
-	 * @return the root of this edit
-	 */
-	protected FileNodeEdit getRoot() {
-		return m_parent != null ? m_parent.getRoot() : (FileNodeEdit) this;
-	}
-	
-	/**
-	 * @return the path from the root
-	 */
-	private TreeNodeEdit[] getPath() {
-		List<TreeNodeEdit> editsInPath = new ArrayList<>();
-		editsInPath.add(this);
-		while (editsInPath.get(0).getParent() != null) {
-			editsInPath.add(0, editsInPath.get(0).getParent());
-		}
-		return editsInPath.toArray(new TreeNodeEdit[editsInPath.size()]);
-	}
-	
-	/**
-	 * Checks if this edit is a descendant of {@code other}. It is also a
-	 * descendant if {@code this == other}.
+	 * Updates the edit state and adds the total progress in this edit if the edit
+	 * state was IN_PROGRESS before.
 	 * 
-	 * @param other the possible ancestor
-	 * @return if this edit is a descendant of {@code other}
+	 * @param exec the knime execution context
+	 * @param totalProgressToDo the total progress to do while executing the
+	 * 	hdf writer
+	 * @throws IOException if an error occurred while calculating the total
+	 * 	progress to do in this edit
 	 */
-	public boolean isEditDescendantOf(TreeNodeEdit other) {
-		TreeNodeEdit[] thisPath = getPath();
-		TreeNodeEdit[] otherPath = other.getPath();
-		
-		for (int i = 0; i < thisPath.length; i++) {
-			if (i >= otherPath.length || thisPath[i] != otherPath[i]) {
-				return false;
+	private void updateStateAndProgress(ExecutionContext exec, long totalProgressToDo) throws IOException {
+		if (m_editState == EditState.IN_PROGRESS && m_editSuccess.isSuccessDecided()) {
+			if (m_editSuccess == EditSuccess.TRUE) {
+				addProgress(getProgressToDoInEdit(), exec, totalProgressToDo, true);
+				setEditState(EditState.SUCCESS);
+				
+			} else {
+				setEditState(EditState.FAIL);
 			}
 		}
+	}
+	
+	/**
+	 * @return all children of this edit
+	 */
+	protected abstract TreeNodeEdit[] getAllChildren();
+	
+	/**
+	 * @return all descendants of this edit (including this edit)
+	 */
+	protected List<TreeNodeEdit> getAllDecendants() {
+		List<TreeNodeEdit> descendants = new ArrayList<>();
 		
-		return true;
+		descendants.add(this);
+		for (TreeNodeEdit child : getAllChildren()) {
+			descendants.addAll(child.getAllDecendants());
+		}
+		
+		return descendants;
 	}
-	
+
 	/**
-	 * Updates the edit action of the parent.
+	 * Integrates the attributeEdits of {@code copyEdit} into this edit.
+	 * 
+	 * @param copyEdit the edit to integrate
 	 */
-	private void updateParentEditAction() {
-		setEditAction(getEditAction());
-	}
-	
-	/**
-	 * Sets the edit action MODIFY_CHILDREN_ONLY back to NO_ACTION if possible.
-	 */
-	private void removeModifyChildrenProperty() {
-		boolean removeModifyChildrenProperty = m_editAction == EditAction.MODIFY_CHILDREN_ONLY;
-		if (removeModifyChildrenProperty) {
-			for (TreeNodeEdit child : getAllChildren()) {
-				if (child.getEditAction() != EditAction.NO_ACTION) {
-					removeModifyChildrenProperty = false;
-					break;
+	protected void integrateAttributeEdits(TreeNodeEdit copyEdit) {
+		if ((this instanceof GroupNodeEdit || this instanceof DataSetNodeEdit)
+				&& (copyEdit instanceof GroupNodeEdit || copyEdit instanceof DataSetNodeEdit)) {
+			AttributeNodeEdit[] copyAttributeEdits = copyEdit instanceof GroupNodeEdit
+					? ((GroupNodeEdit) copyEdit).getAttributeNodeEdits() : ((DataSetNodeEdit) copyEdit).getAttributeNodeEdits();
+					
+			for (AttributeNodeEdit copyAttributeEdit : copyAttributeEdits) {
+				if (copyAttributeEdit.getEditAction() != EditAction.NO_ACTION) {
+					AttributeNodeEdit attributeEdit = this instanceof GroupNodeEdit
+							? ((GroupNodeEdit) this).getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction())
+							: ((DataSetNodeEdit) this).getAttributeNodeEdit(copyAttributeEdit.getInputPathFromFileWithName(), copyAttributeEdit.getEditAction());
+					
+					boolean isCreateOrCopyAction = copyAttributeEdit.getEditAction().isCreateOrCopyAction();
+					if (attributeEdit != null && !isCreateOrCopyAction) {
+						attributeEdit.copyPropertiesFrom(copyAttributeEdit);
+					} else {
+						copyAttributeEdit.copyAttributeEditTo(this, false);
+					}
 				}
 			}
 		}
-		if (removeModifyChildrenProperty) {
-			setEditAction(EditAction.NO_ACTION);
-			if (m_parent != null) {
-				m_parent.removeModifyChildrenProperty();
-			}
-		}
 	}
 	
 	/**
-	 * Sets the edit action to DELETE if {@code toDelete == true} and to
-	 * MODIFY/NO_ACTION otherwise. Also does the same for all
-	 * descendants.
-	 * <br>
-	 * <br>
-	 * If this edit has no hdf source, it will be removed from its parent
-	 * instead of letting it be invalid.
-	 * 
-	 * @param toDelete if the edit action should be set to DELETE or not
+	 * Removes this edit from its parent.
 	 */
-	void setDeletion(boolean toDelete) {
-		if (toDelete != (getEditAction() == EditAction.DELETE)) {
-	    	if (toDelete && getEditAction().isCreateOrCopyAction() || !toDelete && m_invalidEdits.get(this) == InvalidCause.NO_HDF_SOURCE && getEditAction() == EditAction.DELETE) {
-	    		removeFromParentCascade();
-	    		
-	    	} else {
-	    		m_editAction = toDelete ? EditAction.DELETE : (this instanceof ColumnNodeEdit ? EditAction.NO_ACTION : EditAction.MODIFY);
-	    		updateParentEditAction();
-	    		m_treeNodeMenu.updateMenuItems();
-	    	}
-	    	
-	    	for (TreeNodeEdit edit : getAllChildren()) {
-	        	edit.setDeletion(toDelete);
-	    	}
+	protected abstract void removeFromParent();
+	
+	/**
+	 * Removes all descendants (including this edit) from their parents.
+	 */
+	protected void removeFromParentCascade() {
+		for (TreeNodeEdit edit : getAllChildren()) {
+			edit.removeFromParentCascade();
 		}
+		
+		removeFromParent();
 	}
-
+	
 	/**
 	 * Get the child with the specified class and name.
 	 * 
@@ -1327,41 +1444,6 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
-	 * @return all descendants of this edit (including this edit)
-	 */
-	protected List<TreeNodeEdit> getAllDecendants() {
-		List<TreeNodeEdit> descendants = new ArrayList<>();
-		
-		descendants.add(this);
-		for (TreeNodeEdit child : getAllChildren()) {
-			descendants.addAll(child.getAllDecendants());
-		}
-		
-		return descendants;
-	}
-	
-	/**
-	 * @return all children of this edit
-	 */
-	protected abstract TreeNodeEdit[] getAllChildren();
-	
-	/**
-	 * Removes all descendants (including this edit) from their parents.
-	 */
-	protected void removeFromParentCascade() {
-		for (TreeNodeEdit edit : getAllChildren()) {
-			edit.removeFromParentCascade();
-		}
-		
-		removeFromParent();
-	}
-	
-	/**
-	 * Removes this edit from its parent.
-	 */
-	protected abstract void removeFromParent();
-	
-	/**
 	 * Writes the properties of this edit into {@code settings}.
 	 * 
 	 * @param settings the settings to be written to
@@ -1380,42 +1462,70 @@ public abstract class TreeNodeEdit {
 	 * @throws InvalidSettingsException if a required property does not exist
 	 */
 	protected abstract void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException;
-
+	
 	/**
-	 * Creates (if none exists) and adds the tree node of this edit to the
-	 * parent tree node in the {@linkplain JTree} if possible. Otherwise,
-	 * this method does nothing.
+	 * Validates this edit internally and/or externally (based on if the validation
+	 * result depends on the respective hdf file).
 	 * 
-	 * @return if the tree node of this edit was added successfully
+	 * @param internalCheck if an internal check should be done
+	 * @param externalCheck if an external check should be done
 	 */
-	@SuppressWarnings("unchecked")
-	public boolean addEditToParentNodeIfPossible() {
-		DefaultMutableTreeNode parentNode = getParent().getTreeNode();
-		if (parentNode != null && !parentNode.isNodeChild(m_treeNode)) {
-			if (m_treeNode == null) {
-				m_treeNode = new DefaultMutableTreeNode(this);
+	protected void validate(boolean internalCheck, boolean externalCheck) {
+		InvalidCause cause = null;
+		
+		if (externalCheck && cause == null) {
+			if (m_editAction == EditAction.COPY) {
+				cause = m_copyEdit == null ? InvalidCause.NO_COPY_SOURCE : null;
+			} else if (m_editAction == EditAction.CREATE) {
+				cause = this instanceof FileNodeEdit ? ((FileNodeEdit) this).validateFileCreation() :
+						this instanceof ColumnNodeEdit ? ((ColumnNodeEdit) this).getInputInvalidCause() :
+						this instanceof AttributeNodeEdit ? ((AttributeNodeEdit) this).getInputInvalidCause() : null;
+			} else if (isSupported()) {
+				cause = m_hdfObject == null ? InvalidCause.NO_HDF_SOURCE : this instanceof DataSetNodeEdit
+						&& ((Hdf5DataSet<?>) m_hdfObject).numberOfColumns() != ((DataSetNodeEdit) this).getRequiredColumnCountForExecution()
+								? InvalidCause.COLUMN_COUNT : null;
 			}
-			
-			Enumeration<DefaultMutableTreeNode> enumeration = parentNode.children();
-			DefaultMutableTreeNode[] siblings = Collections.list(enumeration).toArray(new DefaultMutableTreeNode[0]);
-			int insert;
-			for (insert = 0; insert < siblings.length; insert++) {
-				TreeNodeEdit edit = (TreeNodeEdit) siblings[insert].getUserObject();
-				if (TreeNodeEditComparator.compareProperties(this, edit) < 0) {
-					break;
-				}
-			}
-			parentNode.insert(m_treeNode, insert);
-			
-			for (TreeNodeEdit edit : getAllChildren()) {
-		        edit.addEditToParentNodeIfPossible();
-			}
-			
-			return true;
 		}
 		
-		return false;
+		if (externalCheck && m_parent != null) {
+			cause = cause == null && m_parent.getEditAction() == EditAction.DELETE && m_editAction != EditAction.DELETE ? InvalidCause.PARENT_DELETE : cause;
+			
+			if (cause == null) {
+				for (TreeNodeEdit edit : m_parent.getAllChildren()) {
+					if (isInConflict(edit)) {
+						cause = InvalidCause.NAME_DUPLICATE;
+						break;
+					}
+				}
+			}
+		}
+		
+		cause = cause == null && internalCheck ? validateEditInternal() : cause;
+		
+		updateInvalidMap(cause);
+
+		for (TreeNodeEdit edit : getAllChildren()) {
+	        edit.validate(internalCheck, externalCheck);
+		}
 	}
+	
+	/**
+	 * Checks if this edit is valid in all properties those validation is not
+	 * dependent on the respective hdf file where this edit is executed.
+	 * 
+	 * @return the cause why this edit is invalid internally (or {@code null}
+	 * 	if it is valid)
+	 */
+	protected abstract InvalidCause validateEditInternal();
+	
+	/**
+	 * Checks if the properties of this edit and the other edit {@code edit}
+	 * contradict.
+	 * 
+	 * @param edit the other edit
+	 * @return if this edit is in conflict to the other edit
+	 */
+	protected abstract boolean isInConflict(TreeNodeEdit edit);
 	
 	/**
 	 * Uses the overwrite policy of {@code newEdit} to add it in this edit,
@@ -1504,81 +1614,6 @@ public abstract class TreeNodeEdit {
 			}
 		}
 	}
-	
-	/**
-	 * Checks if the location of the hdfObject will be changed (but not deleted)
-	 * by execution of this edit.
-	 * 
-	 * @return if the overwrite policy is applicable
-	 */
-	private boolean isOverwriteApplicable() {
-		return m_editAction.isCreateOrCopyAction()
-				|| m_editAction == EditAction.MODIFY && !getOutputPathFromFileWithName(true).equals(m_inputPathFromFileWithName);
-	}
-	
-	/**
-	 * Validates this edit internally and/or externally (based on if the validation
-	 * result depends on the respective hdf file).
-	 * 
-	 * @param internalCheck if an internal check should be done
-	 * @param externalCheck if an external check should be done
-	 */
-	protected void validate(boolean internalCheck, boolean externalCheck) {
-		InvalidCause cause = null;
-		
-		if (externalCheck && cause == null) {
-			if (m_editAction == EditAction.COPY) {
-				cause = m_copyEdit == null ? InvalidCause.NO_COPY_SOURCE : null;
-			} else if (m_editAction == EditAction.CREATE) {
-				cause = this instanceof FileNodeEdit ? ((FileNodeEdit) this).validateFileCreation() :
-						this instanceof ColumnNodeEdit ? ((ColumnNodeEdit) this).getInputInvalidCause() :
-						this instanceof AttributeNodeEdit ? ((AttributeNodeEdit) this).getInputInvalidCause() : null;
-			} else if (isSupported()) {
-				cause = m_hdfObject == null ? InvalidCause.NO_HDF_SOURCE : this instanceof DataSetNodeEdit
-						&& ((Hdf5DataSet<?>) m_hdfObject).numberOfColumns() != ((DataSetNodeEdit) this).getRequiredColumnCountForExecution()
-								? InvalidCause.COLUMN_COUNT : null;
-			}
-		}
-		
-		if (externalCheck && m_parent != null) {
-			cause = cause == null && m_parent.getEditAction() == EditAction.DELETE && m_editAction != EditAction.DELETE ? InvalidCause.PARENT_DELETE : cause;
-			
-			if (cause == null) {
-				for (TreeNodeEdit edit : m_parent.getAllChildren()) {
-					if (isInConflict(edit)) {
-						cause = InvalidCause.NAME_DUPLICATE;
-						break;
-					}
-				}
-			}
-		}
-		
-		cause = cause == null && internalCheck ? validateEditInternal() : cause;
-		
-		updateInvalidMap(cause);
-
-		for (TreeNodeEdit edit : getAllChildren()) {
-	        edit.validate(internalCheck, externalCheck);
-		}
-	}
-	
-	/**
-	 * Checks if this edit is valid in all properties those validation is not
-	 * dependent on the respective hdf file where this edit is executed.
-	 * 
-	 * @return the cause why this edit is invalid internally (or {@code null}
-	 * 	if it is valid)
-	 */
-	protected abstract InvalidCause validateEditInternal();
-	
-	/**
-	 * Checks if the properties of this edit and the other edit {@code edit}
-	 * contradict.
-	 * 
-	 * @param edit the other edit
-	 * @return if this edit is in conflict to the other edit
-	 */
-	protected abstract boolean isInConflict(TreeNodeEdit edit);
 	
 	/**
 	 * Executes the edit defined by {@linkplain EditAction} and the properties
@@ -1701,49 +1736,6 @@ public abstract class TreeNodeEdit {
 		
 		return success;
 	}
-	
-	/**
-	 * Checks if a backup of the hdf object is needed because it gets deleted or
-	 * overwritten (based on the {@code objectNames} and {@code attributeNames}).
-	 * 
-	 * @param objectNames the object names that will be in the parent hdf
-	 * 	object after executing this edit
-	 * @param attributeNames the attribute names that will be in the parent hdf
-	 * 	object after executing this edit
-	 * @return if a backup of the hdf object is needed
-	 */
-	private boolean isBackupNeeded(List<String> objectNames, List<String> attributeNames) {
-		boolean backupNeeded = false;
-		
-		if (m_editAction == EditAction.DELETE) {
-			backupNeeded = true;
-			
-		} else if (m_editAction == EditAction.MODIFY) {
-			backupNeeded = havePropertiesChanged(m_hdfObject);
-			if (!backupNeeded) {
-				String[] pathAndName = Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName);
-				backupNeeded = getOutputPathFromFile().equals(pathAndName[0])
-						&& (this instanceof AttributeNodeEdit ? attributeNames : objectNames).contains(pathAndName[1]);
-			}
-		}
-		
-		return backupNeeded;
-	}
-	
-	/**
-	 * Deletes the hdf object and resets the success of this edit.
-	 * 
-	 * @return if the hdf object was deleted successfully
-	 * @throws IOException if the hdf object does not exist or an error in the
-	 * 	hdf library occurred
-	 */
-	protected boolean deleteActionAndResetEditSuccess() throws IOException {
-		deleteAction();
-		boolean success = m_editSuccess == EditSuccess.TRUE;
-		resetSuccess();
-		
-		return success;
-	}
 
 	/**
 	 * Executes the CREATE action of this edit. It also sets the success of this edit.
@@ -1787,6 +1779,21 @@ public abstract class TreeNodeEdit {
 	 * @throws IOException if an error occurred
 	 */
 	protected abstract void deleteAction() throws IOException;
+	
+	/**
+	 * Deletes the hdf object and resets the success of this edit.
+	 * 
+	 * @return if the hdf object was deleted successfully
+	 * @throws IOException if the hdf object does not exist or an error in the
+	 * 	hdf library occurred
+	 */
+	protected boolean deleteActionAndResetEditSuccess() throws IOException {
+		deleteAction();
+		boolean success = m_editSuccess == EditSuccess.TRUE;
+		resetSuccess();
+		
+		return success;
+	}
 
 	/**
 	 * Executes the MODIFY action of this edit. It also sets the success of this edit.

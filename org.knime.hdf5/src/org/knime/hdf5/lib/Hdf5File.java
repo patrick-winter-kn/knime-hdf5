@@ -433,74 +433,6 @@ public class Hdf5File extends Hdf5Group {
 	}
 	
 	/**
-	 * Opens this file with either READ or WRITE access.
-	 * <br>
-	 * <br>
-	 * If the file is already open in this thread, increase the counter of
-	 * accesses for this thread by 1.
-	 * <br>
-	 * If the file is open in different threads, it may happen that this
-	 * method is locked until the other threads have closed the file.
-	 * 
-	 * @param access {@code READ_ONLY_ACCESS} or {@code READ_WRITE_ACCESS}
-	 * @throws IOException if this file does not exist or an internal error occurred
-	 */
-	public void open(int access) throws IOException {
-		try {
-			// acquire a read or write lock if this file is not open in this thread
-			if (!isOpenInThisThread()) {
-    			long pid = Hdf5File.getAccessPropertyList();
-
-				if (access == READ_ONLY_ACCESS) {
-					m_r.lock();
-					
-					try {
-						lockWriteOpen();
-						// open this file only if this instance is not already open
-						if (!isOpenInAnyThread()) {
-							setElementId(H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDONLY, pid));
-						}
-						m_access = access;
-						setOpenInThisThread(true);
-						
-					} finally {
-						unlockWriteOpen();
-					}
-				} else if (access == READ_WRITE_ACCESS) {
-					m_w.lock();
-
-					try {
-						lockWriteOpen();
-						// open this file only if this instance is not already open
-						if (!isOpenInAnyThread()) {
-							setElementId(H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDWR, pid));
-						}
-						m_access = access;
-						setOpenInThisThread(true);
-						
-					} finally {
-						unlockWriteOpen();
-					}
-				}
-				
-    			H5.H5Pclose(pid);
-    			
-			} else {
-				setOpenInThisThread(true);
-			}
-		} catch (HDF5LibraryException | NullPointerException hlnpe) {
-			if (access == READ_ONLY_ACCESS) {
-				m_r.unlock();
-				
-			} else if (access == READ_WRITE_ACCESS) {
-				m_w.unlock();
-			}
-
-			throw new IOException("The file \"" + getFilePath() + "\" cannot be opened: " + hlnpe.getMessage(), hlnpe);
-        }
-	}
-	
-	/**
 	 * @param prefix the prefix for the name like "temp_"
 	 * @return the instance for the newly created copy of this hdf file
 	 * @throws IOException if an error occurred in the hdf library while creating
@@ -642,13 +574,75 @@ public class Hdf5File extends Hdf5Group {
         
         return opened;
 	}
-	
-	/**
-	 * Closes this group and all elements in this group.
-	 * 
-	 * @throws IOException 
-	 */
 
+	/**
+	 * Opens this file with either READ or WRITE access.
+	 * <br>
+	 * <br>
+	 * If the file is already open in this thread, increase the counter of
+	 * accesses for this thread by 1.
+	 * <br>
+	 * If the file is open in different threads, it may happen that this
+	 * method is locked until the other threads have closed the file.
+	 * 
+	 * @param access {@code READ_ONLY_ACCESS} or {@code READ_WRITE_ACCESS}
+	 * @throws IOException if this file does not exist or an internal error occurred
+	 */
+	public void open(int access) throws IOException {
+		try {
+			// acquire a read or write lock if this file is not open in this thread
+			if (!isOpenInThisThread()) {
+    			long pid = Hdf5File.getAccessPropertyList();
+
+				if (access == READ_ONLY_ACCESS) {
+					m_r.lock();
+					
+					try {
+						lockWriteOpen();
+						// open this file only if this instance is not already open
+						if (!isOpenInAnyThread()) {
+							setElementId(H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDONLY, pid));
+						}
+						m_access = access;
+						setOpenInThisThread(true);
+						
+					} finally {
+						unlockWriteOpen();
+					}
+				} else if (access == READ_WRITE_ACCESS) {
+					m_w.lock();
+
+					try {
+						lockWriteOpen();
+						// open this file only if this instance is not already open
+						if (!isOpenInAnyThread()) {
+							setElementId(H5.H5Fopen(getFilePath(), HDF5Constants.H5F_ACC_RDWR, pid));
+						}
+						m_access = access;
+						setOpenInThisThread(true);
+						
+					} finally {
+						unlockWriteOpen();
+					}
+				}
+				
+    			H5.H5Pclose(pid);
+    			
+			} else {
+				setOpenInThisThread(true);
+			}
+		} catch (HDF5LibraryException | NullPointerException hlnpe) {
+			if (access == READ_ONLY_ACCESS) {
+				m_r.unlock();
+				
+			} else if (access == READ_WRITE_ACCESS) {
+				m_w.unlock();
+			}
+
+			throw new IOException("The file \"" + getFilePath() + "\" cannot be opened: " + hlnpe.getMessage(), hlnpe);
+        }
+	}
+	
 	/**
 	 * Closes this file and all elements in this file if it is not accessed by
 	 * any threads anymore.

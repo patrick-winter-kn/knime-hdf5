@@ -595,41 +595,6 @@ public class Hdf5Attribute<Type> {
 					+ "\" has overflown the Integer values.");
 		}
 	}
-	
-	/**
-	 * Opens this attribute and all of its ancestors (if necessary).
-	 * Does nothing if it is already open.
-	 * 
-	 * @return if this attribute is open
-	 * @throws IOException if an error occurred in the hdf library
-	 */
-	public boolean open() throws IOException, IllegalStateException {
-		try {
-			lockWriteOpen();
-			
-			if (!isOpen()) {
-				if (!getParent().isOpen()) {
-					getParent().open();
-				}
-				
-				checkExists();
-				
-				m_attributeId = H5.H5Aopen(getParent().getElementId(), getName(),
-						HDF5Constants.H5P_DEFAULT);
-				
-		    	loadDataspace();
-			}
-	    	
-			return true;
-			
-		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
-			throw new IOException("Attribute \"" + getPathFromFileWithName()
-					+ "\" could not be opened: " + hlionpe.getMessage(), hlionpe);
-			
-        } finally {
-        	unlockWriteOpen();
-        }
-	}
 
 	/**
 	 * Creates the data space with the size of {@code dimension} for this attribute.
@@ -676,6 +641,41 @@ public class Hdf5Attribute<Type> {
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
 			throw new IOException("Dimension for attribute \""
 					+ getPathFromFileWithName() + "\" could not be loaded: " + hlnpe.getMessage(), hlnpe);
+        }
+	}
+	
+	/**
+	 * Opens this attribute and all of its ancestors (if necessary).
+	 * Does nothing if it is already open.
+	 * 
+	 * @return if this attribute is open
+	 * @throws IOException if an error occurred in the hdf library
+	 */
+	public boolean open() throws IOException, IllegalStateException {
+		try {
+			lockWriteOpen();
+			
+			if (!isOpen()) {
+				if (!getParent().isOpen()) {
+					getParent().open();
+				}
+				
+				checkExists();
+				
+				m_attributeId = H5.H5Aopen(getParent().getElementId(), getName(),
+						HDF5Constants.H5P_DEFAULT);
+				
+		    	loadDataspace();
+			}
+	    	
+			return true;
+			
+		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
+			throw new IOException("Attribute \"" + getPathFromFileWithName()
+					+ "\" could not be opened: " + hlionpe.getMessage(), hlionpe);
+			
+        } finally {
+        	unlockWriteOpen();
         }
 	}
 	

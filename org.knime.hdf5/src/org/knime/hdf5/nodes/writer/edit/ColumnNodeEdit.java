@@ -221,6 +221,17 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		}
 	}
 	
+	@Override
+	protected void setDeletion(boolean isDelete) {
+		if (isDelete && getParent() != null) {
+			((DataSetNodeEdit) getParent()).disconsiderColumnNodeEdit(this);
+		}
+		super.setDeletion(isDelete);
+		if (!isDelete && getParent() != null) {
+			((DataSetNodeEdit) getParent()).considerColumnNodeEdit(this);
+		}
+	}
+	
 	/**
 	 * The properties of a column edit will never change.
 	 * 
@@ -246,17 +257,6 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	@Override
 	protected long getProgressToDoInEdit() {
 		return 0L;
-	}
-	
-	@Override
-	void setDeletion(boolean isDelete) {
-		if (isDelete && getParent() != null) {
-			((DataSetNodeEdit) getParent()).disconsiderColumnNodeEdit(this);
-		}
-		super.setDeletion(isDelete);
-		if (!isDelete && getParent() != null) {
-			((DataSetNodeEdit) getParent()).considerColumnNodeEdit(this);
-		}
 	}
 
 	@Override

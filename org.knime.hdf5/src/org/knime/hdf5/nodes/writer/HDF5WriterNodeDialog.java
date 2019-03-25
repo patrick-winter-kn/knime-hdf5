@@ -94,7 +94,20 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 	private EditTreePanel m_editTreePanel = new EditTreePanel();
 	
     public HDF5WriterNodeDialog() {
-    	// initialize the 'Options' tab
+    	createFileChooser();
+		
+		createDataConfig();
+		
+		m_saveColumnPropertiesSettings = SettingsFactory.createSaveColumnPropertiesSettings();
+		DialogComponentBoolean saveColumnProperties = new DialogComponentBoolean(m_saveColumnPropertiesSettings,
+				"Save column properties");
+		
+        createNewGroup("Advanced settings:");
+		addDialogComponent(saveColumnProperties);
+        closeCurrentGroup();
+	}
+    
+    private void createFileChooser() {
     	m_filePathSettings = SettingsFactory.createFilePathSettings();
 		FlowVariableModel filePathFvm = super.createFlowVariableModel(m_filePathSettings);
 		DialogComponentFileChooser fileChooser = new DialogComponentFileChooser(m_filePathSettings, "outputFilePathHistory",
@@ -119,9 +132,78 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		addDialogComponent(m_fileInfoLabel);
 		addDialogComponent(fileOverwritePolicy);
         closeCurrentGroup();
+    }
+    
+    /**
+     * Updates the file path in the config with the file path and overwrite
+     * policy of this dialog.
+     */
+    private void updateFilePath() {
+    	updateFileInfo();
+    	
+		try {
+			m_editTreePanel.updateTreeWithFile(getFilePathFromSettings(),
+					EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()) == EditOverwritePolicy.OVERWRITE, true);
+			
+		} catch (IOException ioe) {
+			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
+			
+		} catch (InvalidSettingsException ise) {
+    		// nothing to do: exception is already handled by updateFileInfo()
+		}
+    }
+    
+    /**
+     * Updates the file info shown below the file chooser in this dialog.
+     */
+    private void updateFileInfo() {
+    	String errorInfo = null;
+    	
+		String urlPath = m_filePathSettings.getStringValue();
+		try {
+			if (!urlPath.trim().isEmpty()) {
+				String filePath = HDF5WriterNodeModel.getFilePathFromUrlPath(urlPath, false);
+				
+				if (Hdf5File.hasHdf5FileEnding(filePath)) {
+					m_fileInfoLabel.setText("Info: File " + (Hdf5File.existsHdf5File(filePath) ? "exists" : "does not exist"));
+				} else {
+					errorInfo = "Error: File ending is not valid";
+				}
+			} else {
+				errorInfo = "Error: No file selected";
+			}
+		} catch (InvalidSettingsException ise) {
+			errorInfo = "Error: " + ise.getMessage();
+		}
 		
-        // initialize the 'Select data configuration' dialog
-		JPanel inputPanel = new JPanel();
+		if (errorInfo != null) {
+			m_fileInfoLabel.setText("<html><font color=\"red\">" + errorInfo + "</font></html>");
+		}
+    }
+    
+    /**
+     * Get the file path to use for the config considering the overwrite policy
+     * and the fact that the file path of the file chooser might be a knime url.
+     * 
+     * @return the file path to use for the config
+     * @throws InvalidSettingsException if no correct file path could be found
+     */
+    private String getFilePathFromSettings() throws InvalidSettingsException {
+    	String filePath = HDF5WriterNodeModel.getFilePathFromUrlPath(m_filePathSettings.getStringValue(), false);
+    	
+    	if (EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()) == EditOverwritePolicy.RENAME) {
+    		try {
+				filePath = Hdf5File.getUniqueFilePath(filePath);
+			} catch (IOException ioe) {
+				throw new InvalidSettingsException(ioe);
+			}
+    	}
+    	
+    	return filePath;
+    }
+    
+    private void createDataConfig() {
+    	JPanel inputPanel = new JPanel();
 		inputPanel.setLayout(new BoxLayout(inputPanel, BoxLayout.Y_AXIS));
 		inputPanel.setBorder(BorderFactory.createTitledBorder(" Input "));
 		addListToPanel(SpecInfo.COLUMN_SPECS, inputPanel);
@@ -294,13 +376,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 		
 		outputPanel.add(m_editTreePanel);
 		
-
-        DialogComponentButton selectDataConfigButton = new DialogComponentButton("Select data configuration");
-		
-        createNewGroup("Data configuration:");
-		addDialogComponent(selectDataConfigButton);
-        closeCurrentGroup();
-        
+		DialogComponentButton selectDataConfigButton = new DialogComponentButton("Select data configuration");
         selectDataConfigButton.addActionListener(new ActionListener() {
 			
 			@Override
@@ -354,87 +430,15 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 					});
 					selectDataButtonPanel.add(okButton);
 					
+					m_editTreePanel.getTree().requestFocusInWindow();
 					pack();
 				}
 			}
 		});
-        
 
-		m_saveColumnPropertiesSettings = SettingsFactory.createSaveColumnPropertiesSettings();
-		DialogComponentBoolean saveColumnProperties = new DialogComponentBoolean(m_saveColumnPropertiesSettings,
-				"Save column properties");
-		
-        createNewGroup("Advanced settings:");
-		addDialogComponent(saveColumnProperties);
+        createNewGroup("Data configuration:");
+		addDialogComponent(selectDataConfigButton);
         closeCurrentGroup();
-	}
-    
-    /**
-     * Updates the file path in the config with the file path and overwrite
-     * policy of this dialog.
-     */
-    private void updateFilePath() {
-    	updateFileInfo();
-    	
-		try {
-			m_editTreePanel.updateTreeWithFile(getFilePathFromSettings(),
-					EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()) == EditOverwritePolicy.OVERWRITE, true);
-			
-		} catch (IOException ioe) {
-			NodeLogger.getLogger(getClass()).error(ioe.getMessage(), ioe);
-			
-		} catch (InvalidSettingsException ise) {
-    		// nothing to do: exception is already handled by updateFileInfo()
-		}
-    }
-    
-    /**
-     * Updates the file info shown below the file chooser in this dialog.
-     */
-    private void updateFileInfo() {
-    	String errorInfo = null;
-    	
-		String urlPath = m_filePathSettings.getStringValue();
-		try {
-			if (!urlPath.trim().isEmpty()) {
-				String filePath = HDF5WriterNodeModel.getFilePathFromUrlPath(urlPath, false);
-				
-				if (Hdf5File.hasHdf5FileEnding(filePath)) {
-					m_fileInfoLabel.setText("Info: File " + (Hdf5File.existsHdf5File(filePath) ? "exists" : "does not exist"));
-				} else {
-					errorInfo = "Error: File ending is not valid";
-				}
-			} else {
-				errorInfo = "Error: No file selected";
-			}
-		} catch (InvalidSettingsException ise) {
-			errorInfo = "Error: " + ise.getMessage();
-		}
-		
-		if (errorInfo != null) {
-			m_fileInfoLabel.setText("<html><font color=\"red\">" + errorInfo + "</font></html>");
-		}
-    }
-    
-    /**
-     * Get the file path to use for the config considering the overwrite policy
-     * and the fact that the file path of the file chooser might be a knime url.
-     * 
-     * @return the file path to use for the config
-     * @throws InvalidSettingsException if no correct file path could be found
-     */
-    private String getFilePathFromSettings() throws InvalidSettingsException {
-    	String filePath = HDF5WriterNodeModel.getFilePathFromUrlPath(m_filePathSettings.getStringValue(), false);
-    	
-    	if (EditOverwritePolicy.get(m_fileOverwritePolicySettings.getStringValue()) == EditOverwritePolicy.RENAME) {
-    		try {
-				filePath = Hdf5File.getUniqueFilePath(filePath);
-			} catch (IOException ioe) {
-				throw new InvalidSettingsException(ioe);
-			}
-    	}
-    	
-    	return filePath;
     }
     
     /**

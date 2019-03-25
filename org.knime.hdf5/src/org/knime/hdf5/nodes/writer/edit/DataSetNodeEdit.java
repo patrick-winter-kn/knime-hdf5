@@ -310,48 +310,23 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		m_chunkRowSize = chunkRowSize;
 	}
 
-	@Override
-	protected boolean havePropertiesChanged(Object hdfSource) {
-		boolean propertiesChanged = true;
-		
-		Hdf5DataSet<?> copyDataSet = (Hdf5DataSet<?>) hdfSource;
-		
-		if (hdfSource != null) {
-			propertiesChanged = m_inputType != m_editDataType.getOutputType()
-					|| copyDataSet.getType().getHdfType().getEndian() != m_editDataType.getEndian()
-					|| copyDataSet.getType().getHdfType().getStringLength() != m_editDataType.getStringLength()
-					|| copyDataSet.getDimensions().length != (m_useOneDimension ? 1 : 2)
-					|| copyDataSet.getCompressionLevel() != m_compressionLevel
-					|| copyDataSet.getChunkRowSize() != m_chunkRowSize
-					|| copyDataSet.numberOfColumns() != getColumnInputTypes().length;
-			
-			if (!propertiesChanged) {
-				int columnIndex = 0;
-				for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
-					if (columnEdit.getEditAction() != EditAction.NO_ACTION || columnEdit.getInputColumnIndex() != columnIndex) {
-						propertiesChanged = true;
-						break;
-					}
-					columnIndex++;
-				}
-			}
-		}
-		
-		return propertiesChanged;
-	}
-
 	/**
 	 * @return the children of this edit which are column edits
 	 */
 	public ColumnNodeEdit[] getColumnNodeEdits() {
 		return m_columnEdits.toArray(new ColumnNodeEdit[m_columnEdits.size()]);
-	}	
-
+	}
+	
 	/**
-	 * @return the children of this edit which are attribute edits
+	 * @return the input types of the columns that will not be deleted
 	 */
-	public AttributeNodeEdit[] getAttributeNodeEdits() {
-		return m_attributeEdits.toArray(new AttributeNodeEdit[m_attributeEdits.size()]);
+	public HdfDataType[] getColumnInputTypes() {
+		ColumnNodeEdit[] columnEdits = getNotDeletedColumnNodeEdits();
+		HdfDataType[] hdfTypes = new HdfDataType[columnEdits.length];
+		for (int i = 0; i < hdfTypes.length; i++) {
+			hdfTypes[i] = columnEdits[i].getInputType();
+		}
+		return hdfTypes;
 	}
 
 	/**
@@ -369,15 +344,13 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	}
 	
 	/**
-	 * @return the input types of the columns that will not be deleted
+	 * Checks if at most this edit contains at most 1 column edit that does
+	 * not get deleted.
+	 * 
+	 * @return if the new dataSet can also be created with 1 dimension
 	 */
-	public HdfDataType[] getColumnInputTypes() {
-		ColumnNodeEdit[] columnEdits = getNotDeletedColumnNodeEdits();
-		HdfDataType[] hdfTypes = new HdfDataType[columnEdits.length];
-		for (int i = 0; i < hdfTypes.length; i++) {
-			hdfTypes[i] = columnEdits[i].getInputType();
-		}
-		return hdfTypes;
+	private boolean isOneDimensionPossible() {
+		return getNotDeletedColumnNodeEdits().length <= 1;
 	}
 	
 	/**
@@ -394,46 +367,6 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		}
 		
 		return colCount;
-	}
-
-	/**
-	 * Adds a new column edit to this dataSet edit. Also updates the input type,
-	 * number of dimensions and input row size.
-	 * 
-	 * @param edit the new column edit
-	 */
-	void addColumnNodeEdit(ColumnNodeEdit edit) {
-		m_columnEdits.add(edit);
-		edit.setParent(this);
-		considerColumnNodeEdit(edit);
-	}
-	
-	/**
-	 * Updates the input type, number of dimensions and input row size on
-	 * {@code newColumnEdit} is newly existing in this dataSet edit.
-	 * 
-	 * @param newColumnEdit the new column edit existing in this edit
-	 */
-	void considerColumnNodeEdit(ColumnNodeEdit newColumnEdit) {
-		if (newColumnEdit.getEditAction() != EditAction.DELETE) {
-			if (m_inputType == null || !newColumnEdit.getInputType().getPossiblyConvertibleHdfTypes().contains(m_inputType)) {
-				setInputType(newColumnEdit.getInputType());
-			}
-			if (!m_inputType.getPossiblyConvertibleHdfTypes().contains(m_editDataType.getOutputType())) {
-				m_editDataType.setOutputType(m_inputType);
-				setEditAction(EditAction.MODIFY);
-			}
-			
-			m_useOneDimension = isOneDimensionPossible()
-					&& (getEditAction().isCreateOrCopyAction() || ((Hdf5DataSet<?>) getHdfObject()).getDimensions().length == 1);
-			
-			m_inputRowSize = m_inputRowSize == ColumnNodeEdit.UNKNOWN_ROW_SIZE ? newColumnEdit.getInputRowSize() : m_inputRowSize;
-		}
-	}
-
-	void addAttributeNodeEdit(AttributeNodeEdit edit) {
-		m_attributeEdits.add(edit);
-		edit.setParent(this);
 	}
 
 	/**
@@ -485,6 +418,13 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	}
 
 	/**
+	 * @return the children of this edit which are attribute edits
+	 */
+	public AttributeNodeEdit[] getAttributeNodeEdits() {
+		return m_attributeEdits.toArray(new AttributeNodeEdit[m_attributeEdits.size()]);
+	}
+
+	/**
 	 * For {@code editAction == EditAction.CREATE}, get the child attribute edit
 	 * (with CREATE action) for the flowVariable with the name
 	 * {@code inputPathFromFileWithName} or {@code null} if none exists.
@@ -514,6 +454,46 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Adds a new column edit to this dataSet edit. Also updates the input type,
+	 * number of dimensions and input row size.
+	 * 
+	 * @param edit the new column edit
+	 */
+	void addColumnNodeEdit(ColumnNodeEdit edit) {
+		m_columnEdits.add(edit);
+		edit.setParent(this);
+		considerColumnNodeEdit(edit);
+	}
+	
+	/**
+	 * Updates the input type, number of dimensions and input row size on
+	 * {@code newColumnEdit} is newly existing in this dataSet edit.
+	 * 
+	 * @param newColumnEdit the new column edit existing in this edit
+	 */
+	void considerColumnNodeEdit(ColumnNodeEdit newColumnEdit) {
+		if (newColumnEdit.getEditAction() != EditAction.DELETE) {
+			if (m_inputType == null || !newColumnEdit.getInputType().getPossiblyConvertibleHdfTypes().contains(m_inputType)) {
+				setInputType(newColumnEdit.getInputType());
+			}
+			if (!m_inputType.getPossiblyConvertibleHdfTypes().contains(m_editDataType.getOutputType())) {
+				m_editDataType.setOutputType(m_inputType);
+				setEditAction(EditAction.MODIFY);
+			}
+			
+			m_useOneDimension = isOneDimensionPossible()
+					&& (getEditAction().isCreateOrCopyAction() || ((Hdf5DataSet<?>) getHdfObject()).getDimensions().length == 1);
+			
+			m_inputRowSize = m_inputRowSize == ColumnNodeEdit.UNKNOWN_ROW_SIZE ? newColumnEdit.getInputRowSize() : m_inputRowSize;
+		}
+	}
+
+	void addAttributeNodeEdit(AttributeNodeEdit edit) {
+		m_attributeEdits.add(edit);
+		edit.setParent(this);
 	}
 
 	/**
@@ -606,46 +586,35 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		m_columnEdits.clear();
 		m_columnEdits.addAll(newEdits);
 	}
-	
-	/**
-	 * Checks if at most this edit contains at most 1 column edit that does
-	 * not get deleted.
-	 * 
-	 * @return if the new dataSet can also be created with 1 dimension
-	 */
-	private boolean isOneDimensionPossible() {
-		int editCount = 0;
-		for (ColumnNodeEdit edit : m_columnEdits) {
-			if (edit.getEditAction() != EditAction.DELETE) {
-				editCount++;
-			}
-		}
-		return editCount <= 1;
-	}
-	/**
-	 * Integrates the children of {@code copyEdit} (not the attribute edits
-	 * with {@code editAction == NO_ACTION}) in this dataSet edit. The
-	 * properties of this dataSet edit will stay the same. The properties
-	 * of this edit's children will be overwritten. {@code removeOldColumns}
-	 * specifies if the existing columns should be removed before integrating.
-	 * 
-	 * @param copyEdit the dataSet edit to be integrated
-	 * @param removeOldColumns if the existing columns should be removed
-	 * 	before integrating
-	 */
-	void integrate(DataSetNodeEdit copyEdit, boolean removeOldColumns) {
-		// TODO only supported for dataSets if the dataSet has the correct amount of columns (the same amount as the config was created)
-		if (removeOldColumns) {
-			for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
-				columnEdit.removeFromParent();
+
+	@Override
+	protected boolean havePropertiesChanged(Object hdfSource) {
+		boolean propertiesChanged = true;
+		
+		Hdf5DataSet<?> copyDataSet = (Hdf5DataSet<?>) hdfSource;
+		
+		if (hdfSource != null) {
+			propertiesChanged = m_inputType != m_editDataType.getOutputType()
+					|| copyDataSet.getType().getHdfType().getEndian() != m_editDataType.getEndian()
+					|| copyDataSet.getType().getHdfType().getStringLength() != m_editDataType.getStringLength()
+					|| copyDataSet.getDimensions().length != (m_useOneDimension ? 1 : 2)
+					|| copyDataSet.getCompressionLevel() != m_compressionLevel
+					|| copyDataSet.getChunkRowSize() != m_chunkRowSize
+					|| copyDataSet.numberOfColumns() != getColumnInputTypes().length;
+			
+			if (!propertiesChanged) {
+				int columnIndex = 0;
+				for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
+					if (columnEdit.getEditAction() != EditAction.NO_ACTION || columnEdit.getInputColumnIndex() != columnIndex) {
+						propertiesChanged = true;
+						break;
+					}
+					columnIndex++;
+				}
 			}
 		}
 		
-		for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
-			copyColumnEdit.copyColumnEditTo(this, false).setHdfObject((Hdf5DataSet<?>) getHdfObject());
-		}
-		
-		integrateAttributeEdits(copyEdit);
+		return propertiesChanged;
 	}
 	
 	@Override
@@ -710,6 +679,32 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		children.addAll(m_attributeEdits);
 		
 		return children.toArray(new TreeNodeEdit[0]);
+	}
+	
+	/**
+	 * Integrates the children of {@code copyEdit} (not the attribute edits
+	 * with {@code editAction == NO_ACTION}) in this dataSet edit. The
+	 * properties of this dataSet edit will stay the same. The properties
+	 * of this edit's children will be overwritten. {@code removeOldColumns}
+	 * specifies if the existing columns should be removed before integrating.
+	 * 
+	 * @param copyEdit the dataSet edit to be integrated
+	 * @param removeOldColumns if the existing columns should be removed
+	 * 	before integrating
+	 */
+	void integrate(DataSetNodeEdit copyEdit, boolean removeOldColumns) {
+		// TODO only supported for dataSets if the dataSet has the correct amount of columns (the same amount as the config was created)
+		if (removeOldColumns) {
+			for (ColumnNodeEdit columnEdit : getColumnNodeEdits()) {
+				columnEdit.removeFromParent();
+			}
+		}
+		
+		for (ColumnNodeEdit copyColumnEdit : copyEdit.getColumnNodeEdits()) {
+			copyColumnEdit.copyColumnEditTo(this, false).setHdfObject((Hdf5DataSet<?>) getHdfObject());
+		}
+		
+		integrateAttributeEdits(copyEdit);
 	}
 
 	@Override
@@ -828,6 +823,21 @@ public class DataSetNodeEdit extends TreeNodeEdit {
     	}
 	}
 	
+	@Override
+	protected InvalidCause validateEditInternal() {
+		return getName().contains("/") || getName().isEmpty() ? InvalidCause.NAME_CHARS :
+			getName().startsWith(BACKUP_PREFIX) && !getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName())
+					? InvalidCause.NAME_BACKUP_PREFIX : null;
+	}
+
+	@Override
+	protected boolean isInConflict(TreeNodeEdit edit) {
+		boolean conflictPossible = !(edit instanceof ColumnNodeEdit) && !(edit instanceof AttributeNodeEdit) && this != edit;
+		boolean inConflict = conflictPossible && getName().equals(edit.getName()) && getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
+		
+		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willBeNameConflictWithIgnoredEdit(edit);
+	}
+	
 	/**
 	 * If the overwrite policy is 'overwrite', set a DELETE action to those
 	 * column edits that should be overwritten by its successor.
@@ -849,21 +859,6 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 				}
 			}
 		}
-	}
-	
-	@Override
-	protected InvalidCause validateEditInternal() {
-		return getName().contains("/") || getName().isEmpty() ? InvalidCause.NAME_CHARS :
-			getName().startsWith(BACKUP_PREFIX) && !getOutputPathFromFileWithName(true).equals(getInputPathFromFileWithName())
-					? InvalidCause.NAME_BACKUP_PREFIX : null;
-	}
-
-	@Override
-	protected boolean isInConflict(TreeNodeEdit edit) {
-		boolean conflictPossible = !(edit instanceof ColumnNodeEdit) && !(edit instanceof AttributeNodeEdit) && this != edit;
-		boolean inConflict = conflictPossible && getName().equals(edit.getName()) && getEditAction() != EditAction.DELETE && edit.getEditAction() != EditAction.DELETE;
-		
-		return inConflict ? !avoidsOverwritePolicyNameConflict(edit) : conflictPossible && willBeNameConflictWithIgnoredEdit(edit);
 	}
 
 	@Override

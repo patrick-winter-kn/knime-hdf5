@@ -312,6 +312,39 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	/**
+	 * @param offset the indices of the first cell in the dataSet from where
+	 * 	the chunk should be selected
+	 * @param count the number of values to select for each dimension
+	 * @return the number of values contained in {@code count}
+	 * @throws HDF5DataspaceInterfaceException if the selection of the data
+	 * 	space is out of range
+	 */
+	private int checkChunkSelection(long[] offset, long[] count) throws HDF5DataspaceInterfaceException {
+		if (m_dimensions.length != offset.length || offset.length != count.length) {
+			throw new HDF5DataspaceInterfaceException("Offset or count has wrong number of dimensions");
+		}
+		
+		long numberOfValues = 1;
+		for (int i = 0; i < m_dimensions.length; i++) {
+			if (offset[i] < 0) {
+				throw new HDF5DataspaceInterfaceException("Cannot select a negative index of dimension " + i);
+			} else if (count[i] < 0) {
+				throw new HDF5DataspaceInterfaceException("Cannot select a negative number of dimension " + i);
+			} else if (offset[i] + count[i] > m_dimensions[i]) {
+				throw new HDF5DataspaceInterfaceException("Maximum selected index of dimension " + i + " (size: " + m_dimensions[i] + ") is out of bounds: " + (offset[i] + count[i] - 1));
+			}
+			numberOfValues *= count[i];
+		}
+
+		if (numberOfValues > Integer.MAX_VALUE) {
+			throw new HDF5DataspaceInterfaceException("Number of values to read/write in dataSet \"" + getPathFromFileWithName()
+					+ "\" has overflown the Integer values.");
+		}
+		
+		return (int) numberOfValues;
+	}
+	
+	/**
 	 * Writes the knime data to the row using the rounding if there is a cast
 	 * from float to int when converting from knime to hdf. If this dataSet
 	 * has more than 2 dimensions, the one-dimensional data array {@code dataIn}
@@ -657,39 +690,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	}
 	
 	/**
-	 * @param offset the indices of the first cell in the dataSet from where
-	 * 	the chunk should be selected
-	 * @param count the number of values to select for each dimension
-	 * @return the number of values contained in {@code count}
-	 * @throws HDF5DataspaceInterfaceException if the selection of the data
-	 * 	space is out of range
-	 */
-	private int checkChunkSelection(long[] offset, long[] count) throws HDF5DataspaceInterfaceException {
-		if (m_dimensions.length != offset.length || offset.length != count.length) {
-			throw new HDF5DataspaceInterfaceException("Offset or count has wrong number of dimensions");
-		}
-		
-		long numberOfValues = 1;
-		for (int i = 0; i < m_dimensions.length; i++) {
-			if (offset[i] < 0) {
-				throw new HDF5DataspaceInterfaceException("Cannot select a negative index of dimension " + i);
-			} else if (count[i] < 0) {
-				throw new HDF5DataspaceInterfaceException("Cannot select a negative number of dimension " + i);
-			} else if (offset[i] + count[i] > m_dimensions[i]) {
-				throw new HDF5DataspaceInterfaceException("Maximum selected index of dimension " + i + " (size: " + m_dimensions[i] + ") is out of bounds: " + (offset[i] + count[i] - 1));
-			}
-			numberOfValues *= count[i];
-		}
-
-		if (numberOfValues > Integer.MAX_VALUE) {
-			throw new HDF5DataspaceInterfaceException("Number of values to read/write in dataSet \"" + getPathFromFileWithName()
-					+ "\" has overflown the Integer values.");
-		}
-		
-		return (int) numberOfValues;
-	}
-	
-	/**
 	 * Extends the input row by the whole row (with the input row index)
 	 * of this dataSet.
 	 * 
@@ -719,35 +719,6 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				row.add(knimeType.getDataCellWithValue(null, missingValueMessage));
 			}
 		}
-	}
-	
-	@Override
-	public boolean open() throws IOException {
-		try {
-			lockWriteOpen();
-			
-			if (!isOpen()) {
-				if (!getParent().isOpen()) {
-					getParent().open();
-				}
-				
-				checkExists();
-				
-				setElementId(H5.H5Dopen(getParent().getElementId(), getName(),
-						HDF5Constants.H5P_DEFAULT));
-				
-				loadDataspace();
-				loadCompression();
-			}
-			
-			return true;
-			
-		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
-			throw new IOException("DataSet could not be opened: " + hlionpe.getMessage(), hlionpe);
-			
-        } finally {
-        	unlockWriteOpen();
-        }
 	}
 	
 	/**
@@ -863,6 +834,35 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	        
 		} catch (HDF5LibraryException | NullPointerException hlnpe) {
             throw new IOException("Chunking could not be loaded: " + hlnpe.getMessage(), hlnpe);
+        }
+	}
+	
+	@Override
+	public boolean open() throws IOException {
+		try {
+			lockWriteOpen();
+			
+			if (!isOpen()) {
+				if (!getParent().isOpen()) {
+					getParent().open();
+				}
+				
+				checkExists();
+				
+				setElementId(H5.H5Dopen(getParent().getElementId(), getName(),
+						HDF5Constants.H5P_DEFAULT));
+				
+				loadDataspace();
+				loadCompression();
+			}
+			
+			return true;
+			
+		} catch (HDF5LibraryException | IOException | NullPointerException hlionpe) {
+			throw new IOException("DataSet could not be opened: " + hlionpe.getMessage(), hlionpe);
+			
+        } finally {
+        	unlockWriteOpen();
         }
 	}
 
