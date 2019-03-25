@@ -69,6 +69,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	
 	private EditDataType m_editDataType = new EditDataType();
 	
+	private int m_inputNumberOfDimensions;
+	
 	private boolean m_useOneDimension;
 	
 	private long m_inputRowSize = ColumnNodeEdit.UNKNOWN_ROW_SIZE;
@@ -150,11 +152,11 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			throw new IllegalArgumentException("Hdf dataSet cannot be added to this edit.");
 		}
 		
-		int numberOfDimensions = dataSet.getDimensions().length;
-		if (numberOfDimensions == 0) {
+		m_inputNumberOfDimensions = dataSet.getDimensions().length;
+		if (m_inputNumberOfDimensions == 0) {
 			throw new IllegalArgumentException("Hdf dataSet is scalar.");
 			
-		} else if (numberOfDimensions > 2) {
+		} else if (m_inputNumberOfDimensions > 2) {
 			throw new IllegalArgumentException("Hdf dataSet has more than 2 dimensions.");
 		}
 		
@@ -162,7 +164,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		m_inputType = hdfType.getType();
 		m_editDataType.setValues(m_inputType, m_inputType.getPossiblyConvertibleHdfTypes(), hdfType.getEndian(),
 				Rounding.DOWN, m_inputType.isFloat(), false, (int) hdfType.getStringLength());
-		m_useOneDimension = numberOfDimensions == 1;
+		m_useOneDimension = m_inputNumberOfDimensions == 1;
 		m_compressionLevel = dataSet.getCompressionLevel();
 		m_chunkRowSize = (int) dataSet.getChunkRowSize();
 		setHdfObject(dataSet);
@@ -259,7 +261,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	public EditDataType getEditDataType() {
 		return m_editDataType;
 	}
-
+	
 	/**
 	 * Returns if the number of dimensions for the edit of the hdf dataSet is 1.
 	 * Otherwise, it is 2. Other numbers of dimensions are not supported so far.
@@ -487,7 +489,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 
 			// use one dimension if the hdf dataSet also has one dimension or does not exist yet
 			m_useOneDimension = isOneDimensionPossible()
-					&& (getEditAction().isCreateOrCopyAction() || ((Hdf5DataSet<?>) getHdfObject()).getDimensions().length == 1);
+					&& (getEditAction().isCreateOrCopyAction() || m_inputNumberOfDimensions == 1);
 			
 			// update the row size if none is known so far
 			m_inputRowSize = m_inputRowSize == ColumnNodeEdit.UNKNOWN_ROW_SIZE ? newColumnEdit.getInputRowSize() : m_inputRowSize;
@@ -548,7 +550,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			
 			// use one dimension if the hdf dataSet also has one dimension or does not exist yet
 			m_useOneDimension = isOneDimensionPossible()
-					&& (getEditAction().isCreateOrCopyAction() || ((Hdf5DataSet<?>) getHdfObject()).getDimensions().length == 1);
+					&& (getEditAction().isCreateOrCopyAction() || m_inputNumberOfDimensions == 1);
 
 			// update the row size if there still exists a known one
 			long inputRowSize = ColumnNodeEdit.UNKNOWN_ROW_SIZE;
@@ -600,7 +602,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		Hdf5DataSet<?> copyDataSet = (Hdf5DataSet<?>) hdfSource;
 		
 		if (hdfSource != null) {
-			propertiesChanged = m_inputType != m_editDataType.getOutputType()
+			propertiesChanged = copyDataSet.getType().getHdfType().getType() != m_editDataType.getOutputType()
 					|| copyDataSet.getType().getHdfType().getEndian() != m_editDataType.getEndian()
 					|| copyDataSet.getType().getHdfType().getStringLength() != m_editDataType.getStringLength()
 					|| copyDataSet.getDimensions().length != (m_useOneDimension ? 1 : 2)
@@ -630,6 +632,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			m_overwriteWithNewColumns = copyDataSetEdit.isOverwriteWithNewColumns();
 			m_inputType = copyDataSetEdit.getInputType();
 			m_editDataType.setValues(copyDataSetEdit.getEditDataType());
+			m_inputNumberOfDimensions = copyDataSetEdit.m_inputNumberOfDimensions;
 			m_useOneDimension = copyDataSetEdit.usesOneDimension();
 			m_compressionLevel = copyDataSetEdit.getCompressionLevel();
 			m_chunkRowSize = copyDataSetEdit.getChunkRowSize();
@@ -728,7 +731,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		
 		settings.addBoolean(SettingsKey.OVERWRITE_WITH_NEW_COLUMNS.getKey(), m_overwriteWithNewColumns);
 		m_editDataType.saveSettingsTo(settings);
-		settings.addInt(SettingsKey.NUMBER_OF_DIMENSIONS.getKey(), m_useOneDimension ? 1 : 2);
+		settings.addInt(SettingsKey.INPUT_NUMBER_OF_DIMENSIONS.getKey(), m_inputNumberOfDimensions);
+		settings.addInt(SettingsKey.OUTPUT_NUMBER_OF_DIMENSIONS.getKey(), m_useOneDimension ? 1 : 2);
 		settings.addInt(SettingsKey.COMPRESSION.getKey(), m_compressionLevel);
 		settings.addLong(SettingsKey.CHUNK_ROW_SIZE.getKey(), m_chunkRowSize);
 		
@@ -753,8 +757,9 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	protected void loadSettingsFrom(final NodeSettingsRO settings) throws InvalidSettingsException {
 		setOverwriteWithNewColumns(settings.getBoolean(SettingsKey.OVERWRITE_WITH_NEW_COLUMNS.getKey()));
 		m_editDataType.loadSettingsFrom(settings);
+		m_inputNumberOfDimensions = settings.getInt(SettingsKey.INPUT_NUMBER_OF_DIMENSIONS.getKey());
 		
-		int numberOfDimensions = settings.getInt(SettingsKey.NUMBER_OF_DIMENSIONS.getKey());
+		int numberOfDimensions = settings.getInt(SettingsKey.OUTPUT_NUMBER_OF_DIMENSIONS.getKey());
 		if (numberOfDimensions < 1 || numberOfDimensions > 2) {
 			throw new InvalidSettingsException("Number of dimensions has to be 1 or 2");
 		}

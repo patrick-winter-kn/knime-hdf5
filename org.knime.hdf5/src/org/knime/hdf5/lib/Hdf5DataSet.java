@@ -517,15 +517,18 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 				 * dimensions for the columns of this dataSet
 				 */
 				long[] dims = dataSet.getDimensions();
-				long[] offset = new long[dims.length];
-				long[] count = new long[dims.length];
-				if (dims.length > 0) {
+				int numberOfDimensions = dims.length;
+				long[] offset = new long[numberOfDimensions];
+				long[] count = new long[numberOfDimensions];
+				if (numberOfDimensions > 0) {
 					offset[0] = rowIndex;
-					for (int dim = offset.length-1; dim >= 2; i--) {
+					for (int dim = numberOfDimensions-1; dim >= 2; i--) {
 						offset[i] = columnIndex % dims[i];
 						columnIndex = columnIndex / dims[i];
 					}
-					offset[1] = columnIndex;
+					if (numberOfDimensions > 1) {
+						offset[1] = columnIndex;
+					}
 					Arrays.fill(count, 1);
 				}
 
