@@ -421,7 +421,7 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 								setVisible(false);
 								
 							} catch (InvalidSettingsException ise) {
-								JOptionPane.showMessageDialog(okButton, ise.getMessage(),
+								JOptionPane.showMessageDialog(DataDialog.this, ise.getMessage(),
 										"Warning: invalid settings", JOptionPane.WARNING_MESSAGE);
 							}
 						}
