@@ -859,13 +859,6 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			for (int i = 0; i < columnEdits.length; i++) {
 				if (columnEdits[i].getEditAction().isCreateOrCopyAction()) {
 					columnEdits[i-1].setEditAction(EditAction.DELETE);
-					/*for (ColumnNodeEdit columnEdit : columnEdits) {
-						if (!columnEdit.getEditAction().isCreateOrCopyAction()
-								&& columnEdits[i].getOutputColumnIndex() == columnEdit.getOutputColumnIndex()) {
-							columnEdit.setEditAction(EditAction.DELETE);
-							break;
-						}
-					}*/
 				}
 			}
 		}

@@ -490,10 +490,6 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 			Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
 			if (havePropertiesChanged(oldAttribute)) {
 				setHdfObject(parent.copyAttribute(this, oldAttribute));
-				//throw new NullPointerException("exception test");
-				/*if (oldAttribute != getHdfBackup()) {
-					parent.deleteAttribute(oldAttribute.getName());
-				}*/
 			} else {
 				if (!oldAttribute.getName().equals(getName())) {
 					if (oldAttribute == getHdfBackup()) {

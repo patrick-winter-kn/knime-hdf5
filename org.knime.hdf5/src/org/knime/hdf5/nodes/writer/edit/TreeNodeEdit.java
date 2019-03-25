@@ -1281,13 +1281,11 @@ public abstract class TreeNodeEdit {
 	 * 	updated (the message shows the last edit which has added some progress)
 	 */
 	protected void addProgress(long progressToAdd, ExecutionContext exec, long totalProgressToDo, boolean updateMessage) {
-		// TODO change after testing
 		long progressDone = Math.round(exec.getProgressMonitor().getProgress() * totalProgressToDo) + progressToAdd;
 		exec.setProgress((double) progressDone / totalProgressToDo);
 		if (updateMessage) {
 			exec.setMessage(getSummary());
 		}
-		System.out.println("Progress done (Edit " + getOutputPathFromFileWithName() + "): " + progressDone);
 	}
 	
 	/**
@@ -2104,7 +2102,6 @@ public abstract class TreeNodeEdit {
 		protected PropertiesDialog(TreeNodeMenu menu, String title) {
 			super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, menu.getInvoker()), title, true);
 			setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
-			// setLocation(400, 400);
 			
 			JPanel panel = new JPanel(new BorderLayout());
 			add(panel, BorderLayout.CENTER);

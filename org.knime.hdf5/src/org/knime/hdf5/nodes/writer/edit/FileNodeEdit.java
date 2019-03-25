@@ -749,11 +749,9 @@ public class FileNodeEdit extends GroupNodeEdit {
 		}
 		
 		exec.setProgress(0.0);
-		// TODO change after testing
-		long pTD = getTotalProgressToDo();
-		boolean success = preparationSuccess && doAction(inputTable, flowVariables, saveColumnProperties, exec, pTD)
-				&& doPostponedDataSetActions(inputTable, saveColumnProperties, exec, pTD);
-		System.out.println("TotalProgressToDo: " + pTD);
+		long totalProgressToDo = getTotalProgressToDo();
+		boolean success = preparationSuccess && doAction(inputTable, flowVariables, saveColumnProperties, exec, totalProgressToDo)
+				&& doPostponedDataSetActions(inputTable, saveColumnProperties, exec, totalProgressToDo);
 		return success;
 	}
 	

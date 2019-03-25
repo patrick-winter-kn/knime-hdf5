@@ -89,9 +89,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	 * @param parent the parent dataSet edit for this edit
 	 */
 	private void updateDataSetEditAction(DataSetNodeEdit parent) {
-		/*if (parent.getEditAction().isCreateOrCopyAction()) {
-			parent.setEditAction(EditAction.CREATE);
-		} else */if (parent.getEditAction() != EditAction.DELETE) {
+		if (parent.getEditAction() != EditAction.DELETE) {
 			parent.setEditAction(EditAction.MODIFY);
 		}
 	}

@@ -258,7 +258,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 				protected ResetDialog(Component comp, String title, TreeMap<TreeNodeEdit, InvalidCause> resettableEdits) {
 					super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, comp), title, true);
 					setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
-					// setLocation(400, 400);
 					
 					JPanel panel = new JPanel(new BorderLayout());
 					add(panel, BorderLayout.CENTER);
@@ -401,7 +400,6 @@ class HDF5WriterNodeDialog extends DefaultNodeSettingsPane {
 					super((Frame) SwingUtilities.getAncestorOfClass(Frame.class, comp), title, true);
 					setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
 					setMinimumSize(new Dimension(800, 600));
-					// setLocation(400, 400);
 					
 					JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true, inputPanel, outputPanel);
 					add(splitPane, BorderLayout.CENTER);

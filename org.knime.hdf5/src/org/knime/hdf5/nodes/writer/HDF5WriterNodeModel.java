@@ -63,9 +63,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 			success = fileEdit.doAction(inData[0], getAvailableFlowVariables(), m_saveColumnPropertiesSettings.getBooleanValue(), exec);
 			
 		} finally {
-			// TODO change after testing
-			NodeLogger.getLogger(getClass()).warn("Success: " + success);
-			NodeLogger.getLogger(getClass()).warn("States of all edits after execution:\n" + fileEdit.getSummaryOfEditStates(false));
+			NodeLogger.getLogger(getClass()).debug("Success: " + success);
+			NodeLogger.getLogger(getClass()).debug("States of all edits after execution:\n" + fileEdit.getSummaryOfEditStates(false));
 			
 			if (success) {
 				try {
@@ -84,8 +83,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 					NodeLogger.getLogger(getClass()).error("Rollback failed: " + e.getMessage(), e);
 				
 				} finally {
-					NodeLogger.getLogger(getClass()).warn("Success of rollback: " + rollbackSuccess);
-					NodeLogger.getLogger(getClass()).warn("States of all edits after rollback:\n" + fileEdit.getSummaryOfEditStates(true));
+					NodeLogger.getLogger(getClass()).debug("Success of rollback: " + rollbackSuccess);
+					NodeLogger.getLogger(getClass()).debug("States of all edits after rollback:\n" + fileEdit.getSummaryOfEditStates(true));
 				}
 			}
 			
@@ -148,9 +147,7 @@ public class HDF5WriterNodeModel extends NodeModel {
 			
 			boolean valid = lastValidationBeforeExecution ? oldFileEdit.finalIntegrateAndValidate(fileEdit, inputTable) : oldFileEdit.integrateAndValidate(fileEdit);
 			if (!valid) {
-				// TODO change after testing
-				// System.out.println(inputTable == null ? "1." : "2.");
-				/*NodeLogger.getLogger(HDF5WriterNodeModel.class).warn*/throw new InvalidSettingsException("The configuration for file \"" + oldFileEdit.getFilePath()
+				throw new InvalidSettingsException("The configuration for file \"" + oldFileEdit.getFilePath()
 						+ "\" is not valid:\n" + oldFileEdit.getInvalidCauseMessages(fileEdit));
 			}
 		} catch (IOException ioe) {
