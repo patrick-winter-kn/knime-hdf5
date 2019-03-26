@@ -63,8 +63,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 			success = fileEdit.doAction(inData[0], getAvailableFlowVariables(), m_saveColumnPropertiesSettings.getBooleanValue(), exec);
 			
 		} finally {
-			NodeLogger.getLogger(getClass()).warn("Success: " + success);
-			NodeLogger.getLogger(getClass()).warn("States of all edits after execution:\n" + fileEdit.getSummaryOfEditStates(false));
+			NodeLogger.getLogger(getClass()).debug("Success: " + success);
+			NodeLogger.getLogger(getClass()).debug("States of all edits after execution:\n" + fileEdit.getSummaryOfEditStates(false));
 			
 			if (success) {
 				try {
@@ -83,8 +83,8 @@ public class HDF5WriterNodeModel extends NodeModel {
 					NodeLogger.getLogger(getClass()).error("Rollback failed: " + e.getMessage(), e);
 				
 				} finally {
-					NodeLogger.getLogger(getClass()).warn("Success of rollback: " + rollbackSuccess);
-					NodeLogger.getLogger(getClass()).warn("States of all edits after rollback:\n" + fileEdit.getSummaryOfEditStates(true));
+					NodeLogger.getLogger(getClass()).debug("Success of rollback: " + rollbackSuccess);
+					NodeLogger.getLogger(getClass()).debug("States of all edits after rollback:\n" + fileEdit.getSummaryOfEditStates(true));
 				}
 			}
 			
