@@ -937,18 +937,18 @@ public abstract class TreeNodeEdit {
 	protected void setEditAction(EditAction editAction) {
 		if (!editAction.isModifyAction() || m_editAction == EditAction.NO_ACTION || m_editAction == EditAction.MODIFY_CHILDREN_ONLY) {
 			m_editAction = editAction;
-			
-			if (m_parent != null && m_parent.getEditAction() == EditAction.NO_ACTION && m_editAction != EditAction.NO_ACTION) {
-				m_parent.setEditAction(EditAction.MODIFY_CHILDREN_ONLY);
-			}
 		}
+		
+		updateParentEditAction();
 	}
 	
 	/**
 	 * Updates the edit action of the parent.
 	 */
 	private void updateParentEditAction() {
-		setEditAction(getEditAction());
+		if (m_parent != null && m_parent.getEditAction() == EditAction.NO_ACTION && m_editAction != EditAction.NO_ACTION) {
+			m_parent.setEditAction(EditAction.MODIFY_CHILDREN_ONLY);
+		}
 	}
 	
 	/**

@@ -144,8 +144,11 @@ public class EditTreeConfiguration {
 			checkConfig.setFileNodeEdit(m_fileEdit.copyWithoutNoActionEdits());
 			HDF5WriterNodeModel.checkForErrors(checkConfig);
 			
-		} catch (IOException ioe) {
-			throw new InvalidSettingsException(ioe.getMessage(), ioe);
+		} catch (InvalidSettingsException ise) {
+			throw ise;
+			
+		} catch (Exception e) {
+			throw new InvalidSettingsException("Could not check configuration: " + e.getMessage(), e);
 		}
 	}
 	
