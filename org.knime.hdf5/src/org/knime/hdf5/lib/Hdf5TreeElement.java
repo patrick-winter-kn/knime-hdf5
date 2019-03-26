@@ -568,7 +568,12 @@ abstract public class Hdf5TreeElement {
 			try {
 				treeElement = ((Hdf5Group) this).getDataSetByPath(path);
 			} catch (IOException ioe) {
-				treeElement = ((Hdf5Group) this).getGroupByPath(path);
+				try {
+					treeElement = ((Hdf5Group) this).getGroupByPath(path);
+				} catch (IOException ioe2) {
+					throw new IOException("Neither a group nor a dataSet for attribute \""
+							+ name + "\" on the path \"" + path + "\" exists.");
+				}
 			}
 		}
 		

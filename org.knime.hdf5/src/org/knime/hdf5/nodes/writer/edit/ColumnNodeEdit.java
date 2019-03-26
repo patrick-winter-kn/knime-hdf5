@@ -296,7 +296,7 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 		InvalidCause cause = getEditAction() != EditAction.DELETE && m_inputRowSize != UNKNOWN_ROW_SIZE
 				&& m_inputRowSize != parent.getInputRowSize() ? InvalidCause.ROW_COUNT : null;
 		
-		// for column overwrite poicy 'overwrite': check if all new columns have a column to overwrite
+		// for column overwrite policy 'overwrite': check if all new columns have a column to overwrite
 		if (cause == null && parent.isOverwriteWithNewColumns()) {
 			ColumnNodeEdit[] columnEdits = parent.getColumnNodeEdits();
 			for (int i = 0; i < columnEdits.length; i++) {
@@ -314,7 +314,11 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 			EditDataType parentDataType = parent.getEditDataType();
 			
 			try {
-				// TODO maybe check this when the columns loaded for the first time
+				/* 
+				 * TODO put it to the external check, but the copyEdit in
+				 * FileNodeEdit.doLastValidation(...) needs to know about
+				 * the changes in the stringLength (if 'auto' is used)
+				 */
 				TreeNodeEdit copyEdit = getEditAction() == EditAction.COPY ? getCopyEdit() : this;
 				Hdf5DataSet<?> dataSet = copyEdit != null ? (Hdf5DataSet<?>) copyEdit.getHdfSource() : null;
 				if (dataSet != null) {

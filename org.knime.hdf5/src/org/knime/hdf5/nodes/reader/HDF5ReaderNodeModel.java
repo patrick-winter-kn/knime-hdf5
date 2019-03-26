@@ -195,8 +195,8 @@ public class HDF5ReaderNodeModel extends NodeModel {
 						} while (dataSet.nextColumnIndices(colIndices));
 	
 					} else {
-						// also do this for dataSet.getDimensions().length == 0 which means that the dataSet is scalar
-						colSpecList.add(new DataColumnSpecCreator(dsPath, type).createSpec());
+						// add '[]' to the name of 1-dimensional and scalar dataSets to avoid name conflicts
+						colSpecList.add(new DataColumnSpecCreator(dsPath + "[]", type).createSpec());
 					}
 				} catch (UnsupportedDataTypeException udte) {
 					NodeLogger.getLogger(getClass()).warn("Unknown dataType of columns in \"" + dsPath + "\"");

@@ -57,6 +57,8 @@ import org.knime.hdf5.lib.types.Hdf5KnimeDataType;
 import org.knime.hdf5.nodes.writer.edit.EditDataType.DataTypeChooser;
 import org.knime.hdf5.nodes.writer.edit.EditDataType.Rounding;
 
+import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
+
 /**
  * Class for edits on dataSets in an hdf file. The respective hdf
  * source is an {@linkplain Hdf5DataSet}.
@@ -488,7 +490,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			}
 
 			// use one dimension if the hdf dataSet also has one dimension or does not exist yet
-			m_useOneDimension = isOneDimensionPossible()
+			m_useOneDimension = m_useOneDimension && isOneDimensionPossible()
 					&& (getEditAction().isCreateOrCopyAction() || m_inputNumberOfDimensions == 1);
 			
 			// update the row size if none is known so far
@@ -890,7 +892,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			Hdf5DataSet<?> copyDataSet = (Hdf5DataSet<?>) findCopySource();
 			
 			if (havePropertiesChanged(copyDataSet)) {
-				createAction(null, exec, totalProgressToDo);
+				copyColumnsAction(exec, totalProgressToDo);
 			} else {
 				setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).copyObject(copyDataSet, getName()));
 			}
@@ -916,8 +918,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		try {
 			Hdf5DataSet<?> oldDataSet = (Hdf5DataSet<?>) getHdfSource();
 			if (havePropertiesChanged(oldDataSet)) {
-				createAction(null, exec, totalProgressToDo);
-				
+				copyColumnsAction(exec, totalProgressToDo);
 			} else {
 				if (!oldDataSet.getName().equals(getName())) {
 					if (oldDataSet == getHdfBackup()) {
@@ -929,6 +930,65 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			}
 		} finally {
 			setEditSuccess(getHdfObject() != null);
+		}
+	}
+	
+	/**
+	 * Creates a new dataSet and copies all values from existing dataSets
+	 * specified by the child column edits.
+	 * 
+	 * @param exec the knime execution context
+	 * @param totalProgressToDo the total progress to do while executing the
+	 * 	hdf writer
+	 * @throws IOException if an error occurred
+	 */
+	private void copyColumnsAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
+		boolean success = false;
+		
+		Hdf5DataSet<?> dataSet = null;
+		try {
+			boolean withoutFail = true;
+			
+			dataSet = ((Hdf5Group) getOpenedHdfObjectOfParent()).createDataSetFromEdit(this);
+			addProgress(331, exec, totalProgressToDo, true);
+			
+			ColumnNodeEdit[] columnEdits = getNotDeletedColumnNodeEdits();
+			Hdf5DataSet<?>[] dataSets = new Hdf5DataSet[columnEdits.length];
+			long[] columnIndices = new long[columnEdits.length];
+			for (int i = 0; i < columnEdits.length; i++) {
+				ColumnNodeEdit columnEdit = columnEdits[i];
+				dataSets[i] = (Hdf5DataSet<?>) columnEdit.findCopySource();
+				columnIndices[i] = columnEdit.getInputColumnIndex();
+			}
+			
+			for (long i = 0; i < m_inputRowSize; i++) {
+				withoutFail &= dataSet.copyValuesToRow(i, dataSets, columnIndices, m_editDataType.getRounding());
+				addProgress(getProgressToDoPerRow(), exec, totalProgressToDo, false);
+			}
+
+			if (getEditAction() == EditAction.MODIFY) {
+				Hdf5DataSet<?> oldDataSet = (Hdf5DataSet<?>) getHdfSource();
+				for (String attrName : oldDataSet.loadAttributeNames()) {
+					withoutFail &= dataSet.copyAttribute(oldDataSet.getAttribute(attrName), attrName) != null;
+				}
+			}
+			
+			success = withoutFail;
+			
+		} catch (HDF5DataspaceInterfaceException hdie) {
+			throw new IOException(hdie);
+			
+		} finally {
+			if (success) {
+				setEditState(EditState.SUCCESS);
+				setHdfObject(dataSet);
+				
+			} else {
+				setEditState(EditState.FAIL);
+				if (dataSet != null) {
+					((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(getName());
+				}
+			}
 		}
 	}
 

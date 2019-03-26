@@ -862,7 +862,12 @@ public abstract class TreeNodeEdit {
 				copySource = copyGroupEdit.getHdfSource();
 			}
 			if (copySource == null) {
-				copySource = ((Hdf5File) fileEdit.getHdfObject()).getGroupByPath(m_inputPathFromFileWithName);
+				try {
+					copySource = ((Hdf5File) fileEdit.getHdfObject()).getGroupByPath(m_inputPathFromFileWithName);
+				} catch (IOException ioe) {
+					copySource = m_parent != null ? ((Hdf5Group) m_parent.findCopySource())
+							.getGroup(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]) : null;
+				}
 			}
 		} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
 			DataSetNodeEdit copyDataSetEdit = fileEdit.getDataSetEditByPath(m_inputPathFromFileWithName);
@@ -870,7 +875,13 @@ public abstract class TreeNodeEdit {
 				copySource = copyDataSetEdit.getHdfSource();
 			}
 			if (copySource == null) {
-				copySource = ((Hdf5File) fileEdit.getHdfObject()).getDataSetByPath(m_inputPathFromFileWithName);
+				try {
+					copySource = ((Hdf5File) fileEdit.getHdfObject()).getDataSetByPath(m_inputPathFromFileWithName);
+				} catch (IOException ioe) {
+					TreeNodeEdit parent = this instanceof ColumnNodeEdit ? m_parent.getParent() : m_parent;
+					copySource = ((Hdf5Group) parent.findCopySource())
+							.getDataSet(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]);
+				}
 			}
 		} else if (this instanceof AttributeNodeEdit) {
 			AttributeNodeEdit copyAttributeEdit = fileEdit.getAttributeEditByPath(m_inputPathFromFileWithName);
@@ -878,7 +889,12 @@ public abstract class TreeNodeEdit {
 				copySource = copyAttributeEdit.getHdfSource();
 			}
 			if (copySource == null) {
-				copySource = ((Hdf5File) fileEdit.getHdfObject()).getAttributeByPath(m_inputPathFromFileWithName);
+				try {
+					copySource = ((Hdf5File) fileEdit.getHdfObject()).getAttributeByPath(m_inputPathFromFileWithName);
+				} catch (IOException ioe) {
+					copySource = ((Hdf5TreeElement) m_parent.findCopySource())
+							.getAttribute(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]);
+				}
 			}
 		}
 

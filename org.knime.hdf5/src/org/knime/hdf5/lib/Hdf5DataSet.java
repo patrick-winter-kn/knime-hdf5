@@ -477,7 +477,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * dataSet.
 	 * 
 	 * @param rowIndex the index of the row to be written in this dataSet
-	 * @param dataRow the knime data row with the values to be written
+	 * @param inputDataRow the knime data row with the values to be written
 	 * @param dataRowColumnIndices the indices of the columns in the {@code dataRow}
 	 * 	those values should be written in the respective columns of this dataSet
 	 * 	or -1 if a dataSet of {@code dataSets} should be used
@@ -493,7 +493,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 	 * 	is out of range
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	public boolean copyValuesToRow(long rowIndex, DataRow dataRow, int[] dataRowColumnIndices, Hdf5DataSet<?>[] dataSets,
+	public boolean copyValuesToRow(long rowIndex, DataRow inputDataRow, int[] dataRowColumnIndices, Hdf5DataSet<?>[] dataSets,
 			long[] dataSetColumnIndices, Type standardValue, Rounding rounding) throws IOException, HDF5DataspaceInterfaceException {
 		Object[] dataWrite = m_type.getHdfType().createArray((int) numberOfColumns());
 		Class outputClass = m_type.getHdfClass();
@@ -502,7 +502,7 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		for (int i = 0; i < dataWrite.length; i++) {
 			// check if the input for this column is a column of knime or of a hdf dataSet 
 			if (dataRowColumnIndices[i] >= 0) {
-				Type value = (Type) m_type.getKnimeType().getValueFromDataCell(dataRow.getCell(dataRowColumnIndices[i]));
+				Type value = (Type) m_type.getKnimeType().getValueFromDataCell(inputDataRow.getCell(dataRowColumnIndices[i]));
 				value = value == null ? standardValue : value;
 				
 				Class knimeClass = m_type.getKnimeClass();
@@ -549,6 +549,26 @@ public class Hdf5DataSet<Type> extends Hdf5TreeElement {
 		}
 		
 		return writeHdf(dataWrite, offset, count);
+	}
+	
+	/**
+	 * Writes the columns of several hdf dataSets to this dataSet.
+	 * 
+	 * @param rowIndex the index of the row to be written in this dataSet
+	 * @param dataSets the dataSets that should be used to write in the respective
+	 * 	columns of this dataSet
+	 * @param dataSetColumnIndices the indices of the columns in the {@code dataSets}
+	 * 	those values should be written in the respective columns of this dataSet
+	 * @param rounding the rounding for a cast from float to int
+	 * @return if the data was written successfully to this dataSet
+	 * @throws IOException if any dataSet is not open or an internal error occurred
+	 * @throws HDF5DataspaceInterfaceException if the row index or any column index
+	 * 	is out of range
+	 */
+	public boolean copyValuesToRow(long rowIndex, Hdf5DataSet<?>[] dataSets, long[] dataSetColumnIndices, Rounding rounding) throws IOException, HDF5DataspaceInterfaceException {
+		int[] dataRowColumnIndices = new int[dataSets.length];
+		Arrays.fill(dataRowColumnIndices, -1);
+		return copyValuesToRow(rowIndex, null, dataRowColumnIndices, dataSets, dataSetColumnIndices, null, rounding);
 	}
 	
 	/**
