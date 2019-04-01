@@ -191,7 +191,7 @@ public class Hdf5Group extends Hdf5TreeElement {
 			oldObject.close();
 			H5.H5Lmove(oldParent.getElementId(), oldObject.getName(), getElementId(), newName, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
 			
-			// update list of children
+			// update instances
 			if (!oldObject.exists() && getObjectTypeByName(newName) == objectType) {
 				if (objectType == HDF5Constants.H5I_GROUP) {
 					removeGroup((Hdf5Group) oldObject);

@@ -187,7 +187,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	}
 
 	/**
-	 * Copies this edit to {@code parent}.
+	 * Copies this edit to {@code parent}. Does the same as
+	 * {@code copyAttributeEditTo(parent, true)}.
 	 * 
 	 * @param parent the destination of the new copy
 	 * @return the new copy
@@ -449,8 +450,9 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	@Override
 	protected void createAction(Map<String, FlowVariable> flowVariables, ExecutionContext exec, long totalProgressToDo) throws IOException {
 		try {
+			setHdfObject((Hdf5Attribute<?>) null);
 			FlowVariable var = flowVariables.get(getInputPathFromFileWithName());
-			setHdfObject(getOpenedHdfObjectOfParent().createAndWriteAttribute(this, var));
+			setHdfObject(getOpenedHdfSourceOfParent().createAndWriteAttribute(this, var));
 		} finally {
 			setEditSuccess(getHdfObject() != null);
 		}
@@ -459,8 +461,9 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	@Override
 	protected void copyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
 		try {
+			setHdfObject((Hdf5Attribute<?>) null);
 			Hdf5Attribute<?> copyAttribute = (Hdf5Attribute<?>) findCopySource();
-			Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
+			Hdf5TreeElement parent = getOpenedHdfSourceOfParent();
 			if (havePropertiesChanged(copyAttribute)) {
 				setHdfObject(parent.copyAttribute(this, copyAttribute));
 			} else {
@@ -475,7 +478,7 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	protected void deleteAction() throws IOException {
 		try {
 			Hdf5Attribute<?> attribute = (Hdf5Attribute<?>) getHdfObject();
-			if (getOpenedHdfObjectOfParent().deleteAttribute(attribute.getName())) {
+			if (getOpenedHdfSourceOfParent().deleteAttribute(attribute.getName())) {
 				setHdfObject((Hdf5Attribute<?>) null);
 			}
 		} finally {
@@ -487,7 +490,8 @@ public class AttributeNodeEdit extends TreeNodeEdit {
 	protected void modifyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
 		try {
 			Hdf5Attribute<?> oldAttribute = (Hdf5Attribute<?>) getHdfSource();
-			Hdf5TreeElement parent = getOpenedHdfObjectOfParent();
+			setHdfObject((Hdf5Attribute<?>) null);
+			Hdf5TreeElement parent = getOpenedHdfSourceOfParent();
 			if (havePropertiesChanged(oldAttribute)) {
 				setHdfObject(parent.copyAttribute(this, oldAttribute));
 			} else {

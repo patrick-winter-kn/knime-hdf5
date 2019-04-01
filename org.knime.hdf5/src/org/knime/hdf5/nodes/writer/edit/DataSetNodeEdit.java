@@ -189,7 +189,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	}
 
 	/**
-	 * Copies this edit to {@code parent} with all children.
+	 * Copies this edit to {@code parent} with all children. Does the same as
+	 * {@code copyDataSetEditTo(parent, true)}.
 	 * 
 	 * @param parent the destination of the new copy
 	 * @return the new copy
@@ -514,6 +515,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
 		}
+		edit.setParent(null);
 		disconsiderColumnNodeEdit(edit);
 	}
 	
@@ -572,6 +574,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		if (getTreeNode() != null) {
 			getTreeNode().remove(edit.getTreeNode());
 		}
+		edit.setParent(null);
 	}
 	
 	/**
@@ -874,7 +877,8 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	@Override
 	protected void createAction(Map<String, FlowVariable> flowVariables, ExecutionContext exec, long totalProgressToDo) throws IOException {
 		try {
-			setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).createDataSetFromEdit(this));
+			setHdfObject((Hdf5DataSet<?>) null);
+			setHdfObject(((Hdf5Group) getOpenedHdfSourceOfParent()).createDataSetFromEdit(this));
 			addProgress(331, exec, totalProgressToDo, true);
 			
 		} finally {
@@ -889,12 +893,13 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	@Override
 	protected void copyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
 		try {
+			setHdfObject((Hdf5DataSet<?>) null);
 			Hdf5DataSet<?> copyDataSet = (Hdf5DataSet<?>) findCopySource();
 			
 			if (havePropertiesChanged(copyDataSet)) {
 				copyColumnsAction(exec, totalProgressToDo);
 			} else {
-				setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).copyObject(copyDataSet, getName()));
+				setHdfObject(((Hdf5Group) getOpenedHdfSourceOfParent()).copyObject(copyDataSet, getName()));
 			}
 		} finally {
 			setEditSuccess(getHdfObject() != null);
@@ -905,7 +910,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	protected void deleteAction() throws IOException {
 		try {
 			Hdf5DataSet<?> dataSet = (Hdf5DataSet<?>) getHdfObject();
-			if (((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(dataSet.getName())) {
+			if (((Hdf5Group) getOpenedHdfSourceOfParent()).deleteObject(dataSet.getName())) {
 				setHdfObject((Hdf5DataSet<?>) null);
 			}
 		} finally {
@@ -917,14 +922,15 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 	protected void modifyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
 		try {
 			Hdf5DataSet<?> oldDataSet = (Hdf5DataSet<?>) getHdfSource();
+			setHdfObject((Hdf5DataSet<?>) null);
 			if (havePropertiesChanged(oldDataSet)) {
 				copyColumnsAction(exec, totalProgressToDo);
 			} else {
 				if (!oldDataSet.getName().equals(getName())) {
 					if (oldDataSet == getHdfBackup()) {
-						setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).copyObject(oldDataSet, getName()));
+						setHdfObject(((Hdf5Group) getOpenedHdfSourceOfParent()).copyObject(oldDataSet, getName()));
 					} else {
-						setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).moveObject(oldDataSet, getName()));
+						setHdfObject(((Hdf5Group) getOpenedHdfSourceOfParent()).moveObject(oldDataSet, getName()));
 					}
 				}
 			}
@@ -949,7 +955,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 		try {
 			boolean withoutFail = true;
 			
-			dataSet = ((Hdf5Group) getOpenedHdfObjectOfParent()).createDataSetFromEdit(this);
+			dataSet = ((Hdf5Group) getOpenedHdfSourceOfParent()).createDataSetFromEdit(this);
 			addProgress(331, exec, totalProgressToDo, true);
 			
 			ColumnNodeEdit[] columnEdits = getNotDeletedColumnNodeEdits();
@@ -986,7 +992,7 @@ public class DataSetNodeEdit extends TreeNodeEdit {
 			} else {
 				setEditState(EditState.FAIL);
 				if (dataSet != null) {
-					((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(getName());
+					((Hdf5Group) getOpenedHdfSourceOfParent()).deleteObject(getName());
 				}
 			}
 		}

@@ -188,7 +188,8 @@ public abstract class TreeNodeEdit {
 	 * Contains all states in those this edit can be.
 	 */
 	static enum EditState {
-		TODO, IN_PROGRESS, CREATE_SUCCESS_WRITE_POSTPONED, SUCCESS, FAIL, ROLLBACK_SUCCESS, ROLLBACK_FAIL, ROLLBACK_NOTHING_TODO;
+		TODO, IN_PROGRESS, CREATE_SUCCESS_WRITE_POSTPONED, SUCCESS, FAIL,
+				ROLLBACK_TODO, ROLLBACK_NOTHING_TODO, ROLLBACK_IN_PROGRESS, ROLLBACK_SUCCESS, ROLLBACK_FAIL;
 
 		/**
 		 * @return if this edit has been executed
@@ -198,10 +199,11 @@ public abstract class TreeNodeEdit {
 		}
 		
 		/**
-		 * @return if this edit's rollback action has been used
+		 * @return if this edit is in a rollback action
 		 */
 		boolean isRollbackState() {
-			return this == ROLLBACK_SUCCESS || this == ROLLBACK_FAIL || this == ROLLBACK_NOTHING_TODO;
+			return this == ROLLBACK_TODO || this == ROLLBACK_NOTHING_TODO || this == ROLLBACK_IN_PROGRESS
+					|| this == ROLLBACK_SUCCESS || this == ROLLBACK_FAIL;
 		}
 	}
 	
@@ -665,6 +667,9 @@ public abstract class TreeNodeEdit {
 	}
 
 	/**
+	 * Get the hdf object or this edit. Returns {@code null} if the hdf source
+	 * is a backup and the edit has not been executed so far.
+	 * 
 	 * @return the hdf object which is edited by this edit
 	 */
 	public Object getHdfObject() {
@@ -686,16 +691,17 @@ public abstract class TreeNodeEdit {
 	}
 	
 	/**
-	 * Get the hdf object of the parent and open it if it is no file and not already opened.
+	 * Get the hdf source of the parent and open it if it is no file and not already opened.
 	 * 
 	 * @return the opened hdf object of the parent
 	 * @throws IOException if the hdf object cannot be opened
-	 * @throws NullPointerException if this edit does not have a parent
+	 * @throws NullPointerException if this edit does not have a parent or the
+	 * 	parent's hdf source does not exist
 	 */
-	protected Hdf5TreeElement getOpenedHdfObjectOfParent() throws IOException, NullPointerException {
-		Hdf5TreeElement parentObject = (Hdf5TreeElement) m_parent.getHdfObject();
+	protected Hdf5TreeElement getOpenedHdfSourceOfParent() throws IOException, NullPointerException {
+		Hdf5TreeElement parentObject = (Hdf5TreeElement) m_parent.getHdfSource();
 		
-		if (parentObject != null && !parentObject.isFile()) {
+		if (!parentObject.isFile()) {
 			parentObject.open();
 		}
 		
@@ -756,36 +762,38 @@ public abstract class TreeNodeEdit {
 	 */
 	boolean createBackup() {
 		try {
-			if (this instanceof FileNodeEdit) {
-				setHdfBackup(((Hdf5File) m_hdfObject).createBackup(BACKUP_PREFIX));
-			} else {
-				Object parentBackup = (this instanceof ColumnNodeEdit ? m_parent.getParent() : m_parent).getHdfBackup();
-				
-				/* 
-				 * only create a new backup if the parent does not already have
-				 * a backup, otherwise find the hdf source for this edit in the
-				 * existing backup
-				 */
-				if (parentBackup != null) {
-					if (this instanceof GroupNodeEdit) {
-						setHdfBackup(((Hdf5Group) parentBackup).getGroup(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
-					} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
-						setHdfBackup(((Hdf5Group) parentBackup).getDataSet(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
-					} else if (this instanceof AttributeNodeEdit) {
-						setHdfBackup(((Hdf5TreeElement) parentBackup).getAttribute(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
-					}
+			if (m_hdfBackup == null) {
+				if (this instanceof FileNodeEdit) {
+					setHdfBackup(((Hdf5File) m_hdfObject).createBackup(BACKUP_PREFIX));
 				} else {
-					if (this instanceof AttributeNodeEdit) {
-						setHdfBackup(((Hdf5Attribute<?>) m_hdfObject).createBackup(BACKUP_PREFIX));
-						
-					} else if (this instanceof ColumnNodeEdit) {
-						if (m_parent.getHdfBackup() == null) {
-							m_parent.createBackup();
+					Object parentBackup = (this instanceof ColumnNodeEdit ? m_parent.getParent() : m_parent).getHdfBackup();
+					
+					/* 
+					 * only create a new backup if the parent does not already have
+					 * a backup, otherwise find the hdf source for this edit in the
+					 * existing backup
+					 */
+					if (parentBackup != null) {
+						if (this instanceof GroupNodeEdit) {
+							setHdfBackup(((Hdf5Group) parentBackup).getGroup(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
+						} else if (this instanceof DataSetNodeEdit || this instanceof ColumnNodeEdit) {
+							setHdfBackup(((Hdf5Group) parentBackup).getDataSet(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
+						} else if (this instanceof AttributeNodeEdit) {
+							setHdfBackup(((Hdf5TreeElement) parentBackup).getAttribute(Hdf5TreeElement.getPathAndName(m_inputPathFromFileWithName)[1]));
 						}
-						setHdfBackup((Hdf5DataSet<?>) m_parent.getHdfBackup());
-						
 					} else {
-						setHdfBackup(((Hdf5TreeElement) m_hdfObject).createBackup(BACKUP_PREFIX));
+						if (this instanceof AttributeNodeEdit) {
+							setHdfBackup(((Hdf5Attribute<?>) m_hdfObject).createBackup(BACKUP_PREFIX));
+							
+						} else if (this instanceof ColumnNodeEdit) {
+							if (m_parent.getHdfBackup() == null) {
+								m_parent.createBackup();
+							}
+							setHdfBackup((Hdf5DataSet<?>) m_parent.getHdfBackup());
+							
+						} else {
+							setHdfBackup(((Hdf5TreeElement) m_hdfObject).createBackup(BACKUP_PREFIX));
+						}
 					}
 				}
 			}
@@ -794,6 +802,19 @@ public abstract class TreeNodeEdit {
 		}
 		
 		return m_hdfBackup != null;
+	}
+	
+	boolean createBackupCascade() {
+		boolean success = createBackup();
+		if (success) {
+			for (TreeNodeEdit edit : getAllChildren()) {
+				if (!(edit instanceof ColumnNodeEdit)) {
+					edit.createBackupCascade();
+				}
+			}
+		}
+		
+		return success;
 	}
 	
 	/**
@@ -984,18 +1005,21 @@ public abstract class TreeNodeEdit {
 	 * @param toDelete if the edit action should be set to DELETE or not
 	 */
 	protected void setDeletion(boolean toDelete) {
-		if (toDelete != (getEditAction() == EditAction.DELETE)) {
-	    	if (toDelete && getEditAction().isCreateOrCopyAction() || !toDelete && m_invalidEdits.get(this) == InvalidCause.NO_HDF_SOURCE && getEditAction() == EditAction.DELETE) {
+		if (m_invalidEdits.get(this) == InvalidCause.NO_HDF_SOURCE) {
+    		removeFromParentCascade();
+    		
+		} else if (toDelete != (getEditAction() == EditAction.DELETE)) {
+	    	if (toDelete && getEditAction().isCreateOrCopyAction()) {
 	    		removeFromParentCascade();
 	    		
 	    	} else {
 	    		m_editAction = toDelete ? EditAction.DELETE : (this instanceof ColumnNodeEdit ? EditAction.NO_ACTION : EditAction.MODIFY);
 	    		updateParentEditAction();
 	    		m_treeNodeMenu.updateMenuItems();
-	    	}
-	    	
-	    	for (TreeNodeEdit edit : getAllChildren()) {
-	        	edit.setDeletion(toDelete);
+	    		
+		    	for (TreeNodeEdit edit : getAllChildren()) {
+		        	edit.setDeletion(toDelete);
+		    	}
 	    	}
 		}
 	}
@@ -1753,7 +1777,7 @@ public abstract class TreeNodeEdit {
 		// create backups if needed
 		for (TreeNodeEdit edit : children) {
 			if (edit.isBackupNeeded(objectNames, attributeNames)) {
-				edit.createBackup();
+				edit.createBackupCascade();
 				if (edit.getEditAction() != EditAction.DELETE) {
 					try {
 						edit.deleteActionAndResetEditSuccess();
@@ -1866,11 +1890,13 @@ public abstract class TreeNodeEdit {
 		try {
 			if (m_editState == EditState.ROLLBACK_NOTHING_TODO
 					|| m_parent.getEditState() == EditState.ROLLBACK_SUCCESS
-					&& (m_parent.getEditAction() == EditAction.DELETE || m_parent.getEditAction() == EditAction.MODIFY && m_parent.getHdfBackup() != null)) {
-					// this edit's rollback has already been done successfully in the parent's rollback
+					&& (m_parent.getEditAction() != EditAction.MODIFY || m_parent.getHdfBackup() != null)) {
+				// this edit's rollback has already been done successfully in the parent's rollback
 				m_editSuccess = EditSuccess.TRUE;
+				setEditState(EditState.ROLLBACK_NOTHING_TODO);
 				
 			} else {
+				setEditState(EditState.ROLLBACK_IN_PROGRESS);
 				switch (m_editAction) {
 				case CREATE:
 				case COPY:
@@ -1887,10 +1913,6 @@ public abstract class TreeNodeEdit {
 							Hdf5TreeElement treeElement = (Hdf5TreeElement) getHdfSource();
 							setHdfObject(treeElement.getParent().moveObject(treeElement, newName));
 						}
-						/* 
-						 * do not set m_hdfBackup to null here because '!=null' check is needed for children
-						 * (at the beginning of this try-finally-block)
-						 */
 					} finally {
 						m_editSuccess = EditSuccess.getSuccess(m_hdfObject != null);
 					}
@@ -1901,7 +1923,7 @@ public abstract class TreeNodeEdit {
 				}
 			}
 		} finally {
-			if (m_editState != EditState.ROLLBACK_NOTHING_TODO) {
+			if (m_editState == EditState.ROLLBACK_IN_PROGRESS) {
 				setEditState(m_editSuccess == EditSuccess.TRUE ? EditState.ROLLBACK_SUCCESS : EditState.ROLLBACK_FAIL);
 			}
 		}

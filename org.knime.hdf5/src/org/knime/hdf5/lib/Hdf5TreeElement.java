@@ -460,7 +460,7 @@ abstract public class Hdf5TreeElement {
 				}
 			}
 		} catch (HDF5LibraryException | IOException hlioe) {
-			throw new IOException("Attribute \"" + copyAttribute.getPathFromFileWithName()
+			throw new IOException("Attribute \"" + copyAttribute.getName() + "\" in \"" + copyAttribute.getPathFromFile()
 					+ "\" could not be copied with name \"" + newName + "\": " + hlioe.getMessage(), hlioe);
 		}
 
@@ -491,7 +491,7 @@ abstract public class Hdf5TreeElement {
 				}
 			}
 		} catch (HDF5LibraryException | IOException hlioe) {
-			throw new IOException("Attribute \"" + copyAttribute.getPathFromFileWithName()
+			throw new IOException("Attribute \"" + copyAttribute.getName() + "\" in \"" + copyAttribute.getPathFromFile()
 					+ "\" could not be copied to \"" + getPathFromFileWithName() + "\": " + hlioe.getMessage(), hlioe);
 		}
 		

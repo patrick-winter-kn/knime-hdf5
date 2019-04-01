@@ -141,7 +141,8 @@ public class ColumnNodeEdit extends TreeNodeEdit {
 	}
 
 	/**
-	 * Copies this edit to {@code parent}.
+	 * Copies this edit to {@code parent}. Does the same as
+	 * {@code copyColumnEdit(parent, true)}.
 	 * 
 	 * @param parent the destination of the new copy
 	 * @return the new copy

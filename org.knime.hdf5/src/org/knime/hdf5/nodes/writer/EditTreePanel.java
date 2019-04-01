@@ -376,8 +376,15 @@ public class EditTreePanel extends JPanel {
         		List<?> data = specInfo.getSpecList();
                 if (data.get(0) instanceof DataColumnSpec) {
                 	if (!(parentEdit instanceof DataSetNodeEdit)) {
-                		String newName = TreeNodeEdit.getUniqueName(parentEdit, DataSetNodeEdit.class, ((DataColumnSpec) data.get(0)).getName());
-            			DataSetNodeEdit newEdit = new DataSetNodeEdit((GroupNodeEdit) parentEdit, newName);
+                		// reproduce the name of the dataSet which was used in the HDF5 Reader
+                		String newName = ((DataColumnSpec) data.get(0)).getName();
+                		int firstIndex = newName.lastIndexOf("/") + 1;
+                		int lastIndex = newName.contains("[") ? newName.lastIndexOf("[") : newName.length();
+                		newName = newName.substring(firstIndex, lastIndex);
+            			newName = TreeNodeEdit.getUniqueName(parentEdit, DataSetNodeEdit.class, newName);
+                		
+            			// create a new dataSet edit to add the column edit in it
+                		DataSetNodeEdit newEdit = new DataSetNodeEdit((GroupNodeEdit) parentEdit, newName);
                     	newEdit.addEditToParentNodeIfPossible();
                     	parentEdit = newEdit;
                 	}

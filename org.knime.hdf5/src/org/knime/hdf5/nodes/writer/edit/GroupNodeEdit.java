@@ -108,7 +108,8 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	}
 	
 	/**
-	 * Copies this edit to {@code parent} with all descendants.
+	 * Copies this edit to {@code parent} with all descendants. Does the same as
+	 * {@code copyGroupEditTo(parent, true)}.
 	 * 
 	 * @param parent the destination of the new copy
 	 * @return the new copy
@@ -549,7 +550,8 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	@Override
 	protected void createAction(Map<String, FlowVariable> flowVariables, ExecutionContext exec, long totalProgressToDo) throws IOException {
 		try {
-			setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).createGroup(getName()));
+			setHdfObject((Hdf5Group) null);
+			setHdfObject(((Hdf5Group) getOpenedHdfSourceOfParent()).createGroup(getName()));
 		} finally {
 			setEditSuccess(getHdfObject() != null);
 		}
@@ -564,7 +566,7 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	protected void deleteAction() throws IOException {
 		try {
 			Hdf5Group group = (Hdf5Group) getHdfObject();
-			if (((Hdf5Group) getOpenedHdfObjectOfParent()).deleteObject(group.getName())) {
+			if (((Hdf5Group) getOpenedHdfSourceOfParent()).deleteObject(group.getName())) {
 				setHdfObject((Hdf5Group) null);
 			}
 		} finally {
@@ -576,11 +578,12 @@ public class GroupNodeEdit extends TreeNodeEdit {
 	protected void modifyAction(ExecutionContext exec, long totalProgressToDo) throws IOException {
 		try {
 			Hdf5Group oldGroup = (Hdf5Group) getHdfSource();
+			setHdfObject((Hdf5Group) null);
 			if (!oldGroup.getName().equals(getName())) {
 				if (oldGroup == getHdfBackup()) {
-					setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).copyObject(oldGroup, getName()));
+					setHdfObject(((Hdf5Group) getOpenedHdfSourceOfParent()).copyObject(oldGroup, getName()));
 				} else {
-					setHdfObject(((Hdf5Group) getOpenedHdfObjectOfParent()).moveObject(oldGroup, getName()));
+					setHdfObject(((Hdf5Group) getOpenedHdfSourceOfParent()).moveObject(oldGroup, getName()));
 				}
 			}
 		} finally {

@@ -251,12 +251,21 @@ public class FileNodeEdit extends GroupNodeEdit {
 			if (edit instanceof GroupNodeEdit) {
 				newEdit = new GroupNodeEdit((GroupNodeEdit) edit.getParent(), (Hdf5Group) hdfObject);
 			} else if (edit instanceof DataSetNodeEdit) {
-				newEdit = new DataSetNodeEdit((GroupNodeEdit) edit.getParent(), (Hdf5DataSet<?>) hdfObject);
+				try {
+					newEdit = new DataSetNodeEdit((GroupNodeEdit) edit.getParent(), (Hdf5DataSet<?>) hdfObject);
+					for (ColumnNodeEdit oldColumnEdit : ((DataSetNodeEdit) edit).getColumnNodeEdits()) {
+						oldColumnEdit.removeFromParent();
+					}
+					((DataSetNodeEdit) edit).loadChildrenOfHdfObject();
+				} catch (IOException ioe) {
+					NodeLogger.getLogger(getClass()).error("Could not reset DataSetNodeEdit: " + ioe, ioe);
+					newEdit = null;
+				}
 			} else if (edit instanceof AttributeNodeEdit) {
 				try {
 					newEdit = new AttributeNodeEdit(edit.getParent(), (Hdf5Attribute<?>) hdfObject);
 				} catch (IOException ioe) {
-					NodeLogger.getLogger(getClass()).error("Could not reset AttributeNodeEdit: " + ioe);
+					NodeLogger.getLogger(getClass()).error("Could not reset AttributeNodeEdit: " + ioe, ioe);
 					newEdit = null;
 				}
 			}
@@ -266,7 +275,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 				newEdit.removeFromParentCascade();
 			}
 		} else {
-			edit.setDeletion(true);
+			edit.removeFromParentCascade();
 		}
 	}
 	
@@ -758,6 +767,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 	@Override
 	protected void createAction(Map<String, FlowVariable> flowVariables, ExecutionContext exec, long totalProgressToDo) throws IOException {
 		try {
+			setHdfObject((Hdf5File) null);
 			setHdfObject(Hdf5File.createFile(m_filePath));
 		} finally {
 			setEditSuccess(getHdfObject() != null);
@@ -956,7 +966,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 					dataSetEdits[i].setHdfObject(outputDataSets[i]);
 					
 				} else {
-					((Hdf5Group) dataSetEdits[i].getOpenedHdfObjectOfParent()).deleteObject(dataSetEdits[i].getName());
+					((Hdf5Group) dataSetEdits[i].getOpenedHdfSourceOfParent()).deleteObject(dataSetEdits[i].getName());
 				}
 			}
 		}
@@ -992,6 +1002,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 			if (getEditState() == EditState.SUCCESS) {
 				// delete the created file restore the backup file
 				try {
+					setEditState(EditState.ROLLBACK_IN_PROGRESS);
 					success &= deleteActionAndResetEditSuccess();
 					if (getHdfBackup() != null) {
 						setHdfObject(((Hdf5File) getHdfBackup()).copyFile(m_filePath));
@@ -1010,6 +1021,7 @@ public class FileNodeEdit extends GroupNodeEdit {
 		} else {
 			List<TreeNodeEdit> rollbackEdits = getAllDecendants();
 			rollbackEdits.remove(this);
+			setEditState(EditState.ROLLBACK_NOTHING_TODO);
 			
 			// find out which edits need rollback actions and where could appear name conflicts for that
 			List<String> attributePaths = new ArrayList<>();
@@ -1017,31 +1029,39 @@ public class FileNodeEdit extends GroupNodeEdit {
 			for (TreeNodeEdit edit : rollbackEdits.toArray(new TreeNodeEdit[rollbackEdits.size()])) {
 				if (!edit.getEditState().isExecutedState()) {
 					rollbackEdits.remove(edit);
+					edit.setEditState(EditState.ROLLBACK_NOTHING_TODO);
+					
 				} else if (edit.getEditState() == EditState.SUCCESS && edit.getEditAction() == EditAction.MODIFY_CHILDREN_ONLY
 						|| edit.getEditState() == EditState.FAIL && edit.getEditAction().isCreateOrCopyAction()) {
 					edit.setEditState(EditState.ROLLBACK_NOTHING_TODO);
+					
 				} else if (edit.getEditAction() == EditAction.MODIFY || edit.getEditAction() == EditAction.DELETE) {
 					(edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).add(edit.getInputPathFromFileWithName());
+					edit.setEditState(EditState.ROLLBACK_TODO);
+					
+				} else {
+					edit.setEditState(EditState.ROLLBACK_TODO);
 				}
 			}
 
 			for (TreeNodeEdit edit : rollbackEdits.toArray(new TreeNodeEdit[rollbackEdits.size()])) {
-				// in case hdfObject was created/edited before the fail, delete it so that it can be substituted by hdfBackup
-				if (edit.getHdfObject() != null && edit.getEditState() != EditState.ROLLBACK_NOTHING_TODO
+				// in case hdfObject was created/edited before the fail, delete it so that it can be substituted by its backup
+				if (edit.getHdfObject() != null && edit.getEditState() == EditState.ROLLBACK_TODO
 						&& (edit instanceof AttributeNodeEdit ? attributePaths : objectPaths).contains(edit.getOutputPathFromFileWithName(true))) {
 					if (!edit.getEditAction().isCreateOrCopyAction()) {
 						if (edit.getHdfBackup() == null) {
-							success &= edit.createBackup();
+							success &= edit.createBackupCascade();
 						}
 						
 						try {
 							success &= edit.deleteActionAndResetEditSuccess();
 							
-						} catch (IOException ioe) {
+						} catch (Exception e) {
 							success = false;
 							rollbackEdits.remove(edit);
 							edit.setEditState(EditState.ROLLBACK_FAIL);
-							NodeLogger.getLogger(getClass()).error("Fail in rollback of \"" + edit.getOutputPathFromFileWithName() + "\": " + ioe.getMessage(), ioe);
+							NodeLogger.getLogger(getClass()).error("Fail in preparing rollback of \""
+									+ edit.getOutputPathFromFileWithName() + "\": " + e.getMessage(), e);
 						}
 					} else {
 						/* 
